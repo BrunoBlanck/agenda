@@ -1116,3 +1116,22 @@ Decisões tomadas ao implementar as rotas `/api/loja/...` (detalham regras que o
 - **Ponto:** a hora de entrada/saída é a do servidor; correções e lançamentos manuais não podem ficar no futuro e gravam `editado_por`.
 - **Dados da loja:** CNPJ validado pelos dígitos e gravado com máscara; CEP com máscara; UF em maiúsculas. Quem fez a última alteração (loja ou superadmin) vem da `auditoria`, porque `lojas` guarda as duas colunas `atualizado_por_*` sem dizer qual foi a última. **Envio da logo** ainda não existe (depende do storage); só é possível remover.
 - **Locais:** a lista traz só a *contagem* de próximos agendamentos de cada local; a lista dos agendamentos fica em `/agendamentos?local_id=` (com as regras de visibilidade da agenda).
+
+## 6.2 Etapa 3: SUPERADMIN e site do consumidor
+
+Decisões tomadas ao implementar `/api/superadmin/...` e `/api/site/{slug}/...` (nenhuma tabela ou coluna nova; as *provisórias* respondem de forma conservadora a pontos ainda em aberto e são fáceis de trocar):
+
+- **Senha sem e-mail (provisória):** como ainda não há envio de e-mail, criar loja (primeiro Administrador), funcionário pelo suporte ou usuário admin sem senha gera uma **senha provisória** aleatória, devolvida uma única vez na resposta. "Redefinir senha" troca o `senha_hash` na hora (informada ou provisória): entra na auditoria como `alterar` com `campos_alterados = {senha_hash}`, sem o valor, `atualizado_por` NULL e o `superadmin_id`. Quando houver e-mail, vira "enviar link" (`gerar_senha_provisoria` em `app/auth/senhas.py`).
+- **Ações sem alteração de linha (1.9):** `registrar_acao` (`app/services/auditoria.py`) grava uma linha `alterar` com o detalhe em `depois`, `campos_alterados` = chaves do detalhe, e quem fez, origem e IP lidos do contexto da transação, como nos triggers. Pronto para "enviar link de nova senha" e "entrar como a loja".
+- **Situação da loja:** qualquer troca entre `ativa`, `suspensa` e `cancelada` é permitida (inclusive reativar uma cancelada). **Excluir** (lógica) só loja `cancelada`; o `slug` fica livre de novo. Loja excluída some do painel, do login e do site.
+- **Plano:** plano inativo não pode ser escolhido para loja nova nem trocado numa loja (a loja que já o tem mantém). Plano com lojas não excluídas não é excluído (inative).
+- **Usuários admin:** ninguém se exclui nem se desativa; a regra "pelo menos um superadmin ativo" é conferida com as contas ativas travadas (`FOR UPDATE`).
+- **Funcionários pelo suporte:** o superadmin atribui qualquer perfil (inclusive Administrador), mas a loja não fica sem Administrador ativo (mesma regra do painel). `criado_por_superadmin` vem do contexto.
+- **Módulos:** `PATCH` só muda os campos enviados (habilitado, observação, prazo). `expira_em` sem fuso é lido no fuso da loja; prazo vencido = módulo desativado.
+- **Auditoria (tela):** os períodos (hoje, 7/30/90 dias, último ano, intervalo) usam os dias do fuso da loja; a "Plataforma" usa `America/Sao_Paulo`. Só as tabelas do catálogo de cada área podem ser filtradas. Pessoa: `f:<id>`, `s:<id>`, `site` (origem `site`) ou `sistema` (rotinas e cargas).
+- **Site, loja indisponível:** loja inexistente, excluída, suspensa ou cancelada responde **404** (não revela que existe).
+- **Site, horários (provisória, ponto "antecedência mínima" da seção 5):** como `horariosLivres.js`: passos de 30 min, 60 min de antecedência, até 31 dias por consulta. Com "qualquer profissional", cada horário fica com o primeiro livre (ordem alfabética); com o módulo Locais, com o primeiro local permitido e livre (ordem alfabética). O pedido só é aceito num horário oferecido.
+- **Site sem o módulo Serviços:** um "Atendimento" genérico de 30 min, sem preço, com os funcionários ativos que têm jornada.
+- **Site, cliente (2.7):** identificado pelo telefone (só dígitos, na mesma loja; havendo mais de um, o mais antigo). O cadastro existente só ganha o canal `site`: nome, e-mail e situação não mudam (*provisória*: um cliente inativo não é reativado) e nada dele é devolvido ao site. O telefone é gravado com máscara (`(11) 98888-1111`) e precisa ter DDD.
+- **Site, pedido:** `pendente`, `origem = site`, preço do serviço congelado, local reservado, materiais do serviço copiados (módulo Materiais), contexto `app.origem = 'site'` sem funcionário (`atualizado_por` e `criado_por` NULL). O `EXCLUDE` do banco recusa a corrida entre dois pedidos.
+- **Ainda não feito:** limite de requisições e captcha nas rotas públicas do site.

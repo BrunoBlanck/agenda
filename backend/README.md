@@ -3,9 +3,10 @@
 API do sistema de agendamento multi-loja: FastAPI + PostgreSQL 16 + SQLAlchemy 2 + Alembic.
 O modelo do banco segue o [`estrutura.md`](../estrutura.md).
 
-> **Status (etapa 2 de 3):** schema completo, seed, login (funcionário e superadmin), permissões e
-> todas as rotas do **painel da loja** (`/api/loja/...`). As rotas do SUPERADMIN e do site do
-> consumidor (etapa 3) ainda não existem, e o front-end ainda não está ligado à API.
+> **Status:** schema completo, seed, login (funcionário e superadmin), permissões e as rotas das três
+> áreas: **painel da loja** (`/api/loja/...`), **SUPERADMIN** (`/api/superadmin/...`) e **site do
+> consumidor** (`/api/site/{slug}/...`). O front-end ainda usa os dados de exemplo e não está ligado à
+> API (ver "O que o front precisa adaptar").
 
 ## Requisitos
 
@@ -89,7 +90,64 @@ e vice-versa (401). Loja suspensa ou cancelada recebe 403.
 | Controle de Tempo | `GET ponto`, `GET ponto/aberto`, `POST ponto/registrar`, `POST ponto`, `PUT ponto/{id}` | `ponto_proprio` / `ponto_equipe` |
 | Configurações | `GET/PUT configuracoes/loja`, `DELETE configuracoes/loja/logo` | `config_loja` |
 
-Superadmin: `POST /api/superadmin/auth/login` e `GET /api/superadmin/eu`. Saúde: `GET /api/saude`.
+Saúde: `GET /api/saude`.
+
+### SUPERADMIN (`/api/superadmin/...`, só com token de superadmin)
+
+| Área | Rotas |
+|---|---|
+| Acesso | `POST auth/login`, `GET eu` |
+| Visão geral | `GET visao-geral` (lojas por situação e tipo, funcionários, receita, módulos, últimas ações) |
+| Lojas | `GET/POST lojas`, `GET lojas/opcoes`, `GET/PUT/DELETE lojas/{id}`, `POST lojas/{id}/status` |
+| Módulos da loja | `GET lojas/{id}/modulos`, `PATCH lojas/{id}/modulos/{codigo}` (habilitado, observacao, expira_em) |
+| Funcionários (suporte) | `GET lojas/{id}/perfis`, `GET/POST lojas/{id}/funcionarios`, `PUT lojas/{id}/funcionarios/{fid}`, `POST .../redefinir-senha` |
+| Planos | `GET/POST planos`, `GET/PUT/DELETE planos/{id}` |
+| Usuários admin | `GET/POST usuarios`, `GET/PUT/DELETE usuarios/{id}` |
+| Auditoria | `GET auditoria?loja=<id ou plataforma>&tabela=&periodo=&inicio=&fim=&quem=`, `GET auditoria/pessoas`, `GET auditoria/tabelas` |
+
+- O superadmin escolhe a loja pela URL. Nas tabelas da loja, o que ele grava fica com
+  `atualizado_por` NULL e a auditoria guarda o `superadmin_id` (origem `superadmin`).
+- Sem envio de e-mail ainda: criar loja, funcionário ou usuário admin sem `senha`, e redefinir senha
+  sem `senha`, geram uma **senha provisória**, devolvida uma única vez em `senha_provisoria`.
+- Loja só é excluída (exclusão lógica) depois de cancelada; o `slug` fica livre de novo.
+- Auditoria: `periodo` = `hoje`, `7d`, `30d` (padrão), `90d`, `ano` ou `intervalo` (com `inicio` e
+  `fim`), nos dias do fuso da loja; `quem` = `f:<id>`, `s:<id>`, `site` ou `sistema` (valores de
+  `auditoria/pessoas`). Cada item traz `quem` com o nome resolvido, `rotulo` do registro e
+  `mudancas` (campo, antes, depois); a troca de senha aparece como `senha: •••••• → redefinida`.
+
+### Site do consumidor (`/api/site/{slug}/...`, público)
+
+| Rota | O que faz |
+|---|---|
+| `GET /api/site/{slug}` | Dados públicos da loja (contato, endereço, tipo, `usa_servicos`, `usa_locais`) |
+| `GET servicos` | Serviços ativos com os profissionais habilitados (sem o módulo Serviços: "Atendimento", 30 min) |
+| `GET locais?servico_id=` | Locais ativos (id, nome, tipo; sem link) |
+| `GET horarios?servico_id=&funcionario_id=&inicio=&fim=` | Horários livres por dia (até 31 dias), com o profissional e o local reservados |
+| `POST agendamentos` | Pedido do cliente: vira agendamento `pendente`, `origem = site` |
+
+- Loja inexistente, excluída, suspensa ou cancelada: **404** em todas as rotas.
+- Horários livres seguem as regras do painel (jornada, bloqueios, ocupação, local permitido e livre)
+  com 60 min de antecedência e passos de 30 min. O pedido só é aceito num horário oferecido; o banco
+  recusa a corrida entre dois pedidos (409).
+- O cliente é identificado pelo telefone (mesma loja): se já existe, ganha o canal `site` e o cadastro
+  não muda; senão é criado. A resposta não traz dados do cadastro existente.
+- **Sem proteção contra abuso ainda** (rate limit, captcha): ver próximos passos.
+
+### O que o front precisa adaptar
+
+- **Ids** são uuid; os campos seguem o banco em `snake_case` (`preco_mensal`, `nome_fantasia`,
+  `plano_id`...). Datas vêm com o fuso da loja.
+- **Lojas (SUPERADMIN):** lista paginada (`itens`, `total`); `GET lojas/opcoes` para os selects.
+  `modulos` na criação é a lista de códigos. Funcionário usa `perfil_id` (de `GET lojas/{id}/perfis`),
+  não o nome do perfil. Módulos via `PATCH` com só o campo alterado. Mostrar `senha_provisoria` quando
+  vier (o texto "recebe um e-mail para definir a senha" ainda não vale).
+- **Redefinir senha** troca a senha na hora (informada ou provisória), em vez de "enviar link".
+- **Auditoria:** a busca e o filtro de pessoa vêm do servidor (paginados); usar `mudancas` em vez de
+  comparar `antes`/`depois` no navegador (as colunas são as do banco, ex.: `inicio` em vez de
+  `data`/`hora`). A operação `restaurar` também pode aparecer.
+- **Site:** loja suspensa responde 404 (o front hoje mostra "Agendamento online indisponível" a
+  partir de `status`); os horários vêm prontos de `GET horarios` (não calcular no navegador); o pedido
+  manda `funcionario_id`, `inicio` e opcionalmente `local_id` do horário escolhido.
 
 Convenções das rotas da loja:
 

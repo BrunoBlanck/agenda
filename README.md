@@ -2,7 +2,7 @@
 
 Sistema web para gestão de uma clínica com vários funcionários: agenda de atendimentos, cadastro de clientes, funcionários, serviços e materiais, além do controle de ponto (entrada e saída) da equipe.
 
-> **Status:** o front-end ainda usa dados de exemplo em memória (ao recarregar a página, os dados voltam ao estado inicial). O back-end está em construção em [`backend/`](backend/README.md): já tem o banco completo (PostgreSQL), dados de exemplo, login de funcionário e de superadmin, as regras de acesso e as rotas de todos os menus do painel da loja; faltam as rotas do SUPERADMIN e do site do consumidor, e o front ainda não está ligado à API.
+> **Status:** há um back-end em [`backend/`](backend/README.md) (FastAPI + PostgreSQL) com o banco completo, dados de exemplo, login de funcionário e de superadmin, as regras de acesso e as rotas das três áreas: painel da loja, painel SUPERADMIN e site do consumidor. O front-end **ainda usa dados de exemplo em memória** (ao recarregar a página, os dados voltam ao estado inicial) e o próximo passo é ligá-lo à API.
 
 ## Funcionalidades
 
@@ -64,7 +64,25 @@ Back-end ([`backend/`](backend/README.md)): Python, FastAPI, PostgreSQL 16, SQLA
 
 ## Como rodar
 
-O back-end tem as próprias instruções em [`backend/README.md`](backend/README.md). Para o front-end:
+### Back-end (API)
+
+Pré-requisitos: [uv](https://docs.astral.sh/uv/) e Docker Desktop. Detalhes, usuários de exemplo e a lista de rotas em [`backend/README.md`](backend/README.md).
+
+```bash
+cd backend
+cp .env.example .env            # e troque JWT_SECRET
+docker compose up -d            # PostgreSQL 16 local
+uv sync
+uv run python -m scripts.criar_papel_app
+uv run alembic upgrade head
+uv run python -m scripts.seed   # dados de exemplo
+uv run uvicorn app.main:app --reload
+```
+
+A API fica em http://localhost:8000 (documentação em http://localhost:8000/docs). Testes: `uv run pytest`.
+
+### Front-end
+
 
 Pré-requisito: [Node.js](https://nodejs.org/) 20 ou superior.
 
@@ -113,6 +131,6 @@ frontend/src/
 
 ## Próximos passos
 
-- Back-end: rotas do painel SUPERADMIN e do site do consumidor
-- Ligar o front-end à API (login real no lugar do botão Demonstração)
-- Painel SUPERADMIN
+- Ligar o front-end à API (login real no lugar do botão Demonstração), no painel da loja, no SUPERADMIN e no site
+- Proteção contra abuso nas rotas públicas do site (limite de requisições, captcha)
+- Envio de e-mail (definir/redefinir senha) e notificações de agendamento

@@ -239,3 +239,47 @@ def test_visao_geral_sem_dados(cliente, sa):
     assert visao['lojas_ativas'] == 0
     assert visao['receita_mensal'] == 0
     assert visao['ultimas_acoes'] == []
+
+
+def test_rotas_com_os_dados_do_seed(cliente, engine_app):
+    """SUPERADMIN e site do consumidor com os dados de exemplo (mock.js e plataforma.js)."""
+    from datetime import date, timedelta
+
+    from scripts import seed
+
+    seed.executar(engine_app)
+    h = login_superadmin(cliente, 'rafael@agendaplataforma.com', seed.SENHA_SUPERADMIN)
+    visao = cliente.get('/api/superadmin/visao-geral', headers=h).json()
+    assert (visao['lojas_ativas'], visao['lojas_suspensas'], visao['lojas_canceladas']) == (3, 1, 1)
+    lojas = cliente.get('/api/superadmin/lojas', headers=h).json()
+    assert lojas['total'] == 5
+    sorriso = next(i for i in lojas['itens'] if i['slug'] == 'clinica-sorriso')
+    for caminho in ('', '/modulos', '/funcionarios', '/perfis'):
+        assert cliente.get(f'/api/superadmin/lojas/{sorriso["id"]}{caminho}', headers=h).status_code == 200
+    for caminho in (
+        '/api/superadmin/planos',
+        '/api/superadmin/usuarios',
+        '/api/superadmin/auditoria/tabelas',
+    ):
+        assert cliente.get(caminho, headers=h).status_code == 200
+    auditoria = cliente.get(
+        '/api/superadmin/auditoria', params={'loja': sorriso['id'], 'periodo': 'ano'}, headers=h
+    )
+    assert auditoria.status_code == 200
+
+    site = cliente.get('/api/site/clinica-sorriso').json()
+    assert site['nome_fantasia'] == 'Clínica Sorriso'
+    servicos = cliente.get('/api/site/clinica-sorriso/servicos').json()
+    assert servicos
+    hoje = date.today()
+    dias = cliente.get(
+        '/api/site/clinica-sorriso/horarios',
+        params={
+            'servico_id': servicos[0]['id'],
+            'inicio': hoje.isoformat(),
+            'fim': (hoje + timedelta(days=13)).isoformat(),
+        },
+    )
+    assert dias.status_code == 200
+    assert any(d['horarios'] for d in dias.json())
+    assert cliente.get('/api/site/clinica-bem-estar').status_code == 404
