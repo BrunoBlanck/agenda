@@ -86,6 +86,24 @@ ERROS_BANCO = {
 }
 
 
+# Mensagens específicas por constraint/índice (nome no banco). Têm prioridade sobre ERROS_BANCO.
+MENSAGENS_CONSTRAINT = {
+    'agendamentos_sem_conflito': 'O profissional já tem um agendamento nesse horário.',
+    'agendamentos_local_sem_conflito': 'Este local já está ocupado nesse horário.',
+    'clientes_cpf_uk': 'Já existe um cliente com este CPF.',
+    'funcionarios_email_uk': 'Já existe um funcionário com este e-mail.',
+    'funcionarios_cpf_uk': 'Já existe um funcionário com este CPF.',
+    'perfis_nome_uk': 'Já existe um perfil com este nome.',
+    'cargos_nome_uk': 'Já existe um cargo com este nome.',
+    'servicos_nome_uk': 'Já existe um serviço com este nome.',
+    'locais_nome_uk': 'Já existe um local com este nome.',
+    'materiais_nome_uk': 'Já existe um material com este nome.',
+    'categorias_material_nome_uk': 'Já existe uma categoria com este nome.',
+    'lojas_cnpj_uk': 'Este CNPJ já está cadastrado em outra loja.',
+    'registros_ponto_um_aberto': 'Este funcionário já tem um registro de ponto em aberto.',
+}
+
+
 def registrar_tratadores(app: FastAPI) -> None:
     @app.exception_handler(StarletteHTTPException)
     async def http(_: Request, exc: StarletteHTTPException) -> JSONResponse:
@@ -121,6 +139,9 @@ def registrar_tratadores(app: FastAPI) -> None:
             and diag.message_primary
         ):
             mensagem = diag.message_primary
+        constraint = getattr(diag, 'constraint_name', None)
+        if constraint in MENSAGENS_CONSTRAINT:
+            mensagem = MENSAGENS_CONSTRAINT[constraint]
         log.info(
             'Erro de banco tratado (SQLSTATE %s, constraint %s)',
             sqlstate,

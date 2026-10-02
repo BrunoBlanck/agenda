@@ -57,7 +57,7 @@ def test_unicidade_vira_409_sem_mostrar_o_cpf(cliente_erros):
     cliente, cabecalho = cliente_erros
     resposta = cliente.post('/api/loja/teste/cliente-duplicado', headers=cabecalho)
     assert resposta.status_code == 409
-    assert resposta.json() == {'detail': 'Já existe um cadastro com esses dados.'}
+    assert resposta.json() == {'detail': 'Já existe um cliente com este CPF.'}
     assert '123.456.789-00' not in resposta.text
 
 
@@ -72,6 +72,6 @@ def test_erro_no_commit_tambem_vira_resposta_em_portugues(cliente_erros, engine_
     cliente, cabecalho = cliente_erros
     resposta = cliente.post('/api/loja/teste/duplicado-no-commit', headers=cabecalho)
     assert resposta.status_code == 409
-    assert resposta.json() == {'detail': 'Já existe um cadastro com esses dados.'}
+    assert resposta.json() == {'detail': 'Já existe um cliente com este CPF.'}
     with engine_dono.connect() as conexao:
         assert conexao.execute(text('SELECT count(*) FROM clientes')).scalar() == 0

@@ -2,7 +2,8 @@
 
 from fastapi import APIRouter
 
-from app.routers.loja import auth
+from app.routers.loja import auth, clientes
 
 router = APIRouter(prefix='/api/loja')
 router.include_router(auth.router)
+router.include_router(clientes.router)

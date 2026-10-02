@@ -105,3 +105,11 @@ def cliente() -> Iterator[TestClient]:
 
     with TestClient(app) as c:
         yield c
+
+
+@pytest.fixture
+def lojas(engine_dono):
+    """Duas lojas (A e B) com Administrador, Recepção e Profissional e todos os módulos ligados."""
+    from tests.fabricas import criar_loja_teste
+
+    return criar_loja_teste(engine_dono, 'loja-a'), criar_loja_teste(engine_dono, 'loja-b')
