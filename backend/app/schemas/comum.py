@@ -68,7 +68,7 @@ class Erro(BaseModel):
 # ---------------------------------------------------------------------------------------------
 
 
-def _vazio_para_none(valor: Any) -> Any:
+def vazio_para_none(valor: Any) -> Any:
     """Texto vazio (ou só espaços) vindo de formulário vira None."""
     if isinstance(valor, str) and not valor.strip():
         return None
@@ -84,11 +84,11 @@ def texto_opcional(maximo: int | None = None) -> Any:
     """Texto opcional: vazio vira None."""
     return Annotated[
         Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=maximo)] | None,
-        BeforeValidator(_vazio_para_none),
+        BeforeValidator(vazio_para_none),
     ]
 
 
-EmailOpcional = Annotated[EmailStr | None, BeforeValidator(_vazio_para_none)]
+EmailOpcional = Annotated[EmailStr | None, BeforeValidator(vazio_para_none)]
 
 # Valores numeric(10,2) saem como número no JSON (e não como texto, padrão do Pydantic para Decimal)
 _COMO_NUMERO = PlainSerializer(float, return_type=float, when_used='json')
