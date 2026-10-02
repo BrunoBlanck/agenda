@@ -113,3 +113,11 @@ def lojas(engine_dono):
     from tests.fabricas import criar_loja_teste
 
     return criar_loja_teste(engine_dono, 'loja-a'), criar_loja_teste(engine_dono, 'loja-b')
+
+
+@pytest.fixture
+def clinica(cliente, lojas):
+    """Loja A com jornada, clientes, locais, materiais e serviços (ver tests/clinica.py)."""
+    from tests.clinica import montar_clinica
+
+    return montar_clinica(cliente, lojas[0])

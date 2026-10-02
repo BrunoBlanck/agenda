@@ -3,6 +3,7 @@
 from fastapi import APIRouter
 
 from app.routers.loja import (
+    agenda,
     agendamentos,
     auth,
     clientes,
@@ -22,3 +23,4 @@ router.include_router(locais.router)
 router.include_router(materiais.router)
 router.include_router(servicos.router)
 router.include_router(agendamentos.router)
+router.include_router(agenda.router)
