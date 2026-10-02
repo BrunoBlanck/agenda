@@ -2,7 +2,7 @@
 
 Sistema web para gestão de uma clínica com vários funcionários: agenda de atendimentos, cadastro de clientes, funcionários, serviços e materiais, além do controle de ponto (entrada e saída) da equipe.
 
-> **Status:** o front-end ainda usa dados de exemplo em memória (ao recarregar a página, os dados voltam ao estado inicial). O back-end está em construção em [`backend/`](backend/README.md): já tem o banco completo (PostgreSQL), dados de exemplo, login de funcionário e de superadmin e as regras de acesso; as rotas de cada menu ainda não existem, então o front ainda não está ligado à API.
+> **Status:** o front-end ainda usa dados de exemplo em memória (ao recarregar a página, os dados voltam ao estado inicial). O back-end está em construção em [`backend/`](backend/README.md): já tem o banco completo (PostgreSQL), dados de exemplo, login de funcionário e de superadmin, as regras de acesso e as rotas de todos os menus do painel da loja; faltam as rotas do SUPERADMIN e do site do consumidor, e o front ainda não está ligado à API.
 
 ## Funcionalidades
 
@@ -113,8 +113,6 @@ frontend/src/
 
 ## Próximos passos
 
-- Back-end: rotas de cada menu do painel da loja, do painel SUPERADMIN e do site do consumidor
+- Back-end: rotas do painel SUPERADMIN e do site do consumidor
 - Ligar o front-end à API (login real no lugar do botão Demonstração)
 - Painel SUPERADMIN
-- Validação de conflito de horários por profissional
-- Baixa automática de materiais no estoque ao concluir um atendimento

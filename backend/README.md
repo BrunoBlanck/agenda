@@ -3,9 +3,9 @@
 API do sistema de agendamento multi-loja: FastAPI + PostgreSQL 16 + SQLAlchemy 2 + Alembic.
 O modelo do banco segue o [`estrutura.md`](../estrutura.md).
 
-> **Status (etapa 1 de 3):** schema completo, seed de desenvolvimento, login (funcionário e
-> superadmin), permissões e `/api/loja/eu`. As rotas CRUD dos menus (etapa 2) e as rotas do
-> SUPERADMIN e do site (etapa 3) ainda não existem.
+> **Status (etapa 2 de 3):** schema completo, seed, login (funcionário e superadmin), permissões e
+> todas as rotas do **painel da loja** (`/api/loja/...`). As rotas do SUPERADMIN e do site do
+> consumidor (etapa 3) ainda não existem, e o front-end ainda não está ligado à API.
 
 ## Requisitos
 
@@ -66,18 +66,45 @@ schema, que precisa ser superusuário para a limpeza entre testes (`session_repl
 Migração reversível: `uv run alembic downgrade base` e `uv run alembic upgrade head`
 (também testado em `tests/test_migracoes.py`, num banco separado).
 
-## Endpoints desta etapa
+## Endpoints
 
-| Método | Caminho | O que faz |
-|---|---|---|
-| GET | `/api/saude` | API e banco no ar |
-| POST | `/api/loja/auth/login` | Login do funcionário: `{slug, email, senha}` → `{token, tipo_token, expira_em}` |
-| GET | `/api/loja/eu` | Funcionário, perfil, loja (com rótulos de local), `modulos` e `acessos` efetivos |
-| POST | `/api/superadmin/auth/login` | Login do superadmin: `{email, senha}` |
-| GET | `/api/superadmin/eu` | Superadmin logado |
-
+A lista completa, com os campos de entrada e saída, está em http://localhost:8000/docs (OpenAPI).
 Envie o token em `Authorization: Bearer <token>`. Token de superadmin não vale nas rotas da loja,
 e vice-versa (401). Loja suspensa ou cancelada recebe 403.
+
+| Área | Rotas (`/api/loja/...`) | Recurso exigido |
+|---|---|---|
+| Acesso | `POST auth/login`, `GET eu`, `GET recursos` | — |
+| Início | `GET inicio` (cada bloco conforme o acesso) | — |
+| Clientes | `GET/POST clientes`, `GET/PUT/DELETE clientes/{id}`, `GET clientes/{id}/historico` | `clientes` |
+| Funcionários | `GET/POST funcionarios`, `GET/PUT funcionarios/{id}`, `GET/POST cargos`, `PUT/DELETE cargos/{id}` | `funcionarios` |
+| Perfis | `GET/POST perfis`, `GET/PUT/DELETE perfis/{id}`, `PUT perfis/{id}/acessos` | `perfis_acesso` (lista também com `config_agendamentos` ou `funcionarios`) |
+| Jornada e bloqueios | `GET horarios`, `POST perfis/{id}/horarios`, `DELETE horarios/{id}`, `GET/POST bloqueios`, `DELETE bloqueios/{id}` | `config_agendamentos` |
+| Serviços | `GET/POST servicos`, `GET/PUT/DELETE servicos/{id}` (com profissionais, locais e materiais) | `servicos` |
+| Locais | `GET/POST locais`, `GET/PUT locais/{id}`, `GET/PUT locais/rotulos` | `locais` |
+| Materiais | `GET/POST materiais`, `GET/PUT/DELETE materiais/{id}`, `GET/POST materiais/{id}/movimentacoes`, `GET/POST categorias-material`, `PUT/DELETE categorias-material/{id}` | `materiais` |
+| Agendamentos | `GET/POST agendamentos`, `GET/PUT/DELETE agendamentos/{id}`, `POST agendamentos/{id}/status`, `POST .../aceitar`, `POST .../recusar`, `PUT .../materiais` | `agenda_propria` / `agenda_equipe` |
+| Apoio ao formulário | `GET apoio/agendamento`, `GET apoio/disponibilidade` | escrita na agenda |
+| Agenda | `GET agenda?inicio=&fim=&funcionario_id=` (semana, mês ou dia) | `agenda_propria` / `agenda_equipe` |
+| Controle de Tempo | `GET ponto`, `GET ponto/aberto`, `POST ponto/registrar`, `POST ponto`, `PUT ponto/{id}` | `ponto_proprio` / `ponto_equipe` |
+| Configurações | `GET/PUT configuracoes/loja`, `DELETE configuracoes/loja/logo` | `config_loja` |
+
+Superadmin: `POST /api/superadmin/auth/login` e `GET /api/superadmin/eu`. Saúde: `GET /api/saude`.
+
+Convenções das rotas da loja:
+
+- **Isolamento:** tudo usa o `loja_id` do token; recurso de outra loja responde **404**.
+- **Permissões:** `exigir(recurso, nivel)` em toda rota; módulo desligado responde 403 até para o
+  Administrador. Leitura não escreve (403 "Você só tem permissão de leitura aqui.").
+- **Datas:** `inicio`, `fim`, `entrada`... sem fuso são lidos no fuso da loja; a resposta vem com o
+  fuso da loja (ex.: `2030-01-07T09:00:00-03:00`). Filtros por dia (`inicio`/`fim` como `date`)
+  usam o dia da loja.
+- **Listas que crescem** (clientes, agendamentos, histórico, movimentações) são paginadas:
+  `?pagina=1&por_pagina=20` → `{itens, total, pagina, por_pagina}`.
+- **Dinheiro e quantidades** saem como número no JSON.
+- **Última alteração:** as respostas trazem `criado_em`, `atualizado_em`, `atualizado_por` e
+  `atualizado_por_nome` (componente `UltimaAlteracao` do front).
+- **Erros** em português: `{"detail": "..."}`; validação (422) traz também `erros: [{campo, mensagem}]`.
 
 ## Como o banco protege os dados
 
@@ -96,6 +123,8 @@ e vice-versa (401). Loja suspensa ou cancelada recebe 403.
   rotas e RLS como segunda camada.
 - **Permissões.** `exigir(recurso, nivel)` (`app/auth/dependencias.py`) confere perfil, módulo
   ligado na loja e status da loja, igual a `frontend/src/data/useAcesso.js`.
+- **Regras de negócio** que não cabem na rota ficam em `app/services/` (agendamentos, jornada e
+  bloqueios, estoque, serviços).
 
 ### Tabela nova
 
