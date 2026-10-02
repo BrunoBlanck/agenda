@@ -152,7 +152,7 @@ def _carregar[M](db: Session, modelo: type[M], loja_id: UUID, id_: UUID, mensage
     return obj
 
 
-def _materiais_do_servico(db: Session, loja_id: UUID, servico_id: UUID) -> dict[UUID, dict]:
+def materiais_do_servico(db: Session, loja_id: UUID, servico_id: UUID) -> dict[UUID, dict]:
     linhas = db.execute(
         select(ServicoMaterial.material_id, ServicoMaterial.quantidade)
         .join(
@@ -285,7 +285,7 @@ def salvar(ctx: ContextoLoja, dados: AgendamentoEntrada, atual: Agendamento | No
         db.add(ag)
         db.flush()
         if com_materiais and servico is not None:
-            for material_id, extra in _materiais_do_servico(db, loja_id, servico.id).items():
+            for material_id, extra in materiais_do_servico(db, loja_id, servico.id).items():
                 db.add(
                     AgendamentoMaterial(
                         loja_id=loja_id, agendamento_id=ag.id, material_id=material_id, **extra
@@ -300,7 +300,7 @@ def salvar(ctx: ContextoLoja, dados: AgendamentoEntrada, atual: Agendamento | No
             setattr(ag, campo, valor)
     db.flush()
     if com_materiais and servico is not None and servico_mudou and ag.status != S.concluido:
-        materiais = _materiais_do_servico(db, loja_id, servico.id)
+        materiais = materiais_do_servico(db, loja_id, servico.id)
         sincronizar_vinculos(
             db, AgendamentoMaterial, loja_id, {'agendamento_id': ag.id}, 'material_id', materiais
         )
