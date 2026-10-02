@@ -9,6 +9,7 @@ from app.routers.loja import (
     clientes,
     configuracoes,
     funcionarios,
+    inicio,
     locais,
     materiais,
     perfis,
@@ -28,3 +29,4 @@ router.include_router(agendamentos.router)
 router.include_router(agenda.router)
 router.include_router(ponto.router)
 router.include_router(configuracoes.router)
+router.include_router(inicio.router)

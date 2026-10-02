@@ -567,3 +567,16 @@ def test_isolamento_entre_lojas(cliente, lojas, clinica):
     # Mesmo horário e "mesmo" profissional em outra loja não conflita
     _criar(cliente, outra)
     assert cliente.get(url, headers=c.lt.h_admin).json()['status'] == 'agendado'
+
+
+def test_historico_ignora_agendamentos_excluidos(cliente, clinica):
+    c = clinica
+    ag = _criar(cliente, c)
+    for st in ('confirmado', 'concluido'):
+        cliente.post(f'{URL}/{ag["id"]}/status', json={'status': st}, headers=c.lt.h_admin)
+    excluido = _criar(cliente, c, inicio=f'{SEGUNDA}T13:00')
+    cliente.post(f'{URL}/{excluido["id"]}/status', json={'status': 'nao_compareceu'}, headers=c.lt.h_admin)
+    cliente.delete(f'{URL}/{excluido["id"]}', headers=c.lt.h_admin)
+    historico = cliente.get(f'/api/loja/clientes/{c.maria}/historico', headers=c.lt.h_admin).json()
+    assert (historico['concluidos'], historico['faltas'], historico['parcial']) == (1, 0, False)
+    assert historico['agendamentos']['total'] == 1
