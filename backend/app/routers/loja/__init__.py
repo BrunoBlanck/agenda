@@ -2,7 +2,7 @@
 
 from fastapi import APIRouter
 
-from app.routers.loja import auth, clientes, funcionarios, locais, perfis
+from app.routers.loja import auth, clientes, funcionarios, locais, materiais, perfis
 
 router = APIRouter(prefix='/api/loja')
 router.include_router(auth.router)
@@ -10,3 +10,4 @@ router.include_router(clientes.router)
 router.include_router(funcionarios.router)
 router.include_router(perfis.router)
 router.include_router(locais.router)
+router.include_router(materiais.router)
