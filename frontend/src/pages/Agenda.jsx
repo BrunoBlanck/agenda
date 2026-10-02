@@ -1,6 +1,6 @@
 import { useState } from 'react'
-import { Card, Row, Col, Select, Button, Flex, Typography, Segmented } from 'antd'
-import { LeftOutlined, RightOutlined } from '@ant-design/icons'
+import { Card, Row, Col, Select, Button, Flex, Typography, Segmented, Tooltip } from 'antd'
+import { LeftOutlined, RightOutlined, MenuFoldOutlined } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import { useData } from '../data/DataContext.jsx'
 import { useAcesso } from '../data/useAcesso.js'
@@ -12,14 +12,36 @@ import { COR_PADRAO, capitalizar, diasDaSemana, diasDoMes, minutosDe } from '../
 
 const unidade = { semana: 'week', mes: 'month' }
 
+// Painel do dia aberto ou recolhido: lembrado neste navegador (preferência de cada usuário)
+const CHAVE_PAINEL = 'agenda.painelDia'
+const lerPainel = () => {
+  try {
+    return localStorage.getItem(CHAVE_PAINEL) !== 'fechado'
+  } catch {
+    return true
+  }
+}
+const gravarPainel = (aberto) => {
+  try {
+    localStorage.setItem(CHAVE_PAINEL, aberto ? 'aberto' : 'fechado')
+  } catch {
+    // Sem acesso ao armazenamento: só não lembra a escolha
+  }
+}
+
 export default function Agenda() {
-  const { agendamentos, clientes, funcionarios, servicos, jornadas, bloqueios } = useData()
+  const { agendamentos, clientes, funcionarios, servicos, jornadas, bloqueios, locais } = useData()
   const { agenda, usuario, moduloAtivo } = useAcesso()
   const [modo, setModo] = useState('semana')
   const [referencia, setReferencia] = useState(dayjs()) // semana/mês exibido
   const [dia, setDia] = useState(dayjs()) // dia detalhado no painel lateral
   const [profissional, setProfissional] = useState(null)
   const [modal, setModal] = useState({ open: false, agendamento: null, hora: null })
+  const [painelAberto, setPainelAberto] = useState(lerPainel)
+  const alternarPainel = (aberto) => {
+    setPainelAberto(aberto)
+    gravarPainel(aberto)
+  }
 
   const func = (id) => funcionarios.itens.find((f) => f.id === id)
   const nomeCliente = (id) => clientes.itens.find((c) => c.id === id)?.nome ?? '—'
@@ -73,7 +95,7 @@ export default function Agenda() {
 
   return (
     <Row gutter={[16, 16]} align="top">
-      <Col xs={24} xl={17}>
+      <Col xs={24} xl={painelAberto ? 17 : 24}>
         <Card>
           <Flex justify="space-between" align="center" wrap gap={12} style={{ marginBottom: 16 }}>
             <Flex align="center" gap={8}>
@@ -113,6 +135,13 @@ export default function Agenda() {
                   { value: 'mes', label: 'Mês' },
                 ]}
               />
+              {!painelAberto && (
+                <Tooltip title="Mostrar os atendimentos do dia selecionado">
+                  <Button icon={<MenuFoldOutlined />} onClick={() => alternarPainel(true)}>
+                    Dia {dia.format('DD/MM')}
+                  </Button>
+                </Tooltip>
+              )}
             </Flex>
           </Flex>
 
@@ -146,22 +175,26 @@ export default function Agenda() {
           )}
         </Card>
       </Col>
-      <Col xs={24} xl={7} className="agenda-coluna-detalhe">
-        <DetalheDia
-          dia={dia}
-          agendamentos={visiveis.filter((a) => a.data === chaveDia)}
-          bloqueios={bloqueiosVisiveis.filter((b) => dia.startOf('day').isBefore(b.fim) && dia.endOf('day').isAfter(b.inicio))}
-          podeCriar={agenda.criar}
-          podeEditar={agenda.editar}
-          onNovo={() => novo(dia)}
-          onAbrir={(a) => setModal({ open: true, agendamento: a, hora: null })}
-          nomeCliente={nomeCliente}
-          nomeServico={nomeServico}
-          nomeFunc={nomeFunc}
-          corDe={corDe}
-          comServicos={moduloAtivo('servicos')}
-        />
-      </Col>
+      {painelAberto && (
+        <Col xs={24} xl={7} className="agenda-coluna-detalhe">
+          <DetalheDia
+            dia={dia}
+            agendamentos={visiveis.filter((a) => a.data === chaveDia)}
+            bloqueios={bloqueiosVisiveis.filter((b) => dia.startOf('day').isBefore(b.fim) && dia.endOf('day').isAfter(b.inicio))}
+            podeCriar={agenda.criar}
+            podeEditar={agenda.editar}
+            onNovo={() => novo(dia)}
+            onAbrir={(a) => setModal({ open: true, agendamento: a, hora: null })}
+            nomeCliente={nomeCliente}
+            nomeServico={nomeServico}
+            nomeFunc={nomeFunc}
+            corDe={corDe}
+            comServicos={moduloAtivo('servicos')}
+            localDe={moduloAtivo('locais') ? (id) => locais.itens.find((l) => l.id === id) : null}
+            onFechar={() => alternarPainel(false)}
+          />
+        </Col>
+      )}
       <AgendamentoModal
         open={modal.open}
         agendamento={modal.agendamento}

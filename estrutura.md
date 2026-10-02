@@ -89,7 +89,7 @@ O que o superadmin faz:
 |---|---|
 | Criar e editar os **dados gerais da loja** (cadastro, endereço, **tipo**, plano, status) | `lojas` (1.6), `tipos_loja` (1.2) |
 | Manter o cadastro de **tipos de loja** (Clínica, Barbearia, Escola...) | `tipos_loja` (1.2) |
-| **Ativar ou desativar módulos** de cada loja, um a um (Serviços, Materiais, Controle de Tempo) | `loja_funcionalidades` (1.7) |
+| **Ativar ou desativar módulos** de cada loja, um a um (Serviços, Materiais, Controle de Tempo, Locais) | `loja_funcionalidades` (1.7) |
 | **Criar e editar funcionários** (usuários) de qualquer loja | `funcionarios` (2.4) |
 | Manter o catálogo de **recursos** usados nos níveis de acesso | `recursos` (1.8) |
 
@@ -197,8 +197,9 @@ Valores iniciais (mesmos menus do front-end):
 | `servicos` | Serviços | **sim** |
 | `materiais` | Materiais | **sim** |
 | `controle_tempo` | Controle de Tempo | **sim** |
+| `locais` | Locais (salas, cadeiras, macas, links online...) | **sim** |
 
-📌 Por enquanto só **Serviços, Materiais e Controle de Tempo** podem ser desativados. Para tornar outro módulo opcional no futuro, basta mudar `opcional` para `true`.
+📌 Por enquanto só **Serviços, Materiais, Controle de Tempo e Locais** podem ser desativados. Para tornar outro módulo opcional no futuro, basta mudar `opcional` para `true`.
 
 ## 1.5 `plano_funcionalidades`
 
@@ -274,6 +275,7 @@ Cada negócio cliente da plataforma (clínica, barbearia, escola...). É o "tena
 | Serviços | Agendamento é criado **sem serviço**: duração e preço informados manualmente (ver 2.13) |
 | Materiais | Não há consumo de materiais nem baixa de estoque ao concluir atendimentos |
 | Controle de Tempo | Funcionários não registram ponto |
+| Locais | Agendamento é criado **sem local** (`local_id` NULL) e as regras de local (2.19, 2.20) não se aplicam |
 
 ## 1.8 `recursos`
 
@@ -302,6 +304,7 @@ Valores iniciais:
 | `perfis_acesso` | Perfis de acesso | funcionarios | Ver perfis e seus níveis | Criar e editar perfis e níveis |
 | `servicos` | Serviços | servicos | Ver serviços | Cadastrar, editar, vincular profissionais e materiais |
 | `materiais` | Materiais | materiais | Ver estoque e movimentações | Cadastrar, editar, lançar entradas, ajustes e perdas |
+| `locais` | Locais | locais | Ver salas, cadeiras, links online... | Cadastrar, editar, inativar e definir como a loja chama os locais (2.21) |
 | `ponto_proprio` | Meu ponto | controle_tempo | Ver os próprios registros | Registrar entrada e saída |
 | `ponto_equipe` | Ponto da equipe | controle_tempo | Ver registros de todos | Corrigir registros (com justificativa) |
 | `config_loja` | Dados da loja | configuracoes | Ver logo, nome, contato, endereço e CNPJ | Editar esses dados (ver 2.18) |
@@ -364,6 +367,12 @@ erDiagram
     agendamentos ||--o{ movimentacoes_estoque : "baixa"
 
     funcionarios ||--o{ registros_ponto : ""
+
+    lojas ||--o{ locais : ""
+    lojas ||--|| loja_configuracoes : ""
+    locais ||--o{ servico_locais : ""
+    servicos ||--o{ servico_locais : "pode ocorrer em"
+    locais ||--o{ agendamentos : "ocorre em"
 ```
 
 ## 2.1 `perfis`
@@ -394,6 +403,7 @@ Perfis padrão criados com a loja (a loja pode editar Recepção e Profissional 
 | Perfis de acesso | escrita | nenhum | nenhum |
 | Serviços | escrita | leitura | nenhum |
 | Materiais | escrita | nenhum | nenhum |
+| Locais | escrita | leitura | nenhum |
 | Meu ponto | escrita | escrita | escrita |
 | Ponto da equipe | escrita | nenhum | nenhum |
 | Dados da loja | escrita | nenhum | nenhum |
@@ -620,6 +630,8 @@ Materiais consumidos por **um** atendimento do serviço.
 | cliente_id | uuid | NOT NULL, FK (loja_id, cliente_id) → clientes |
 | servico_id | uuid | FK (loja_id, servico_id) → servicos. Obrigatório quando o módulo Serviços está ativo (validado no back-end) |
 | funcionario_id | uuid | NOT NULL, FK (loja_id, funcionario_id) → funcionarios |
+| local_id | uuid | FK (loja_id, local_id) → locais. Obrigatório quando o módulo Locais está ativo (validado no back-end) |
+| link_reuniao | varchar(500) | Link deste atendimento online. Vazio = usa `locais.link_padrao` |
 | inicio | timestamptz | NOT NULL |
 | fim | timestamptz | NOT NULL, CHECK (fim > inicio) |
 | preco | numeric(10,2) | cópia do preço do serviço no momento do agendamento |
@@ -649,7 +661,20 @@ ALTER TABLE agendamentos ADD CONSTRAINT agendamentos_sem_conflito
   WHERE (status NOT IN ('cancelado', 'nao_compareceu'));
 ```
 
-📌 **Disponibilidade:** o back-end só aceita agendamentos dentro da jornada do profissional (`funcionario_horarios`) e fora dos `bloqueios_agenda`.
+📌 **Sem conflito de local:** a mesma regra vale para o local (a sala 101 não recebe duas aulas ao mesmo tempo). Agendamentos sem local não entram na verificação. Pedidos `pendente` do site também ocupam o local.
+
+```sql
+ALTER TABLE agendamentos ADD CONSTRAINT agendamentos_local_sem_conflito
+  EXCLUDE USING gist (
+    local_id WITH =,
+    tstzrange(inicio, fim) WITH &&
+  )
+  WHERE (local_id IS NOT NULL AND status NOT IN ('cancelado', 'nao_compareceu'));
+```
+
+📌 **Local do agendamento:** com o módulo **Locais** ativo, o local precisa ser permitido para o serviço (ver 2.20) e estar ativo. A coluna fica nullable porque o módulo pode ser ligado ou desligado a qualquer momento, e os agendamentos antigos continuam válidos. Com o módulo **Serviços** desativado, qualquer local ativo serve.
+
+📌 **Disponibilidade:** o back-end só aceita agendamentos dentro da jornada do profissional (`funcionario_horarios`) e fora dos `bloqueios_agenda`. No site do consumidor, com o módulo Locais ativo, um horário só é oferecido se também houver um local permitido livre; o pedido já sai com esse local.
 
 📌 **Visibilidade:** funcionário com acesso apenas em *Minha agenda* (perfil Profissional) só vê agendamentos onde `funcionario_id` é ele mesmo. Com leitura em *Agenda da equipe* (Recepção, Administrador), vê todos. Em cada caso, **leitura** só vê e **escrita** pode criar, remarcar, mudar status e cancelar.
 
@@ -674,6 +699,7 @@ agendado ──► confirmado ──► concluido
 CREATE INDEX ON agendamentos (loja_id, inicio);
 CREATE INDEX ON agendamentos (loja_id, funcionario_id, inicio);
 CREATE INDEX ON agendamentos (loja_id, cliente_id);
+CREATE INDEX ON agendamentos (loja_id, local_id, inicio);
 ```
 
 ## 2.14 `agendamento_materiais`
@@ -755,7 +781,7 @@ Histórico de alterações de cada agendamento (quem remarcou, cancelou, mudou s
 | loja_id | uuid | |
 | agendamento_id | uuid | FK (loja_id, agendamento_id) → agendamentos |
 | funcionario_id | uuid | FK → funcionarios (quem alterou) |
-| acao | varchar(40) | `criado`, `remarcado`, `status_alterado`, `profissional_alterado` |
+| acao | varchar(40) | `criado`, `remarcado`, `status_alterado`, `profissional_alterado`, `local_alterado` |
 | dados | jsonb | valores antes/depois |
 | criado_em | timestamptz | NOT NULL DEFAULT now() |
 | atualizado_em | timestamptz | NOT NULL DEFAULT now(). Atualizado automaticamente em todo UPDATE (trigger) |
@@ -787,7 +813,68 @@ O que **só o superadmin** altera (não aparece no menu da loja ou aparece só p
 
 📌 Cada alteração preenche `atualizado_por_funcionario` e `atualizado_em`.
 
-📌 **Configurações futuras:** novas opções que não sejam dados cadastrais (ex.: antecedência mínima para agendar, horário de funcionamento, cores) devem ir para uma tabela própria `loja_configuracoes` (uma linha por loja), em vez de aumentar `lojas`. Se alguma delas precisar de acesso separado, cria-se um novo recurso (ex.: `config_agenda_loja`).
+📌 **Configurações futuras:** novas opções que não sejam dados cadastrais (ex.: antecedência mínima para agendar, horário de funcionamento, cores) devem ir para a tabela `loja_configuracoes` (2.21, uma linha por loja), em vez de aumentar `lojas`. Se alguma delas precisar de acesso separado, cria-se um novo recurso (ex.: `config_agenda_loja`).
+
+## 2.19 `locais`
+
+Onde o atendimento acontece. O nome é genérico: em cada loja vira **sala** (escola de música), **cadeira** (barbearia), **maca** (estética), **consultório** (clínica) ou **link de reunião** (atendimento online). O nome exibido no painel vem de `loja_configuracoes` (2.21). Só existe com o módulo **Locais** ativo (1.7).
+
+| Coluna | Tipo | Regras |
+|---|---|---|
+| id | uuid | PK |
+| loja_id | uuid | FK → lojas |
+| nome | varchar(80) | NOT NULL, UNIQUE (loja_id, nome). Ex.: `Sala 101`, `Cadeira 2`, `Online · Dr. Carlos` |
+| tipo | enum `tipo_local` | NOT NULL DEFAULT `presencial`. `presencial` ou `online` |
+| link_padrao | varchar(500) | Só para `online`: link fixo da reunião (ex.: sala pessoal do Meet/Zoom) |
+| descricao | text | Ex.: "piano de cauda, isolamento acústico" |
+| ativo | boolean | DEFAULT true |
+| criado_em | timestamptz | NOT NULL DEFAULT now() |
+| atualizado_em | timestamptz | NOT NULL DEFAULT now(). Atualizado automaticamente em todo UPDATE (trigger) |
+| atualizado_por | uuid | FK (loja_id, atualizado_por) → funcionarios. Funcionário que fez a última alteração na linha |
+
+📌 **Online:** um link de reunião também é um local. Link fixo fica em `link_padrao`; link gerado a cada atendimento vai em `agendamentos.link_reuniao`. Como o conflito de horário é verificado por local, cada link que pode ser usado ao mesmo tempo que outro deve ser um local separado (ex.: um por profissional).
+
+📌 Local **inativo** não aparece para novos agendamentos nem no site, mas o histórico é mantido. Local não é excluído fisicamente.
+
+📌 Cadastro e edição exigem **escrita** em *Locais* (1.8). Para escolher o local ao agendar, a lista (id, nome, tipo) é liberada para quem pode criar agendamentos (mesma regra das listas de apoio, 2.2).
+
+## 2.20 `servico_locais`
+
+Em quais locais cada serviço pode acontecer.
+
+| Coluna | Tipo | Regras |
+|---|---|---|
+| loja_id | uuid | |
+| servico_id | uuid | PK, FK (loja_id, servico_id) → servicos |
+| local_id | uuid | PK, FK (loja_id, local_id) → locais |
+| criado_em | timestamptz | NOT NULL DEFAULT now() |
+| atualizado_em | timestamptz | NOT NULL DEFAULT now(). Atualizado automaticamente em todo UPDATE (trigger) |
+| atualizado_por | uuid | FK (loja_id, atualizado_por) → funcionarios. Funcionário que fez a última alteração na linha |
+
+📌 **Serviço sem nenhum local vinculado = pode acontecer em qualquer local ativo.** Exemplo de uma escola de música:
+
+| Serviço | Vínculos | Resultado |
+|---|---|---|
+| Aula de piano | Sala 101 | Só na sala 101, onde está o piano |
+| Aula de violão | nenhum | Qualquer sala ativa, inclusive salas criadas depois |
+| Aula online | Online · Prof. Pedro, Online · Prof. Ana | Só nos locais online |
+
+📌 Os vínculos são editados na tela de **Serviços** (escrita em *Serviços*).
+
+## 2.21 `loja_configuracoes`
+
+Opções da loja que não são dados cadastrais (ver 2.18). Uma linha por loja, criada junto com a loja.
+
+| Coluna | Tipo | Regras |
+|---|---|---|
+| loja_id | uuid | PK, FK → lojas |
+| rotulo_local | varchar(40) | NOT NULL DEFAULT `'Local'`. Como a loja chama um local (Sala, Cadeira, Maca, Consultório...) |
+| rotulo_local_plural | varchar(40) | NOT NULL DEFAULT `'Locais'`. Usado no menu e nos títulos |
+| criado_em | timestamptz | NOT NULL DEFAULT now() |
+| atualizado_em | timestamptz | NOT NULL DEFAULT now(). Atualizado automaticamente em todo UPDATE (trigger) |
+| atualizado_por | uuid | FK (loja_id, atualizado_por) → funcionarios. Funcionário que fez a última alteração na linha |
+
+📌 Os rótulos são editados na própria tela de Locais, por quem tem **escrita** em *Locais*. Diferente do tipo da loja (1.2), que só muda os textos do site do consumidor, o rótulo muda os textos do **painel**.
 
 ---
 
@@ -801,6 +888,7 @@ CREATE TYPE canal_cliente      AS ENUM ('loja', 'whatsapp', 'site');
 CREATE TYPE tipo_movimentacao  AS ENUM ('entrada', 'saida_atendimento', 'ajuste', 'perda');
 CREATE TYPE origem_ponto       AS ENUM ('sistema', 'manual');
 CREATE TYPE nivel_acesso       AS ENUM ('nenhum', 'leitura', 'escrita');
+CREATE TYPE tipo_local         AS ENUM ('presencial', 'online');
 ```
 
 ---
@@ -810,15 +898,16 @@ CREATE TYPE nivel_acesso       AS ENUM ('nenhum', 'leitura', 'escrita');
 | Tela | Tabelas |
 |---|---|
 | Início | `agendamentos`, `clientes`, `registros_ponto`, `materiais` |
-| Agenda | `agendamentos`, `funcionarios`, `funcionario_horarios`, `bloqueios_agenda` |
-| Agendamentos | `agendamentos`, `clientes`, `servicos`, `servico_funcionarios`, `agendamento_materiais` |
+| Agenda | `agendamentos`, `funcionarios`, `funcionario_horarios`, `bloqueios_agenda`, `locais` |
+| Agendamentos | `agendamentos`, `clientes`, `servicos`, `servico_funcionarios`, `servico_locais`, `locais`, `agendamento_materiais` |
 | Clientes | `clientes` |
 | Funcionários | `funcionarios`, `cargos`, `perfis`, `perfil_acessos`, `recursos` |
-| Serviços | `servicos`, `servico_funcionarios`, `servico_materiais` |
+| Serviços | `servicos`, `servico_funcionarios`, `servico_materiais`, `servico_locais` |
+| Locais (nome definido pela loja) | `locais`, `servico_locais`, `loja_configuracoes` |
 | Materiais | `materiais`, `categorias_material`, `movimentacoes_estoque` |
 | Controle de Tempo | `registros_ponto` |
 | *(futuro)* Login da loja | `lojas` (slug), `funcionarios`, `perfis`, `perfil_acessos`, `recursos`, `loja_funcionalidades` |
-| Site do consumidor (`/`, exemplo) | `lojas`, `tipos_loja`, `servicos`, `servico_funcionarios`, `funcionario_horarios`, `bloqueios_agenda`, `agendamentos`, `clientes` |
+| Site do consumidor (`/`, exemplo) | `lojas`, `tipos_loja`, `servicos`, `servico_funcionarios`, `servico_locais`, `locais`, `funcionario_horarios`, `bloqueios_agenda`, `agendamentos`, `clientes` |
 | *(futuro)* Configurações | `lojas` (campos editáveis pela loja, ver 2.18) |
 | *(futuro)* Painel SUPERADMIN | todas as tabelas da seção 1 |
 
@@ -837,6 +926,8 @@ Diferenças entre o mock atual e o banco:
 | ponto com `data` + `entrada`/`saida` em texto | `entrada` / `saida` (`timestamptz`) |
 | Sem perfis/níveis de acesso | `perfis`, `perfil_acessos`, `recursos` |
 | Menu sempre completo | itens ocultos conforme `loja_funcionalidades` e nível de acesso |
+| `servico.localIds` (array) | tabela `servico_locais` |
+| `loja.rotuloLocal` / `rotuloLocalPlural` | `loja_configuracoes` |
 
 ---
 
@@ -854,3 +945,5 @@ Diferenças entre o mock atual e o banco:
 - [ ] Com o módulo **Serviços desativado**, o agendamento sem serviço (duração e preço manuais) é o comportamento desejado?
 - [ ] Precisa de ajuste de acesso **por funcionário** (exceção ao perfil), ou o perfil basta?
 - [ ] Configurações da loja: a razão social também deve ser editável pela loja, ou só o nome fantasia?
+- [ ] **Quem liga o módulo Locais:** hoje, como os outros módulos, só o superadmin. A ideia original era a própria loja escolher se usa locais. Se for isso, Locais vira um módulo que a loja liga em Configurações (sem passar pelo superadmin), ou um módulo opcional do plano que a loja ativa quando quiser.
+- [ ] **Atendimentos em grupo** (ex.: aula de teoria musical com 5 alunos na mesma sala e horário). Hoje cada local e cada profissional aceitam um agendamento por vez. Para grupos, seria preciso `capacidade` no local/serviço e uma tabela de participantes do agendamento.

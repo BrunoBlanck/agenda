@@ -1,12 +1,13 @@
-import { Card, Button, Flex, Tag, Typography, Empty, Alert } from 'antd'
-import { PlusOutlined, ClockCircleOutlined, UserOutlined } from '@ant-design/icons'
+import { Card, Button, Flex, Tag, Typography, Empty, Alert, Tooltip } from 'antd'
+import { PlusOutlined, ClockCircleOutlined, UserOutlined, MenuUnfoldOutlined } from '@ant-design/icons'
 import { statusAgendamento } from '../../data/mock.js'
 import { moeda } from '../../utils/formatos.js'
 import { capitalizar, ehHoje, fimDe, inativo } from './util.js'
 import AceiteSolicitacao from '../AceiteSolicitacao.jsx'
+import LocalInfo from '../LocalInfo.jsx'
 
 // Painel lateral: todos os atendimentos do dia selecionado, em ordem de horário
-export default function DetalheDia({ dia, agendamentos, bloqueios, podeCriar, podeEditar, onNovo, onAbrir, nomeCliente, nomeServico, nomeFunc, corDe, comServicos }) {
+export default function DetalheDia({ dia, agendamentos, bloqueios, podeCriar, podeEditar, onNovo, onAbrir, nomeCliente, nomeServico, nomeFunc, corDe, comServicos, localDe, onFechar }) {
   const lista = [...agendamentos].sort((a, b) => a.hora.localeCompare(b.hora))
   const ativos = lista.filter((a) => !inativo(a))
   const minutos = ativos.reduce((t, a) => t + (a.duracao ?? 0), 0)
@@ -15,6 +16,13 @@ export default function DetalheDia({ dia, agendamentos, bloqueios, podeCriar, po
   return (
     <Card
       className="agenda-detalhe"
+      extra={
+        onFechar && (
+          <Tooltip title="Recolher painel e ampliar o calendário">
+            <Button type="text" icon={<MenuUnfoldOutlined />} onClick={onFechar} />
+          </Tooltip>
+        )
+      }
       title={
         <Flex vertical>
           <Flex align="center" gap={8}>
@@ -63,6 +71,11 @@ export default function DetalheDia({ dia, agendamentos, bloqueios, podeCriar, po
             </Flex>
             <div className="agenda-detalhe-cliente">{nomeCliente(a.clienteId)}</div>
             {comServicos && <Typography.Text>{nomeServico(a.servicoId)}</Typography.Text>}
+            {localDe && (
+              <div>
+                <LocalInfo local={localDe(a.localId)} secundario />
+              </div>
+            )}
             <Flex justify="space-between">
               <Typography.Text type="secondary">
                 <UserOutlined /> {nomeFunc(a.funcionarioId)}

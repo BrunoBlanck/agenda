@@ -6,21 +6,27 @@ import { useData } from '../data/DataContext.jsx'
 import { useAcesso } from '../data/useAcesso.js'
 import { statusAgendamento } from '../data/mock.js'
 import AgendamentoModal from '../components/AgendamentoModal.jsx'
+import { rotulosLocal } from '../data/locais.js'
+import LocalInfo from '../components/LocalInfo.jsx'
 
 export default function Agendamentos() {
-  const { agendamentos, clientes, funcionarios, servicos } = useData()
+  const { agendamentos, clientes, funcionarios, servicos, locais, loja } = useData()
   const { agenda, moduloAtivo } = useAcesso()
   const [profissional, setProfissional] = useState(null)
+  const [local, setLocal] = useState(null)
   const [periodo, setPeriodo] = useState(null)
   const [modal, setModal] = useState({ open: false, agendamento: null })
 
   const nomeCliente = (id) => clientes.itens.find((c) => c.id === id)?.nome ?? '—'
   const nomeFunc = (id) => funcionarios.itens.find((f) => f.id === id)?.nome ?? '—'
   const nomeServico = (id) => servicos.itens.find((s) => s.id === id)?.nome ?? '—'
+  const comLocais = moduloAtivo('locais')
+  const rotulos = rotulosLocal(loja.dados)
 
   const dados = agendamentos.itens
     .filter(agenda.ver)
     .filter((a) => !profissional || a.funcionarioId === profissional)
+    .filter((a) => !comLocais || !local || a.localId === local)
     .filter((a) => !periodo || (!dayjs(a.data).isBefore(periodo[0], 'day') && !dayjs(a.data).isAfter(periodo[1], 'day')))
     .sort((a, b) => `${a.data} ${a.hora}`.localeCompare(`${b.data} ${b.hora}`))
 
@@ -30,6 +36,11 @@ export default function Agendamentos() {
     { title: 'Cliente', dataIndex: 'clienteId', render: nomeCliente },
     agenda.verEquipe && { title: 'Profissional', dataIndex: 'funcionarioId', render: nomeFunc },
     moduloAtivo('servicos') && { title: 'Serviço', dataIndex: 'servicoId', render: nomeServico },
+    comLocais && {
+      title: rotulos.singular,
+      dataIndex: 'localId',
+      render: (id) => <LocalInfo local={locais.itens.find((l) => l.id === id)} />,
+    },
     { title: 'Duração', dataIndex: 'duracao', render: (d) => `${d} min` },
     {
       title: 'Status',
@@ -68,6 +79,15 @@ export default function Agendamentos() {
               style={{ minWidth: 220 }}
               onChange={setProfissional}
               options={funcionarios.itens.map((f) => ({ value: f.id, label: f.nome }))}
+            />
+          )}
+          {comLocais && (
+            <Select
+              allowClear
+              placeholder={`Qualquer ${rotulos.singular.toLowerCase()}`}
+              style={{ minWidth: 200 }}
+              onChange={setLocal}
+              options={locais.itens.map((l) => ({ value: l.id, label: l.nome }))}
             />
           )}
           <DatePicker.RangePicker format="DD/MM/YYYY" onChange={setPeriodo} />

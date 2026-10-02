@@ -1,9 +1,10 @@
 import { useEffect } from 'react'
-import { Modal, Form, Select, DatePicker, TimePicker, InputNumber, Alert, Button } from 'antd'
+import { Modal, Form, Select, DatePicker, TimePicker, InputNumber, Alert, Button, Input, Tag } from 'antd'
 import dayjs from 'dayjs'
 import { useData } from '../data/DataContext.jsx'
 import { useAcesso } from '../data/useAcesso.js'
-import { statusAgendamento } from '../data/mock.js'
+import { statusAgendamento, tiposLocal } from '../data/mock.js'
+import { localOcupado, locaisDoServico, rotulosLocal } from '../data/locais.js'
 import UltimaAlteracao from './UltimaAlteracao.jsx'
 
 // Avisa quando o horário cai fora da jornada do profissional ou dentro de um bloqueio.
@@ -30,7 +31,7 @@ function avisoDisponibilidade({ funcionarioId, data, hora, duracao }, jornadas, 
 
 // Modal para criar/editar um agendamento. `agendamento` = null cria um novo.
 export default function AgendamentoModal({ open, onClose, agendamento, dataInicial, horaInicial }) {
-  const { clientes, funcionarios, agendamentos, servicos, materiais, jornadas, bloqueios } = useData()
+  const { clientes, funcionarios, agendamentos, servicos, materiais, jornadas, bloqueios, locais, loja } = useData()
   const { usuario, moduloAtivo, agenda } = useAcesso()
   const [form] = Form.useForm()
   const valores = Form.useWatch([], form) ?? {}
@@ -38,6 +39,8 @@ export default function AgendamentoModal({ open, onClose, agendamento, dataInici
 
   const comServicos = moduloAtivo('servicos')
   const comMateriais = moduloAtivo('materiais')
+  const comLocais = moduloAtivo('locais')
+  const rotulos = rotulosLocal(loja.dados)
   const somenteLeitura = agendamento ? !agenda.editar(agendamento) : !agenda.criar
 
   // Sem escrita na agenda da equipe, o usuário só agenda para si mesmo (e só os serviços que ele realiza).
@@ -52,9 +55,27 @@ export default function AgendamentoModal({ open, onClose, agendamento, dataInici
       : proprio(f.id),
   )
 
+  // Locais permitidos para o serviço (o já gravado no agendamento continua na lista mesmo se inativo)
+  const permitidos = (s) => locaisDoServico(comServicos ? s : null, locais.itens)
+  const opcoesLocal = [
+    ...permitidos(servico),
+    ...locais.itens.filter((l) => l.id === agendamento?.localId && !permitidos(servico).includes(l)),
+  ]
+  // Outro agendamento ativo usa o local no horário informado? (v = valores do formulário)
+  const ocupado = (localId, { data, hora, duracao } = valores) => {
+    if (!data || !hora) return false
+    const ini = hora.hour() * 60 + hora.minute()
+    return localOcupado(localId, data.format('YYYY-MM-DD'), ini, ini + (duracao ?? 0), agendamentos.itens, agendamento?.id)
+  }
+  const localEscolhido = locais.itens.find((l) => l.id === valores.localId)
+
   const trocarServico = (id) => {
     const novo = servicos.itens.find((s) => s.id === id)
     form.setFieldsValue({ duracao: novo?.duracao, preco: novo?.preco })
+    if (comLocais && !permitidos(novo).some((l) => l.id === form.getFieldValue('localId'))) {
+      const lista = permitidos(novo)
+      form.setFieldsValue({ localId: lista.length === 1 ? lista[0].id : undefined })
+    }
     if (agenda.criarParaOutros && !novo?.funcionarioIds.includes(form.getFieldValue('funcionarioId'))) {
       form.setFieldsValue({ funcionarioId: novo?.funcionarioIds.length === 1 ? novo.funcionarioIds[0] : undefined })
     }
@@ -154,6 +175,48 @@ export default function AgendamentoModal({ open, onClose, agendamento, dataInici
           </Form.Item>
         </Form.Item>
         {aviso && !somenteLeitura && <Alert type="warning" showIcon title={aviso} style={{ marginBottom: 16 }} />}
+        {comLocais && (
+          <Form.Item
+            name="localId"
+            label={rotulos.singular}
+            dependencies={['data', 'hora', 'duracao']}
+            rules={[
+              { required: true, message: 'Escolha onde será o atendimento' },
+              {
+                validator: (_, id) =>
+                  id && ocupado(id, form.getFieldsValue())
+                    ? Promise.reject(new Error('Já existe outro agendamento aqui neste horário.'))
+                    : Promise.resolve(),
+              },
+            ]}
+          >
+            <Select
+              disabled={comServicos && !servico}
+              placeholder={comServicos && !servico ? 'Escolha o serviço primeiro' : 'Selecione'}
+              options={opcoesLocal.map((l) => ({
+                value: l.id,
+                disabled: ocupado(l.id),
+                label: (
+                  <>
+                    {l.nome} <Tag color={tiposLocal[l.tipo]?.color}>{tiposLocal[l.tipo]?.label}</Tag>
+                    {ocupado(l.id) && <Tag>Ocupado</Tag>}
+                    {!l.ativo && <Tag>Inativo</Tag>}
+                  </>
+                ),
+              }))}
+            />
+          </Form.Item>
+        )}
+        {comLocais && localEscolhido?.tipo === 'online' && (
+          <Form.Item
+            name="linkReuniao"
+            label="Link da reunião"
+            extra={localEscolhido.linkPadrao ? 'Se ficar vazio, usa o link fixo do local.' : 'Este local não tem link fixo; informe o link deste atendimento.'}
+            rules={[{ type: 'url', message: 'Informe um link válido (https://...)' }]}
+          >
+            <Input placeholder={localEscolhido.linkPadrao ?? 'https://...'} />
+          </Form.Item>
+        )}
         <Form.Item
           name="preco"
           label="Preço"

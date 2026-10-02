@@ -10,7 +10,11 @@ export const modulos = [
   { codigo: 'servicos', nome: 'Serviços', opcional: true },
   { codigo: 'materiais', nome: 'Materiais', opcional: true },
   { codigo: 'controle_tempo', nome: 'Controle de Tempo', opcional: true },
+  { codigo: 'locais', nome: 'Locais', opcional: true },
 ]
+
+// Módulos opcionais (os que o superadmin liga e desliga por loja)
+export const codigosOpcionais = modulos.filter((m) => m.opcional).map((m) => m.codigo)
 
 // Áreas que recebem nível de acesso (nenhum, leitura, escrita) nos perfis
 export const recursos = [
@@ -63,6 +67,13 @@ export const recursos = [
     modulo: 'materiais',
     leitura: 'Ver estoque',
     escrita: 'Cadastrar, editar e ajustar estoque',
+  },
+  {
+    codigo: 'locais',
+    nome: 'Locais',
+    modulo: 'locais',
+    leitura: 'Ver salas, cadeiras, links online...',
+    escrita: 'Cadastrar, editar, inativar e definir como a loja chama os locais',
   },
   {
     codigo: 'ponto_proprio',

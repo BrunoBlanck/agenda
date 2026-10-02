@@ -4,7 +4,7 @@ import { Layout, Menu, Avatar, Flex, Typography, Tag, Button, Result, theme } fr
 import { UserOutlined, ControlOutlined, GlobalOutlined } from '@ant-design/icons'
 import { useData } from '../data/DataContext.jsx'
 import { useAcesso } from '../data/useAcesso.js'
-import { menuPermitido, telaDaRota } from './navegacao.jsx'
+import { menuPermitido, nomeDaTela, telaDaRota } from './navegacao.jsx'
 import PainelDemonstracao from './PainelDemonstracao.jsx'
 
 const { Header, Sider, Content } = Layout
@@ -46,7 +46,7 @@ export default function AppLayout() {
           mode="inline"
           selectedKeys={[pathname]}
           defaultOpenKeys={pathname.startsWith('/painel/configuracoes') ? ['/painel/configuracoes'] : []}
-          items={menuPermitido(acesso)}
+          items={menuPermitido(acesso, loja.dados)}
           onClick={({ key }) => navigate(key)}
         />
       </Sider>
@@ -54,7 +54,7 @@ export default function AppLayout() {
         <Header style={{ background: token.colorBgContainer, padding: '0 24px' }}>
           <Flex justify="space-between" align="center" style={{ height: '100%' }}>
             <Typography.Title level={4} style={{ margin: 0 }}>
-              {tela?.label}
+              {nomeDaTela(tela, loja.dados)}
             </Typography.Title>
             <Flex align="center" gap={8}>
               <Button icon={<GlobalOutlined />} onClick={() => navigate('/')}>

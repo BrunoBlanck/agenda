@@ -6,8 +6,10 @@ import UltimaAlteracao from './UltimaAlteracao.jsx'
 // Tela genérica de cadastro: busca + tabela + modal de formulário.
 // somenteLeitura: perfil com nível "leitura" (sem criar, editar ou excluir).
 // validar(valores, item): regra extra antes de salvar; retorna a mensagem de erro ou nada.
+// textoNovo: texto do botão de criar (padrão "Novo <titulo>"), para nomes femininos ou definidos pela loja.
 export default function CadastroTabela({
   titulo,
+  textoNovo = `Novo ${titulo.toLowerCase()}`,
   lista,
   colunas,
   campos,
@@ -15,6 +17,7 @@ export default function CadastroTabela({
   somenteLeitura = false,
   permitirExcluir = true,
   validar,
+  expandable,
 }) {
   const [busca, setBusca] = useState('')
   const [editando, setEditando] = useState(null) // null = fechado, {} = novo, item = edição
@@ -74,7 +77,7 @@ export default function CadastroTabela({
           <Tag color="blue">Somente leitura</Tag>
         ) : (
           <Button type="primary" icon={<PlusOutlined />} onClick={() => abrir({})}>
-            Novo {titulo.toLowerCase()}
+            {textoNovo}
           </Button>
         )}
       </Flex>
@@ -83,9 +86,10 @@ export default function CadastroTabela({
         columns={somenteLeitura ? colunas : [...colunas, colunaAcoes]}
         dataSource={dados}
         scroll={{ x: true }}
+        expandable={expandable}
       />
       <Modal
-        title={editando?.id ? `Editar ${titulo.toLowerCase()}` : `Novo ${titulo.toLowerCase()}`}
+        title={editando?.id ? `Editar ${titulo.toLowerCase()}` : textoNovo}
         open={!!editando}
         onOk={salvar}
         onCancel={() => setEditando(null)}

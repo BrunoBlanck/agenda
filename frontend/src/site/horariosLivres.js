@@ -1,12 +1,15 @@
 import dayjs from 'dayjs'
 import { horaDe, inativo, minutosDe } from '../components/agenda/util.js'
+import { localOcupado } from '../data/locais.js'
 
 const PASSO = 30 // minutos entre um horário oferecido e outro
 const ANTECEDENCIA = 60 // minutos mínimos a partir de agora
 
 // Horários livres de um dia: dentro da jornada, fora de bloqueios e sem conflito com outro agendamento.
 // Com mais de um profissional, cada horário fica com o primeiro que estiver livre.
-export function horariosLivres({ data, funcionarioIds, duracao, jornadas, bloqueios, agendamentos }) {
+// localIds: locais onde o serviço pode acontecer (módulo Locais); o horário só é oferecido se algum estiver livre.
+// null = loja sem o módulo, não verifica local.
+export function horariosLivres({ data, funcionarioIds, duracao, jornadas, bloqueios, agendamentos, localIds = null }) {
   const chave = data.format('YYYY-MM-DD')
   const limite = dayjs().add(ANTECEDENCIA, 'minute')
   const livres = new Map()
@@ -34,10 +37,12 @@ export function horariosLivres({ data, funcionarioIds, duracao, jornadas, bloque
         if (data.startOf('day').add(ini, 'minute').isBefore(limite)) continue
         if (ocupados.some(([o1, o2]) => ini < o2 && fim > o1)) continue
         if (bloqueado(ini, fim)) continue
-        livres.set(hora, funcionarioId)
+        const localId = localIds?.find((id) => !localOcupado(id, chave, ini, fim, agendamentos)) ?? null
+        if (localIds && localId == null) continue
+        livres.set(hora, { funcionarioId, localId })
       }
     }
   }
 
-  return [...livres.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([hora, funcionarioId]) => ({ hora, funcionarioId }))
+  return [...livres.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([hora, livre]) => ({ hora, ...livre }))
 }

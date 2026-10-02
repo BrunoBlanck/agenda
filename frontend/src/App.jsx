@@ -7,6 +7,7 @@ import Agendamentos from './pages/Agendamentos.jsx'
 import Clientes from './pages/Clientes.jsx'
 import Funcionarios from './pages/Funcionarios.jsx'
 import Servicos from './pages/Servicos.jsx'
+import Locais from './pages/Locais.jsx'
 import Materiais from './pages/Materiais.jsx'
 import ControleTempo from './pages/ControleTempo.jsx'
 import ConfigLoja from './pages/ConfigLoja.jsx'
@@ -35,6 +36,7 @@ export default function App() {
         <Route path="clientes" element={<Clientes />} />
         <Route path="funcionarios" element={<Funcionarios />} />
         <Route path="servicos" element={<Servicos />} />
+        <Route path="locais" element={<Locais />} />
         <Route path="materiais" element={<Materiais />} />
         <Route path="controle-tempo" element={<ControleTempo />} />
         <Route path="configuracoes/loja" element={<ConfigLoja />} />

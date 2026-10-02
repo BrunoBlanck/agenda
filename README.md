@@ -10,10 +10,11 @@ Sistema web para gestão de uma clínica com vários funcionários: agenda de at
 |---|---|
 | **Início** | Resumo do dia: agendamentos de hoje, clientes cadastrados, funcionários em serviço e materiais a repor |
 | **Agenda** | Visão por **semana** (uma coluna por dia, horários na vertical, clique num horário vazio para agendar) ou por **mês**, com filtro por profissional e painel lateral com os atendimentos do dia selecionado em ordem |
-| **Agendamentos** | Lista de agendamentos com filtro por profissional e período; criar, editar e excluir |
+| **Agendamentos** | Lista de agendamentos com filtro por profissional, local e período; criar, editar e excluir |
 | **Clientes** | Cadastro de clientes (nome, CPF, telefone, e-mail, nascimento) |
 | **Funcionários** | Cadastro de funcionários (nome, cargo, e-mail de login, telefone, ativo/inativo) |
-| **Serviços** | Cadastro de serviços com duração, preço, profissionais habilitados e materiais usados por atendimento |
+| **Serviços** | Cadastro de serviços com duração, preço, profissionais habilitados, locais onde podem acontecer e materiais usados por atendimento |
+| **Locais** | Onde o atendimento acontece: salas, cadeiras, macas, consultórios ou links online. A loja escolhe o nome que aparece no menu (ex.: "Salas", "Cadeiras") |
 | **Materiais** | Controle de estoque com quantidade mínima e alerta de reposição |
 | **Controle de Tempo** | Registro de entrada/saída dos funcionários e total de horas trabalhadas por dia |
 | **Configurações › Dados da loja** | Logo, nome, razão social, contato, endereço (com busca por CEP) e CNPJ |
@@ -23,7 +24,7 @@ Sistema web para gestão de uma clínica com vários funcionários: agenda de at
 ### Acessos e módulos
 
 - Cada funcionário tem um **perfil** (Administrador, Recepção, Profissional ou outros criados pela loja). O menu e os botões mostrados dependem do nível do perfil em cada área.
-- **Serviços, Materiais e Controle de Tempo** podem ser desativados por loja. Sem Serviços, o agendamento é feito sem serviço (duração e preço manuais).
+- **Serviços, Materiais, Controle de Tempo e Locais** podem ser desativados por loja. Sem Serviços, o agendamento é feito sem serviço (duração e preço manuais). Sem Locais, o agendamento não pede local.
 - Como ainda não há login nem painel SUPERADMIN, o botão **Demonstração** (no topo) permite trocar o usuário logado, ligar/desligar módulos e mudar o tipo da loja.
 - Detalhes das regras em [`estrutura.md`](estrutura.md).
 
@@ -49,6 +50,7 @@ A "Clínica Sorriso" é a loja aberta no painel da loja: o que o superadmin muda
 - Ao escolher o serviço, a **duração** é preenchida automaticamente.
 - Só podem ser escolhidos os **profissionais habilitados** para aquele serviço.
 - Os **materiais** do serviço são exibidos no momento do agendamento.
+- Com o módulo **Locais** ativo, o agendamento exige um local permitido para o serviço (serviço sem local vinculado aceita qualquer um) e não deixa escolher um local já ocupado no horário. Local online pode ter um link fixo ou um link por atendimento.
 
 ## Tecnologias
 

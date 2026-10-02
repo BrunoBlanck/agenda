@@ -1,4 +1,5 @@
 import { useData } from '../data/DataContext.jsx'
+import { codigosOpcionais } from '../data/acesso.js'
 
 const PERFIS_PADRAO = ['Administrador', 'Recepção', 'Profissional']
 
@@ -52,8 +53,8 @@ export function usePlataforma() {
 
   // Nova loja: módulos vêm do plano (estrutura.md 1.7) e já nasce com o primeiro Administrador
   const criarLoja = ({ admin, ...dados }) => {
-    const sugeridos = plano(dados.planoId)?.modulos ?? ['servicos', 'materiais', 'controle_tempo']
-    const modulos = Object.fromEntries(['servicos', 'materiais', 'controle_tempo'].map((c) => [c, sugeridos.includes(c)]))
+    const sugeridos = plano(dados.planoId)?.modulos ?? codigosOpcionais
+    const modulos = Object.fromEntries(codigosOpcionais.map((c) => [c, sugeridos.includes(c)]))
     const id = lojas.adicionar(
       {
         ...dados,

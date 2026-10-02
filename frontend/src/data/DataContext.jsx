@@ -8,6 +8,7 @@ import {
   clientesIniciais,
   materiaisIniciais,
   servicosIniciais,
+  locaisIniciais,
   agendamentosIniciais,
   pontosIniciais,
 } from './mock.js'
@@ -71,6 +72,7 @@ export function DataProvider({ children }) {
     clientes: useLista(clientesIniciais, usuarioId),
     materiais: useLista(materiaisIniciais, usuarioId),
     servicos: useLista(servicosIniciais, usuarioId),
+    locais: useLista(locaisIniciais, usuarioId),
     agendamentos: useLista(agendamentosIniciais, usuarioId),
     pontos: useLista(pontosIniciais, usuarioId),
   }

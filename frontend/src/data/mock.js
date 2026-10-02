@@ -26,8 +26,11 @@ export const lojaInicial = {
   cidade: 'São Paulo',
   uf: 'SP',
   // Módulos opcionais ativados pelo superadmin (loja_funcionalidades)
-  modulos: { servicos: true, materiais: true, controle_tempo: true },
+  modulos: { servicos: true, materiais: true, controle_tempo: true, locais: true },
   modulosInfo: {},
+  // Como a loja chama os locais na tela (Sala, Cadeira, Maca, Consultório...)
+  rotuloLocal: 'Consultório',
+  rotuloLocalPlural: 'Consultórios',
   criadoEm: dayjs().subtract(90, 'day').toISOString(),
 }
 
@@ -52,6 +55,7 @@ export const perfisIniciais = [
       config_agendamentos: 'leitura',
       clientes: 'escrita',
       servicos: 'leitura',
+      locais: 'leitura',
       ponto_proprio: 'escrita',
     },
   },
@@ -101,7 +105,16 @@ export const materiaisIniciais = [
   { id: 4, nome: 'Gaze estéril', categoria: 'Curativos', quantidade: 3, minimo: 15, unidade: 'pct' },
 ]
 
+// Onde o atendimento acontece (estrutura.md, 2.19). tipo: presencial ou online
+export const locaisIniciais = [
+  { id: 1, nome: 'Consultório 1', tipo: 'presencial', descricao: 'Cadeira odontológica e raio-x', ativo: true },
+  { id: 2, nome: 'Consultório 2', tipo: 'presencial', descricao: 'Cadeira odontológica', ativo: true },
+  { id: 3, nome: 'Sala de fisioterapia', tipo: 'presencial', descricao: 'Macas e aparelhos', ativo: true },
+  { id: 4, nome: 'Online · Dr. Carlos', tipo: 'online', linkPadrao: 'https://meet.google.com/abc-defg-hij', ativo: true },
+]
+
 // materiais: quantidade de cada material consumida por atendimento
+// localIds: onde o serviço pode acontecer. Vazio = qualquer local ativo
 export const servicosIniciais = [
   {
     id: 1,
@@ -110,6 +123,7 @@ export const servicosIniciais = [
     preco: 200,
     funcionarioIds: [1],
     materiais: [{ materialId: 1, quantidade: 1 }, { materialId: 4, quantidade: 2 }],
+    localIds: [1, 2],
   },
   {
     id: 2,
@@ -118,6 +132,7 @@ export const servicosIniciais = [
     preco: 100,
     funcionarioIds: [1, 2],
     materiais: [{ materialId: 1, quantidade: 1 }, { materialId: 2, quantidade: 1 }],
+    localIds: [],
   },
   {
     id: 3,
@@ -126,21 +141,22 @@ export const servicosIniciais = [
     preco: 150,
     funcionarioIds: [2],
     materiais: [],
+    localIds: [3, 4],
   },
 ]
 
 export const agendamentosIniciais = [
-  { id: 1, clienteId: 1, funcionarioId: 1, data: hoje, hora: '09:00', servicoId: 1, duracao: 60, preco: 200, status: 'confirmado' },
-  { id: 2, clienteId: 2, funcionarioId: 2, data: hoje, hora: '10:30', servicoId: 3, duracao: 45, preco: 150, status: 'agendado' },
-  { id: 3, clienteId: 3, funcionarioId: 1, data: amanha, hora: '14:00', servicoId: 2, duracao: 30, preco: 100, status: 'agendado' },
-  { id: 4, clienteId: 2, funcionarioId: 1, data: hoje, hora: '09:30', servicoId: 2, duracao: 30, preco: 100, status: 'agendado' },
-  { id: 5, clienteId: 3, funcionarioId: 2, data: hoje, hora: '14:00', servicoId: 3, duracao: 45, preco: 150, status: 'confirmado' },
-  { id: 6, clienteId: 1, funcionarioId: 2, data: diaRelativo(-1), hora: '11:00', servicoId: 3, duracao: 45, preco: 150, status: 'concluido' },
-  { id: 7, clienteId: 2, funcionarioId: 1, data: diaRelativo(-1), hora: '16:00', servicoId: 1, duracao: 60, preco: 200, status: 'nao_compareceu' },
-  { id: 8, clienteId: 3, funcionarioId: 1, data: diaRelativo(2), hora: '08:30', servicoId: 1, duracao: 60, preco: 200, status: 'agendado' },
-  { id: 9, clienteId: 1, funcionarioId: 2, data: diaRelativo(2), hora: '10:00', servicoId: 2, duracao: 30, preco: 100, status: 'cancelado' },
+  { id: 1, clienteId: 1, funcionarioId: 1, localId: 1, data: hoje, hora: '09:00', servicoId: 1, duracao: 60, preco: 200, status: 'confirmado' },
+  { id: 2, clienteId: 2, funcionarioId: 2, localId: 3, data: hoje, hora: '10:30', servicoId: 3, duracao: 45, preco: 150, status: 'agendado' },
+  { id: 3, clienteId: 3, funcionarioId: 1, localId: 2, data: amanha, hora: '14:00', servicoId: 2, duracao: 30, preco: 100, status: 'agendado' },
+  { id: 4, clienteId: 2, funcionarioId: 1, localId: 2, data: hoje, hora: '09:30', servicoId: 2, duracao: 30, preco: 100, status: 'agendado' },
+  { id: 5, clienteId: 3, funcionarioId: 2, localId: 4, data: hoje, hora: '14:00', servicoId: 3, duracao: 45, preco: 150, status: 'confirmado' },
+  { id: 6, clienteId: 1, funcionarioId: 2, localId: 3, data: diaRelativo(-1), hora: '11:00', servicoId: 3, duracao: 45, preco: 150, status: 'concluido' },
+  { id: 7, clienteId: 2, funcionarioId: 1, localId: 1, data: diaRelativo(-1), hora: '16:00', servicoId: 1, duracao: 60, preco: 200, status: 'nao_compareceu' },
+  { id: 8, clienteId: 3, funcionarioId: 1, localId: 1, data: diaRelativo(2), hora: '08:30', servicoId: 1, duracao: 60, preco: 200, status: 'agendado' },
+  { id: 9, clienteId: 1, funcionarioId: 2, localId: 2, data: diaRelativo(2), hora: '10:00', servicoId: 2, duracao: 30, preco: 100, status: 'cancelado' },
   // Solicitado pelo site, aguardando a loja aceitar
-  { id: 10, clienteId: 3, funcionarioId: 2, data: amanha, hora: '09:00', servicoId: 2, duracao: 30, preco: 100, status: 'pendente', origem: 'site' },
+  { id: 10, clienteId: 3, funcionarioId: 2, localId: 2, data: amanha, hora: '09:00', servicoId: 2, duracao: 30, preco: 100, status: 'pendente', origem: 'site' },
 ]
 
 export const pontosIniciais = [
@@ -154,6 +170,11 @@ export const canaisCliente = {
   loja: 'Loja (presencial)',
   whatsapp: 'WhatsApp',
   site: 'Site',
+}
+
+export const tiposLocal = {
+  presencial: { label: 'Presencial', color: 'default' },
+  online: { label: 'Online', color: 'purple' },
 }
 
 export const statusAgendamento = {

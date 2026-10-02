@@ -11,9 +11,12 @@ import {
   ShopOutlined,
   ClockCircleOutlined,
   SafetyOutlined,
+  EnvironmentOutlined,
 } from '@ant-design/icons'
+import { rotulosLocal } from '../data/locais.js'
 
-// Itens do menu do painel da loja (/painel/...) e a regra de acesso de cada tela (recebe o retorno de useAcesso)
+// Itens do menu do painel da loja (/painel/...) e a regra de acesso de cada tela (recebe o retorno de useAcesso).
+// labelDe(loja): nome da tela definido pela loja, no lugar de label
 const verAgenda = (a) => a.pode('agenda_propria') || a.pode('agenda_equipe')
 
 export const menu = [
@@ -23,6 +26,13 @@ export const menu = [
   { key: '/painel/clientes', icon: <UserOutlined />, label: 'Clientes', permitido: (a) => a.pode('clientes') },
   { key: '/painel/funcionarios', icon: <TeamOutlined />, label: 'Funcionários', permitido: (a) => a.pode('funcionarios') },
   { key: '/painel/servicos', icon: <ExperimentOutlined />, label: 'Serviços', permitido: (a) => a.pode('servicos') },
+  {
+    key: '/painel/locais',
+    icon: <EnvironmentOutlined />,
+    label: 'Locais',
+    labelDe: (loja) => rotulosLocal(loja).plural,
+    permitido: (a) => a.pode('locais'),
+  },
   { key: '/painel/materiais', icon: <MedicineBoxOutlined />, label: 'Materiais', permitido: (a) => a.pode('materiais') },
   {
     key: '/painel/controle-tempo',
@@ -56,9 +66,11 @@ const telas = menu.flatMap((i) => i.children ?? [i])
 
 export const telaDaRota = (pathname) => telas.find((t) => t.key === pathname)
 
+export const nomeDaTela = (tela, loja) => tela?.labelDe?.(loja) ?? tela?.label
+
 // Menu sem os itens que o usuário não pode ver; grupo vazio também some
-export function menuPermitido(acesso) {
-  const item = ({ key, icon, label }) => ({ key, icon, label })
+export function menuPermitido(acesso, loja) {
+  const item = (i) => ({ key: i.key, icon: i.icon, label: nomeDaTela(i, loja) })
   return menu.flatMap((i) => {
     if (!i.children) return i.permitido(acesso) ? [item(i)] : []
     const filhos = i.children.filter((c) => c.permitido(acesso)).map(item)

@@ -7,6 +7,7 @@ import {
   ClockCircleOutlined,
   EnvironmentOutlined,
   PhoneOutlined,
+  VideoCameraOutlined,
   UserOutlined,
 } from '@ant-design/icons'
 import dayjs from 'dayjs'
@@ -15,6 +16,7 @@ import { useAcesso } from '../data/useAcesso.js'
 import { mascaraTelefone, moeda, soDigitos } from '../utils/formatos.js'
 import { capitalizar, COR_PADRAO } from '../components/agenda/util.js'
 import { horariosLivres } from './horariosLivres.js'
+import { locaisDoServico } from '../data/locais.js'
 
 const DIAS_A_FRENTE = 14
 
@@ -29,7 +31,7 @@ const termosPorTipo = {
 // faz um cadastro e a solicitação entra no painel da loja como "Aguardando aceite".
 export default function SiteLoja() {
   const navigate = useNavigate()
-  const { loja, tipos, servicos, funcionarios, jornadas, bloqueios, agendamentos, clientes } = useData()
+  const { loja, tipos, servicos, funcionarios, jornadas, bloqueios, agendamentos, clientes, locais } = useData()
   const { moduloAtivo } = useAcesso()
   const [etapa, setEtapa] = useState(0)
   const [servicoId, setServicoId] = useState(null)
@@ -51,6 +53,7 @@ export default function SiteLoja() {
 
   const profissionais = funcionarios.itens.filter((f) => f.ativo && servico?.funcionarioIds.includes(f.id))
   const idsConsulta = profissional === 'qualquer' ? profissionais.map((f) => f.id) : [profissional]
+  const localIds = moduloAtivo('locais') ? locaisDoServico(servico, locais.itens).map((l) => l.id) : null
   const livresEm = (data) =>
     servico
       ? horariosLivres({
@@ -60,11 +63,13 @@ export default function SiteLoja() {
           jornadas: jornadas.itens,
           bloqueios: bloqueios.itens,
           agendamentos: agendamentos.itens,
+          localIds,
         })
       : []
   const dias = Array.from({ length: DIAS_A_FRENTE }, (_, i) => dayjs().startOf('day').add(i, 'day'))
   const livresDoDia = dia ? livresEm(dia) : []
   const nomeFunc = (id) => funcionarios.itens.find((f) => f.id === id)?.nome
+  const localDoHorario = locais.itens.find((l) => l.id === horario?.localId)
 
   const escolherServico = (id) => {
     setServicoId(id)
@@ -90,6 +95,7 @@ export default function SiteLoja() {
       {
         clienteId,
         funcionarioId: horario.funcionarioId,
+        localId: horario.localId,
         servicoId: moduloAtivo('servicos') ? servico.id : null,
         data: dia.format('YYYY-MM-DD'),
         hora: horario.hora,
@@ -288,6 +294,19 @@ export default function SiteLoja() {
                     <span>
                       <UserOutlined /> {nomeFunc(horario.funcionarioId)}
                     </span>
+                    {localDoHorario && (
+                      <span>
+                        {localDoHorario.tipo === 'online' ? (
+                          <>
+                            <VideoCameraOutlined /> Atendimento online (o link chega pelo WhatsApp)
+                          </>
+                        ) : (
+                          <>
+                            <EnvironmentOutlined /> {localDoHorario.nome}
+                          </>
+                        )}
+                      </span>
+                    )}
                     {servico.preco != null && <span className="site-preco">{moeda(servico.preco)}</span>}
                   </div>
                 </Col>
