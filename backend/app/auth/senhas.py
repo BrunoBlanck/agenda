@@ -1,5 +1,6 @@
 """Hash de senhas com Argon2."""
 
+import secrets
 from functools import lru_cache
 
 from pwdlib import PasswordHash
@@ -26,3 +27,8 @@ def verificar_senha(senha: str, senha_hash: str | None) -> tuple[bool, str | Non
         _hasher.verify(senha, _hash_ficticio())
         return False, None
     return _hasher.verify_and_update(senha, senha_hash)
+
+
+def gerar_senha_provisoria() -> str:
+    """Senha aleatória para o superadmin repassar ao usuário (enquanto não há envio de e-mail)."""
+    return secrets.token_urlsafe(9)

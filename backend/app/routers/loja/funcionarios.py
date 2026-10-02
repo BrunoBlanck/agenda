@@ -18,6 +18,7 @@ from app.models import Cargo, Funcionario, Perfil
 from app.schemas.comum import Erro
 from app.schemas.funcionarios import CargoEntrada, CargoSaida, FuncionarioEntrada, FuncionarioSaida
 from app.services.comum import buscar, com_autor, conflito, excluir, invalido, proibido
+from app.services.funcionarios import MSG_ULTIMO_ADMIN, deixa_loja_sem_admin
 
 ERROS = {403: {'model': Erro}, 404: {'model': Erro}, 409: {'model': Erro}}
 router = APIRouter(tags=['Loja: funcionários'], responses=ERROS)
@@ -58,25 +59,6 @@ def _saida(ctx: ContextoLoja, funcionarios: list[Funcionario]) -> list[Funcionar
     return com_autor(db, ctx.loja_id, saida)
 
 
-def _outros_admins_ativos(ctx: ContextoLoja, exceto: UUID) -> int:
-    return (
-        ctx.db.scalar(
-            select(func.count())
-            .select_from(Funcionario)
-            .join(Perfil, (Perfil.id == Funcionario.perfil_id) & (Perfil.loja_id == Funcionario.loja_id))
-            .where(
-                Funcionario.loja_id == ctx.loja_id,
-                Funcionario.id != exceto,
-                Funcionario.ativo,
-                Funcionario.excluido_em.is_(None),
-                Perfil.acesso_total,
-                Perfil.excluido_em.is_(None),
-            )
-        )
-        or 0
-    )
-
-
 def _validar(ctx: ContextoLoja, dados: FuncionarioEntrada, atual: Funcionario | None) -> None:
     perfil = ctx.db.scalar(select(Perfil).where(Perfil.id == dados.perfil_id, Perfil.loja_id == ctx.loja_id))
     if perfil is None:
@@ -97,9 +79,8 @@ def _validar(ctx: ContextoLoja, dados: FuncionarioEntrada, atual: Funcionario | 
     if perfil.acesso_total and not sou_admin:
         raise proibido('Só um Administrador pode atribuir o perfil Administrador.')
     continua_admin = perfil.acesso_total and dados.ativo
-    deixa_de_ser_admin = atual is not None and era_admin and atual.ativo and not continua_admin
-    if deixa_de_ser_admin and not _outros_admins_ativos(ctx, atual.id):
-        raise conflito('A loja precisa de pelo menos um Administrador ativo.')
+    if atual is not None and deixa_loja_sem_admin(ctx.db, ctx.loja_id, atual, era_admin, continua_admin):
+        raise conflito(MSG_ULTIMO_ADMIN)
 
 
 # --- Funcionários ------------------------------------------------------------------------------

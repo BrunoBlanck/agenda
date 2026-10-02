@@ -102,6 +102,9 @@ MENSAGENS_CONSTRAINT = {
     'materiais_nome_uk': 'Já existe um material com este nome.',
     'categorias_material_nome_uk': 'Já existe uma categoria com este nome.',
     'lojas_cnpj_uk': 'Este CNPJ já está cadastrado em outra loja.',
+    'lojas_slug_uk': 'Este endereço de acesso já está em uso por outra loja.',
+    'planos_nome_uk': 'Já existe um plano com este nome.',
+    'superadmin_usuarios_email_uk': 'Já existe um usuário admin com este e-mail.',
     'registros_ponto_um_aberto': 'Este funcionário já tem um registro de ponto em aberto.',
 }
 

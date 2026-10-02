@@ -19,6 +19,7 @@ from app.models import (
     LojaFuncionalidade,
     Perfil,
     PerfilAcesso,
+    Plano,
     Recurso,
     SuperadminUsuario,
 )
@@ -188,3 +189,18 @@ def criar_loja_teste(engine: Engine, slug: str, modulos: dict[str, bool] | None 
         recepcao=criar_funcionario(engine, loja, perfis['Recepção'], f'recepcao@{slug}.com', nome='Recepção'),
         prof=criar_funcionario(engine, loja, perfis['Profissional'], f'prof@{slug}.com', nome='Profissional'),
     )
+
+
+# --- Atalhos para os testes da plataforma (SUPERADMIN) -------------------------------------------
+
+
+def cabecalho_superadmin(superadmin: SuperadminUsuario) -> dict[str, str]:
+    """Token do superadmin sem passar pelo login."""
+    token, _ = criar_token(superadmin.id, 'superadmin')
+    return {'Authorization': f'Bearer {token}'}
+
+
+def criar_plano(engine: Engine, nome: str = 'Básico', preco: str = '89.90', *, ativo: bool = True) -> Plano:
+    from decimal import Decimal
+
+    return inserir(engine, Plano(nome=nome, preco_mensal=Decimal(preco), ativo=ativo))

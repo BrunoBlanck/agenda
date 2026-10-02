@@ -10,9 +10,10 @@ from sqlalchemy import select
 
 from app.auth.catalogo import MODULOS
 from app.auth.dependencias import ContextoLoja, exigir
-from app.models import Auditoria, Funcionario, Plano, SuperadminUsuario
+from app.models import Plano
 from app.schemas.comum import Erro
 from app.schemas.configuracoes import DadosLoja, DadosLojaEntrada
+from app.services.plataforma import ultima_alteracao_loja
 
 router = APIRouter(
     prefix='/configuracoes/loja',
@@ -27,28 +28,7 @@ Escrita = Annotated[ContextoLoja, Depends(exigir('config_loja', 'escrita'))]
 def _dados(ctx: ContextoLoja) -> DadosLoja:
     db, loja = ctx.db, ctx.loja
     plano = db.scalar(select(Plano.nome).where(Plano.id == loja.plano_id)) if loja.plano_id else None
-    # Quem fez a última alteração: a auditoria diz se foi a loja ou o superadmin
-    ultima = db.execute(
-        select(Auditoria.funcionario_id, Auditoria.superadmin_id)
-        .where(Auditoria.loja_id == loja.id, Auditoria.tabela == 'lojas')
-        .order_by(Auditoria.id.desc())
-        .limit(1)
-    ).first()
-    autor, nome = None, None
-    if ultima is not None and ultima.funcionario_id:
-        autor = 'funcionario'
-        nome = db.scalar(
-            select(Funcionario.nome)
-            .where(Funcionario.id == ultima.funcionario_id, Funcionario.loja_id == loja.id)
-            .execution_options(incluir_excluidos=True)
-        )
-    elif ultima is not None and ultima.superadmin_id:
-        autor = 'superadmin'
-        nome = db.scalar(
-            select(SuperadminUsuario.nome)
-            .where(SuperadminUsuario.id == ultima.superadmin_id)
-            .execution_options(incluir_excluidos=True)
-        )
+    autor, nome = ultima_alteracao_loja(db, loja.id)
     return DadosLoja(
         **{campo: getattr(loja, campo) for campo in DadosLojaEntrada.model_fields},
         logo_url=loja.logo_url,
