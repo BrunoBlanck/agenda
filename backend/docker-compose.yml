@@ -1,0 +1,24 @@
+# Postgres local para desenvolvimento e testes.
+# Porta do host configurável por POSTGRES_PORTA no .env (padrão 5433, para não conflitar com um Postgres local).
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: agenda-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USUARIO:-agenda}
+      POSTGRES_PASSWORD: ${POSTGRES_SENHA:-agenda_dev}
+      POSTGRES_DB: ${POSTGRES_BANCO:-agenda}
+      TZ: UTC
+    ports:
+      - "${POSTGRES_PORTA:-5433}:5432"
+    volumes:
+      - agenda-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  agenda-pgdata:

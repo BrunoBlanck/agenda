@@ -2,7 +2,7 @@
 
 Sistema web para gestão de uma clínica com vários funcionários: agenda de atendimentos, cadastro de clientes, funcionários, serviços e materiais, além do controle de ponto (entrada e saída) da equipe.
 
-> **Status:** esboço inicial. Por enquanto existe apenas o front-end, com dados de exemplo mantidos em memória (ao recarregar a página, os dados voltam ao estado inicial). Ainda não há back-end, banco de dados nem login.
+> **Status:** há um back-end em [`backend/`](backend/README.md) (FastAPI + PostgreSQL) com o banco completo, dados de exemplo, login de funcionário e de superadmin, as regras de acesso e as rotas das três áreas: painel da loja, painel SUPERADMIN e site do consumidor. O front-end **ainda usa dados de exemplo em memória** (ao recarregar a página, os dados voltam ao estado inicial) e o próximo passo é ligá-lo à API.
 
 ## Funcionalidades
 
@@ -62,12 +62,36 @@ O site do consumidor que existe hoje em `frontend/src/site/` é só um **protót
 
 ## Tecnologias
 
+Front-end:
+
 - [React 19](https://react.dev/) + [Vite](https://vite.dev/)
 - [Ant Design](https://ant.design/) (UI kit, em português via `pt_BR`)
 - [React Router](https://reactrouter.com/)
 - [Day.js](https://day.js.org/) para datas
 
+Back-end ([`backend/`](backend/README.md)): Python, FastAPI, PostgreSQL 16, SQLAlchemy 2 e Alembic.
+
 ## Como rodar
+
+### Back-end (API)
+
+Pré-requisitos: [uv](https://docs.astral.sh/uv/) e Docker Desktop. Detalhes, usuários de exemplo e a lista de rotas em [`backend/README.md`](backend/README.md).
+
+```bash
+cd backend
+cp .env.example .env            # e troque JWT_SECRET
+docker compose up -d            # PostgreSQL 16 local
+uv sync
+uv run python -m scripts.criar_papel_app
+uv run alembic upgrade head
+uv run python -m scripts.seed   # dados de exemplo
+uv run uvicorn app.main:app --reload
+```
+
+A API fica em http://localhost:8000 (documentação em http://localhost:8000/docs). Testes: `uv run pytest`.
+
+### Front-end
+
 
 Pré-requisito: [Node.js](https://nodejs.org/) 20 ou superior.
 
@@ -122,8 +146,6 @@ frontend/src/
 
 ## Próximos passos
 
-- Back-end Python com API, banco de dados e o site do consumidor renderizado no servidor (um modelo por tipo de loja)
-- Login (os perfis e níveis de acesso já existem no front-end)
-- Painel SUPERADMIN
-- Validação de conflito de horários por profissional
-- Baixa automática de materiais no estoque ao concluir um atendimento
+- Ligar o front-end à API (login real no lugar do botão Demonstração), no painel da loja, no SUPERADMIN e no site
+- Proteção contra abuso nas rotas públicas do site (limite de requisições, captcha)
+- Envio de e-mail (definir/redefinir senha) e notificações de agendamento

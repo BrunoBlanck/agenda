@@ -1,0 +1,57 @@
+[project]
+name = "agenda-backend"
+version = "0.1.0"
+description = "API do sistema de agendamento multi-loja"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "alembic>=1.20.0",
+    "fastapi>=0.142.2",
+    "psycopg[binary]>=3.2",
+    "pwdlib[argon2]>=0.3.1",
+    "pydantic-settings>=2.15.0",
+    "pydantic[email]>=2.13.5",
+    "pyjwt>=2.15.1",
+    "sqlalchemy>=2.0",
+    "tzdata>=2026.4",
+    "uvicorn[standard]>=0.54.0",
+]
+
+[tool.uv]
+package = false
+
+[dependency-groups]
+dev = [
+    "httpx>=0.28.1",
+    "pytest>=9.1.1",
+    "ruff>=0.16.10",
+]
+
+[tool.ruff]
+line-length = 110
+target-version = "py312"
+extend-exclude = [".venv"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "N", "SIM", "RUF", "S", "PT"]
+ignore = [
+    "RUF001", "RUF002", "RUF003",  # textos em português têm acentos e sinais que o ruff confunde
+    "B008",                        # Depends() em argumentos padrão é o padrão do FastAPI
+    "N818",                        # exceções com nome em português (ex.: TokenInvalido)
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101", "S105", "S106", "S608", "E501", "PT012"]  # SQL em texto e blocos de transação
+"migrations/**" = ["S608", "E501"]
+"scripts/**" = ["S105", "S106"]
+
+[tool.ruff.format]
+quote-style = "single"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+filterwarnings = [
+    # O TestClient do Starlette avisa que prefere httpx2; usamos httpx, como definido no projeto
+    "ignore:Using `httpx` with `starlette.testclient`",
+]
