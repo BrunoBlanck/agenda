@@ -4,7 +4,7 @@ Planejamento do banco de dados para quando o back-end for criado. Este documento
 
 O sistema é dividido em duas áreas:
 
-1. **Plataforma (SUPERADMIN)**: gestão geral. Cria e edita lojas (incluindo o **tipo**), ativa/desativa módulos de cada loja individualmente, cria funcionários das lojas e mantém os catálogos globais. Tem sua **própria tabela de usuários**.
+1. **Plataforma (SUPERADMIN)**: gestão geral. Cria e edita lojas (incluindo o **tipo**), escolhe os módulos que cada loja usa, cria o primeiro funcionário das lojas, mantém os planos e consulta a auditoria. Tem sua **própria tabela de usuários** (usuários admin).
 2. **Painel da Loja**: tudo o que uma loja (clínica, barbearia, escola...) usa no dia a dia (agenda, clientes, funcionários, serviços, materiais, ponto). **Toda tabela tem `loja_id`** e os dados de uma loja nunca se misturam com os de outra.
 
 ---
@@ -18,8 +18,8 @@ O sistema é dividido em duas áreas:
 | Datas/horas | `timestamptz` (sempre em UTC; exibição convertida pelo fuso da loja) |
 | Datas sem hora | `date` |
 | Valores monetários | `numeric(10,2)` |
-| Colunas de controle | **Todas as tabelas** têm `criado_em` e `atualizado_em`. As tabelas da loja têm também `atualizado_por` (ver abaixo) |
-| Exclusão | Preferir **exclusão lógica** (`ativo = false` ou `excluido_em`) em cadastros que têm histórico (clientes, funcionários, serviços, materiais) |
+| Colunas de controle | **Todas as tabelas** têm `criado_em`, `atualizado_em`, `excluido_em` e `excluido_por`. As tabelas da loja têm também `atualizado_por` (ver abaixo) |
+| Exclusão | **Nunca há exclusão física.** Toda tabela tem `excluido_em` e `excluido_por` (ver abaixo). `ativo = false` continua existindo para "inativo, mas visível"; excluído some das telas |
 | Multi-loja | Toda tabela do Painel da Loja tem `loja_id uuid NOT NULL REFERENCES lojas(id)` |
 
 📌 **Isolamento entre lojas:** além do `loja_id` em todas as tabelas, as chaves estrangeiras internas da loja são **compostas** (`loja_id`, `id`). Assim o banco impede, por exemplo, que um agendamento da Loja A aponte para um cliente da Loja B. Para isso, cada tabela da loja tem `UNIQUE (loja_id, id)`.
@@ -42,6 +42,8 @@ ALTER TABLE agendamentos
 | `criado_em` | timestamptz | Todas as tabelas | `NOT NULL DEFAULT now()`. Nunca muda |
 | `atualizado_em` | timestamptz | Todas as tabelas | `NOT NULL DEFAULT now()`. Atualizado por trigger em todo `UPDATE` |
 | `atualizado_por` | uuid | Todas as tabelas do **Painel da Loja** (seção 2) | FK (`loja_id`, `atualizado_por`) → `funcionarios`. Funcionário que fez a **última** alteração na linha (no `INSERT`, é quem criou) |
+| `excluido_em` | timestamptz | Todas as tabelas | NULL = linha não excluída. Preenchido com a **hora exata** da exclusão |
+| `excluido_por` | uuid | Todas as tabelas | Quem excluiu. Tabelas da loja: FK (`loja_id`, `excluido_por`) → `funcionarios`. Tabelas da plataforma: FK → `superadmin_usuarios` |
 
 📌 `atualizado_por` é preenchido pelo próprio banco, a partir do funcionário logado que o back-end informa no início de cada transação. Assim nenhuma rota esquece de gravar:
 
@@ -69,13 +71,50 @@ CREATE TRIGGER agendamentos_alteracao BEFORE INSERT OR UPDATE ON agendamentos
   FOR EACH ROW EXECUTE FUNCTION registrar_alteracao_loja();
 ```
 
-📌 Quando a alteração numa tabela da loja é feita pelo **superadmin** (ex.: criar um funcionário) ou por uma rotina automática, `atualizado_por` fica **NULL**. A ação do superadmin fica registrada em `superadmin_auditoria`.
+📌 Quando a alteração numa tabela da loja é feita pelo **superadmin** (ex.: criar o primeiro funcionário) ou por uma rotina automática, `atualizado_por` / `excluido_por` ficam **NULL**. Quem foi fica registrado na `auditoria` (1.9), que guarda o `superadmin_id`.
 
-📌 Nas tabelas da plataforma (seção 1) não existe `atualizado_por` para funcionário. Quem altera é o superadmin, e isso vai para `superadmin_auditoria`. `lojas` e `loja_funcionalidades` também guardam o último superadmin que alterou.
+📌 Nas tabelas da plataforma (seção 1) `excluido_por` aponta para `superadmin_usuarios`. `lojas` e `loja_funcionalidades` também guardam o último superadmin que alterou.
 
-📌 Tabelas que só recebem inserções (`superadmin_auditoria`, `movimentacoes_estoque`, `agendamento_historico`) também têm as colunas, por padrão. Como as linhas nunca são alteradas, `atualizado_em` é igual a `criado_em`.
+📌 `atualizado_por` guarda apenas a **última** alteração. O histórico completo (antes e depois de cada alteração, de todas as tabelas) fica na `auditoria` (1.9).
 
-📌 `atualizado_por` guarda apenas a **última** alteração. O histórico completo existe hoje só para agendamentos (`agendamento_historico`, 2.17).
+## Exclusão lógica (todas as tabelas)
+
+📌 **Nada é apagado de verdade.** "Excluir" na tela grava `excluido_em = now()` e `excluido_por = <funcionário logado>`. A linha some das telas e da API, mas continua no banco e na auditoria.
+
+📌 O próprio banco garante isso: um trigger `BEFORE DELETE` transforma qualquer `DELETE` em `UPDATE`, então nenhuma rota consegue apagar por engano.
+
+```sql
+CREATE FUNCTION excluir_logicamente() RETURNS trigger AS $$
+BEGIN
+  EXECUTE format(
+    'UPDATE %I.%I SET excluido_em = now(),
+            excluido_por = nullif(current_setting(''app.funcionario_id'', true), '''')::uuid
+      WHERE id = $1 AND excluido_em IS NULL',
+    TG_TABLE_SCHEMA, TG_TABLE_NAME) USING OLD.id;
+  RETURN NULL; -- cancela o DELETE físico
+END $$ LANGUAGE plpgsql;
+
+-- exemplo
+CREATE TRIGGER clientes_excluir BEFORE DELETE ON clientes
+  FOR EACH ROW EXECUTE FUNCTION excluir_logicamente();
+```
+
+(Nas tabelas da plataforma, a função lê `app.superadmin_id`. Nas tabelas de ligação, sem `id`, o `WHERE` usa a chave composta.)
+
+📌 **Consultas:** toda leitura filtra `excluido_em IS NULL`. Para não depender de cada rota lembrar, cada tabela tem uma *view* com esse filtro (ex.: `clientes_ativos`) ou uma política de RLS.
+
+📌 **Unicidade:** como a linha excluída continua no banco, os `UNIQUE` das tabelas viram **índices únicos parciais**, que só valem para linhas não excluídas. Assim dá para cadastrar de novo um nome ou e-mail que já foi excluído.
+
+```sql
+-- em vez de UNIQUE (loja_id, nome)
+CREATE UNIQUE INDEX servicos_nome_uk ON servicos (loja_id, nome) WHERE excluido_em IS NULL;
+```
+
+📌 **Tabelas de ligação** (chave primária composta, ex.: `servico_funcionarios`, `perfil_acessos`): religar um vínculo excluído **desfaz a exclusão** da linha existente (`excluido_em = NULL`) em vez de inserir outra. A auditoria guarda as duas operações.
+
+📌 **Chaves estrangeiras** continuam válidas, pois a linha referenciada não some. Ex.: um agendamento antigo de um serviço excluído continua mostrando o serviço.
+
+📌 Única exceção: a própria `auditoria` (1.9), que só recebe inserções e nunca é alterada nem excluída.
 
 ---
 
@@ -83,64 +122,57 @@ CREATE TRIGGER agendamentos_alteracao BEFORE INSERT OR UPDATE ON agendamentos
 
 Área administrativa global, fora do contexto de qualquer loja. Ainda não existe no front-end.
 
-O que o superadmin faz:
+O que o superadmin faz (menus do painel SUPERADMIN):
 
-| Ação | Onde fica |
-|---|---|
-| Criar e editar os **dados gerais da loja** (cadastro, endereço, **tipo**, plano, status) | `lojas` (1.6), `tipos_loja` (1.2) |
-| Manter o cadastro de **tipos de loja** (Clínica, Barbearia, Escola...) | `tipos_loja` (1.2) |
-| **Ativar ou desativar módulos** de cada loja, um a um (Serviços, Materiais, Controle de Tempo, Locais) | `loja_funcionalidades` (1.7) |
-| **Criar e editar funcionários** (usuários) de qualquer loja | `funcionarios` (2.4) |
-| Manter o catálogo de **recursos** usados nos níveis de acesso | `recursos` (1.8) |
+| Menu | Ação | Onde fica |
+|---|---|---|
+| Lojas | Criar e editar os **dados gerais da loja** (cadastro, endereço, **tipo**, plano, status) | `lojas` (1.6) |
+| Lojas › Módulos | Escolher **quais módulos a loja usa**, um a um (Serviços, Materiais, Controle de Tempo, Locais). O que não é usado some do menu da loja | `loja_funcionalidades` (1.7) |
+| Lojas › Funcionários | Criar o **primeiro Administrador** e dar suporte (editar, redefinir senha). O dia a dia de funcionários é feito na própria loja | `funcionarios` (2.4) |
+| Planos | Manter os **planos comerciais** (nome e preço) | `planos` (1.3) |
+| Usuários admin | Manter as **contas de superadmin**. Só isso: os usuários das lojas são cadastrados na loja | `superadmin_usuarios` (1.1) |
+| Auditoria | Ver **o que mudou e quem fez**, sempre **uma loja por vez**: escolhe a loja, a tabela e o período | `auditoria` (1.9) |
 
-Tudo isso fica registrado em `superadmin_auditoria` (1.9).
+Não são mantidos pelo painel (mudam junto com o código, por migração): o **tipo da loja** (1.2), o catálogo de **módulos** (1.4) e o de **recursos** (1.8).
 
 ## Diagrama
 
 ```mermaid
 erDiagram
-    superadmin_usuarios ||--o{ superadmin_auditoria : registra
+    superadmin_usuarios ||--o{ auditoria : "faz (superadmin)"
     superadmin_usuarios ||--o{ lojas : cria
-    superadmin_usuarios ||--o{ funcionarios : cria
-    tipos_loja ||--o{ lojas : classifica
+    superadmin_usuarios ||--o{ funcionarios : "cria o 1º admin"
     planos ||--o{ lojas : assina
-    planos ||--o{ plano_funcionalidades : "sugere módulos"
-    funcionalidades ||--o{ plano_funcionalidades : ""
     funcionalidades ||--o{ loja_funcionalidades : ""
-    lojas ||--o{ loja_funcionalidades : "ativa/desativa"
+    lojas ||--o{ loja_funcionalidades : "usa / não usa"
     funcionalidades ||--o{ recursos : contem
+    lojas ||--o{ auditoria : "histórico da loja"
 ```
 
 ## 1.1 `superadmin_usuarios`
 
-Usuários que administram a plataforma. **Tabela separada** dos funcionários das lojas: um superadmin não é um funcionário e vice-versa.
+Usuários que administram a plataforma (menu **Usuários admin**). **Tabela separada** dos funcionários das lojas: um superadmin não é um funcionário e vice-versa. Este cadastro serve só para isso; usuários das lojas são criados na própria loja.
 
 | Coluna | Tipo | Regras |
 |---|---|---|
 | id | uuid | PK |
 | nome | varchar(150) | NOT NULL |
-| email | varchar(150) | NOT NULL, UNIQUE |
+| email | varchar(150) | NOT NULL, único entre os não excluídos |
 | senha_hash | varchar(255) | NOT NULL (bcrypt/argon2) |
 | ativo | boolean | DEFAULT true |
 | ultimo_login_em | timestamptz | |
 | criado_em | timestamptz | NOT NULL DEFAULT now() |
 | atualizado_em | timestamptz | NOT NULL DEFAULT now(). Atualizado automaticamente em todo UPDATE (trigger) |
+| excluido_em | timestamptz | NULL = não excluído. Hora exata da exclusão |
+| excluido_por | uuid | FK → superadmin_usuarios. Quem excluiu |
 
-## 1.2 `tipos_loja`
+## 1.2 Tipo da loja (enum `tipo_loja`)
 
-Tipo do negócio. Cadastro mantido pelo superadmin (criar, editar, inativar).
+Tipo do negócio. **Não é tabela:** é uma constante do sistema (enum no banco e constante no back-end), gravada em `lojas.tipo`.
 
-| Coluna | Tipo | Regras |
-|---|---|---|
-| id | uuid | PK |
-| codigo | varchar(30) | NOT NULL, UNIQUE |
-| nome | varchar(60) | NOT NULL |
-| descricao | text | |
-| ativo | boolean | DEFAULT true |
-| criado_em | timestamptz | NOT NULL DEFAULT now() |
-| atualizado_em | timestamptz | NOT NULL DEFAULT now(). Atualizado automaticamente em todo UPDATE (trigger) |
-
-Valores iniciais:
+```sql
+CREATE TYPE tipo_loja AS ENUM ('clinica', 'barbearia', 'escola');
+```
 
 | codigo | nome |
 |---|---|
@@ -148,31 +180,35 @@ Valores iniciais:
 | `barbearia` | Barbearia |
 | `escola` | Escola |
 
-📌 **O tipo NÃO muda nada no Painel da Loja.** Ele não libera nem bloqueia módulos (isso é feito em `loja_funcionalidades`, 1.7) e não altera telas internas.
+📌 **Por que constante:** cada tipo tem o **próprio site do consumidor final**: layout, textos, fluxo de agendamento e apresentação mudam por inteiro (uma barbearia não parece uma clínica). Um tipo novo só faz sentido junto com o código desse site, então entra por migração (`ALTER TYPE tipo_loja ADD VALUE ...`), não por cadastro.
 
-📌 **Uso futuro:** o tipo será lido apenas por um **futuro front-end do consumidor final** (onde o cliente vê a loja e agenda), para adaptar textos e apresentação. Ex.: numa Escola (de música), "Profissional" vira "Professor" e "Serviço" vira "Aula"; numa Barbearia, "Profissional" vira "Barbeiro".
+📌 **O tipo NÃO muda nada no Painel da Loja.** Ele não libera nem bloqueia módulos (isso é feito em `loja_funcionalidades`, 1.7) e não altera telas internas. Os textos internos que variam por loja (ex.: "Sala", "Cadeira") ficam em `loja_configuracoes` (2.21).
 
 ## 1.3 `planos`
 
-Pacotes comerciais oferecidos às lojas.
+Pacotes comerciais oferecidos às lojas. **Por enquanto só definem o valor cobrado.**
 
 | Coluna | Tipo | Regras |
 |---|---|---|
 | id | uuid | PK |
-| nome | varchar(80) | NOT NULL, UNIQUE (ex.: Básico, Profissional) |
+| nome | varchar(80) | NOT NULL, único entre os não excluídos (ex.: Básico, Profissional) |
 | descricao | text | |
 | preco_mensal | numeric(10,2) | NOT NULL |
-| limite_funcionarios | integer | NULL = ilimitado |
-| limite_agendamentos_mes | integer | NULL = ilimitado |
-| ativo | boolean | DEFAULT true |
+| ativo | boolean | DEFAULT true. Plano inativo não aparece para lojas novas |
 | criado_em | timestamptz | NOT NULL DEFAULT now() |
 | atualizado_em | timestamptz | NOT NULL DEFAULT now(). Atualizado automaticamente em todo UPDATE (trigger) |
+| excluido_em | timestamptz | NULL = não excluído. Hora exata da exclusão |
+| excluido_por | uuid | FK → superadmin_usuarios. Quem excluiu |
 
-📌 Os limites são verificados pelo back-end ao criar funcionários ou agendamentos.
+📌 **O plano não define nem limita módulos.** Os módulos (Serviços, Materiais, Controle de Tempo, Locais) são escolhidos **loja a loja** em `loja_funcionalidades` (1.7). A ideia é esconder o que a loja não vai usar, para o menu não ficar com itens sobrando, e não bloquear o que ela não pagou.
+
+📌 **Futuro:** se um dia o plano passar a limitar algo (nº de funcionários, agendamentos por mês, módulos incluídos), entram colunas ou uma tabela `plano_limites` aqui. Hoje não existe nenhuma regra ligando plano e acesso.
 
 ## 1.4 `funcionalidades`
 
 Catálogo dos **módulos** do sistema. Cada item do menu da loja corresponde a uma funcionalidade.
+
+📌 Catálogo **fixo**, mantido por migração junto com o código (um módulo novo só existe se a tela existir). Não há tela de cadastro no painel SUPERADMIN.
 
 | Coluna | Tipo | Regras |
 |---|---|---|
@@ -184,6 +220,8 @@ Catálogo dos **módulos** do sistema. Cada item do menu da loja corresponde a u
 | ativo | boolean | DEFAULT true |
 | criado_em | timestamptz | NOT NULL DEFAULT now() |
 | atualizado_em | timestamptz | NOT NULL DEFAULT now(). Atualizado automaticamente em todo UPDATE (trigger) |
+| excluido_em | timestamptz | NULL = não excluído. Hora exata da exclusão |
+| excluido_por | uuid | FK → superadmin_usuarios. Quem excluiu |
 
 Valores iniciais (mesmos menus do front-end):
 
@@ -201,16 +239,9 @@ Valores iniciais (mesmos menus do front-end):
 
 📌 Por enquanto só **Serviços, Materiais, Controle de Tempo e Locais** podem ser desativados. Para tornar outro módulo opcional no futuro, basta mudar `opcional` para `true`.
 
-## 1.5 `plano_funcionalidades`
+## 1.5 *(removida)* `plano_funcionalidades`
 
-Quais módulos opcionais cada plano sugere. **Serve apenas como modelo na criação da loja** (ver 1.7); não controla o acesso depois disso.
-
-| Coluna | Tipo | Regras |
-|---|---|---|
-| plano_id | uuid | PK, FK → planos |
-| funcionalidade_id | uuid | PK, FK → funcionalidades |
-| criado_em | timestamptz | NOT NULL DEFAULT now() |
-| atualizado_em | timestamptz | NOT NULL DEFAULT now(). Atualizado automaticamente em todo UPDATE (trigger) |
+Não existe mais: o plano não sugere nem define módulos (ver 1.3). Os módulos da loja são escolhidos na criação e depois em **Lojas › Módulos** (1.7).
 
 ## 1.6 `lojas`
 
@@ -219,12 +250,12 @@ Cada negócio cliente da plataforma (clínica, barbearia, escola...). É o "tena
 | Coluna | Tipo | Regras |
 |---|---|---|
 | id | uuid | PK |
-| tipo_loja_id | uuid | NOT NULL, FK → tipos_loja |
+| tipo | enum `tipo_loja` | NOT NULL (ver 1.2). Define qual site do consumidor a loja usa |
 | nome | varchar(150) | NOT NULL (razão social) |
 | nome_fantasia | varchar(150) | Nome exibido da loja |
 | cnpj | varchar(18) | Opcional. UNIQUE quando preenchido |
 | logo_url | varchar(500) | Caminho do arquivo da logo no storage. NULL = sem logo |
-| slug | varchar(60) | NOT NULL, UNIQUE. Identifica a loja na URL/login (ex.: `clinica-sorriso`) |
+| slug | varchar(60) | NOT NULL, único entre os não excluídos. Identifica a loja na URL/login (ex.: `clinica-sorriso`) |
 | email | varchar(150) | |
 | telefone | varchar(20) | |
 | cep | varchar(9) | |
@@ -242,14 +273,16 @@ Cada negócio cliente da plataforma (clínica, barbearia, escola...). É o "tena
 | atualizado_por_superadmin | uuid | FK → superadmin_usuarios. Última edição feita pelo superadmin |
 | criado_em | timestamptz | NOT NULL DEFAULT now() |
 | atualizado_em | timestamptz | NOT NULL DEFAULT now(). Atualizado automaticamente em todo UPDATE (trigger) |
+| excluido_em | timestamptz | NULL = não excluído. Hora exata da exclusão |
+| excluido_por | uuid | FK → superadmin_usuarios. Quem excluiu |
 
 📌 Loja `suspensa`: funcionários não conseguem fazer login, mas os dados são mantidos. Loja `cancelada`: dados mantidos por período definido antes da remoção.
 
-📌 Ao criar uma loja, o sistema cria automaticamente: os **perfis padrão** (ver 2.1) e os registros de **`loja_funcionalidades`** (ver 1.7). No mesmo fluxo, o superadmin cadastra o **primeiro funcionário** com perfil Administrador.
+📌 Ao criar uma loja, o sistema cria automaticamente os **perfis padrão** (ver 2.1) e os registros de **`loja_funcionalidades`** com os módulos que o superadmin marcou (ver 1.7). No mesmo fluxo, o superadmin cadastra o **primeiro funcionário** com perfil Administrador.
 
 ## 1.7 `loja_funcionalidades`
 
-**Liga e desliga cada módulo opcional da loja, individualmente.** É a única fonte que define o que a loja tem acesso (não depende do tipo nem do plano).
+**Define quais módulos opcionais a loja usa, um a um.** É a única fonte que define o que aparece para a loja (não depende do tipo nem do plano). O objetivo é **esconder o que a loja não usa**, para o menu não ter itens sobrando.
 
 | Coluna | Tipo | Regras |
 |---|---|---|
@@ -261,10 +294,12 @@ Cada negócio cliente da plataforma (clínica, barbearia, escola...). É o "tena
 | atualizado_por | uuid | FK → superadmin_usuarios. Superadmin que fez a última alteração |
 | criado_em | timestamptz | NOT NULL DEFAULT now() |
 | atualizado_em | timestamptz | NOT NULL DEFAULT now(). Atualizado automaticamente em todo UPDATE (trigger) |
+| excluido_em | timestamptz | NULL = não excluído. Hora exata da exclusão |
+| excluido_por | uuid | FK → superadmin_usuarios. Quem excluiu |
 
 📌 **Módulo ativo na loja** = funcionalidade com `opcional = false` **OU** registro com `habilitado = true` (e `expira_em` nula ou futura).
 
-📌 **Na criação da loja**, é gerado um registro para cada módulo opcional: habilitado se estiver no plano escolhido (`plano_funcionalidades`); sem plano, todos habilitados. Depois disso o superadmin liga/desliga à vontade, e trocar de plano **não** altera os módulos automaticamente.
+📌 **Na criação da loja**, o superadmin marca os módulos que a loja vai usar e é gerado um registro para cada módulo opcional (`habilitado` conforme a escolha). Depois disso ele liga/desliga à vontade em **Lojas › Módulos**. O plano não interfere.
 
 📌 **Desativar um módulo não apaga dados.** O menu e as telas somem, a API recusa as chamadas daquele módulo, e ao reativar tudo volta como estava.
 
@@ -279,7 +314,7 @@ Cada negócio cliente da plataforma (clínica, barbearia, escola...). É o "tena
 
 ## 1.8 `recursos`
 
-Catálogo global das **áreas do sistema que podem ter nível de acesso** (nenhum, leitura ou escrita). Mantido pelo superadmin. As lojas usam este catálogo para montar seus perfis (2.2).
+Catálogo global das **áreas do sistema que podem ter nível de acesso** (nenhum, leitura ou escrita). Catálogo **fixo**, mantido por migração junto com o código (como 1.4). As lojas usam este catálogo para montar seus perfis (2.2).
 
 | Coluna | Tipo | Regras |
 |---|---|---|
@@ -291,6 +326,8 @@ Catálogo global das **áreas do sistema que podem ter nível de acesso** (nenhu
 | ordem | smallint | ordem de exibição |
 | criado_em | timestamptz | NOT NULL DEFAULT now() |
 | atualizado_em | timestamptz | NOT NULL DEFAULT now(). Atualizado automaticamente em todo UPDATE (trigger) |
+| excluido_em | timestamptz | NULL = não excluído. Hora exata da exclusão |
+| excluido_por | uuid | FK → superadmin_usuarios. Quem excluiu |
 
 Valores iniciais:
 
@@ -298,7 +335,7 @@ Valores iniciais:
 |---|---|---|---|---|
 | `agenda_propria` | Minha agenda | agenda | Ver os próprios agendamentos | Criar, remarcar, mudar status e cancelar os próprios |
 | `agenda_equipe` | Agenda da equipe | agenda | Ver agendamentos de todos | Criar, remarcar, mudar status e cancelar de qualquer profissional |
-| `config_agendamentos` | Configurar agendamentos | agenda | Ver jornadas e bloqueios | Editar jornadas (2.5), bloqueios, folgas e feriados (2.6) |
+| `config_agendamentos` | Horários e bloqueios | agenda | Ver a jornada dos perfis e os bloqueios | Editar a jornada dos perfis (2.5), bloqueios, folgas e feriados (2.6) |
 | `clientes` | Clientes | clientes | Ver lista e ficha | Cadastrar, editar, inativar |
 | `funcionarios` | Funcionários | funcionarios | Ver lista | Cadastrar, editar, inativar, definir cargo e perfil |
 | `perfis_acesso` | Perfis de acesso | funcionarios | Ver perfis e seus níveis | Criar e editar perfis e níveis |
@@ -311,22 +348,72 @@ Valores iniciais:
 
 📌 Um recurso só tem efeito se o módulo dele estiver ativo na loja. Módulo desativado = nível `nenhum` para todos, inclusive o Administrador.
 
-## 1.9 `superadmin_auditoria`
+## 1.9 `auditoria`
 
-Registro de tudo o que o superadmin faz.
+**Histórico completo de alterações de todas as tabelas** (loja e plataforma): uma linha para cada inclusão, alteração ou exclusão, com os valores antes e depois e quem fez. Substitui as antigas `superadmin_auditoria` e `agendamento_historico`.
 
 | Coluna | Tipo | Regras |
 |---|---|---|
 | id | bigserial | PK |
-| superadmin_id | uuid | FK → superadmin_usuarios |
-| loja_id | uuid | FK → lojas, NULL se a ação não for sobre uma loja |
-| acao | varchar(80) | ex.: `loja.criar`, `loja.editar`, `loja.suspender`, `funcionalidade.ativar`, `funcionalidade.desativar`, `funcionario.criar`, `funcionario.editar`, `tipo_loja.editar` |
-| dados | jsonb | antes/depois da alteração |
+| loja_id | uuid | FK → lojas. NULL = tabela da plataforma (`planos`, `superadmin_usuarios`) |
+| tabela | varchar(60) | NOT NULL. Nome da tabela alterada (ex.: `agendamentos`) |
+| registro_id | text | NOT NULL. Chave da linha alterada (uuid, ou a chave composta em texto nas tabelas de ligação) |
+| operacao | enum `operacao_auditoria` | NOT NULL. `inserir`, `alterar`, `excluir`, `restaurar` |
+| antes | jsonb | Linha antes da alteração. NULL em `inserir` |
+| depois | jsonb | Linha depois da alteração. Em `excluir`, a linha com `excluido_em` preenchido |
+| campos_alterados | text[] | Colunas que mudaram (só em `alterar`), para filtrar sem abrir o jsonb |
+| funcionario_id | uuid | FK (loja_id, funcionario_id) → funcionarios. Quem fez, quando foi alguém da loja |
+| superadmin_id | uuid | FK → superadmin_usuarios. Quem fez, quando foi um superadmin |
+| origem | enum `origem_auditoria` | NOT NULL. `painel`, `superadmin`, `site` (cliente final), `sistema` (rotina automática) |
 | ip | inet | |
-| criado_em | timestamptz | NOT NULL DEFAULT now() |
-| atualizado_em | timestamptz | NOT NULL DEFAULT now(). Atualizado automaticamente em todo UPDATE (trigger) |
+| criado_em | timestamptz | NOT NULL DEFAULT now(). Hora exata da alteração |
 
-📌 Se no futuro o superadmin puder "entrar como" uma loja para dar suporte, isso também deve ser registrado aqui.
+📌 **Preenchida pelo banco**, por um trigger `AFTER INSERT OR UPDATE` genérico ligado a todas as tabelas. O back-end só informa quem está logado no início da transação (`SET LOCAL app.funcionario_id`, `app.superadmin_id`, `app.origem`), como já faz para `atualizado_por`. Assim nenhuma rota esquece de registrar:
+
+```sql
+CREATE FUNCTION registrar_auditoria() RETURNS trigger AS $$
+DECLARE
+  op operacao_auditoria;
+BEGIN
+  op := CASE
+    WHEN TG_OP = 'INSERT' THEN 'inserir'
+    WHEN OLD.excluido_em IS NULL AND NEW.excluido_em IS NOT NULL THEN 'excluir'
+    WHEN OLD.excluido_em IS NOT NULL AND NEW.excluido_em IS NULL THEN 'restaurar'
+    ELSE 'alterar'
+  END;
+  INSERT INTO auditoria (loja_id, tabela, registro_id, operacao, antes, depois,
+                         funcionario_id, superadmin_id, origem)
+  VALUES (
+    CASE WHEN TG_TABLE_NAME = 'lojas' THEN NEW.id ELSE (to_jsonb(NEW) ->> 'loja_id')::uuid END,
+    TG_TABLE_NAME, to_jsonb(NEW) ->> 'id', op,
+    CASE WHEN TG_OP = 'UPDATE' THEN to_jsonb(OLD) END, to_jsonb(NEW),
+    nullif(current_setting('app.funcionario_id', true), '')::uuid,
+    nullif(current_setting('app.superadmin_id', true), '')::uuid,
+    coalesce(nullif(current_setting('app.origem', true), ''), 'sistema')::origem_auditoria
+  );
+  RETURN NULL;
+END $$ LANGUAGE plpgsql;
+
+-- exemplo
+CREATE TRIGGER agendamentos_auditoria AFTER INSERT OR UPDATE ON agendamentos
+  FOR EACH ROW EXECUTE FUNCTION registrar_auditoria();
+```
+
+(Como não há `DELETE` físico, as exclusões chegam aqui como `UPDATE` de `excluido_em`.)
+
+📌 **Tela Auditoria (SUPERADMIN):** sempre **uma loja por vez**. O superadmin escolhe a loja (ou "Plataforma"), a **tabela** e o **período** (hoje, últimos 7/30/90 dias, último ano ou intervalo livre) e vê: quando, quem (funcionário, superadmin ou cliente pelo site), operação, qual registro e o que mudou (campo: antes → depois). Pode filtrar por pessoa. A mesma visão aparece na aba **Histórico** do detalhe da loja.
+
+📌 **Somente inserção:** a tabela não tem `atualizado_*` nem `excluido_*`; ninguém altera nem apaga histórico (permissão de `UPDATE`/`DELETE` revogada para o usuário da aplicação).
+
+📌 Índice que atende a consulta da tela:
+
+```sql
+CREATE INDEX ON auditoria (loja_id, tabela, criado_em DESC);
+```
+
+📌 **Volume:** é a maior tabela do sistema. Se crescer muito, particionar por mês (`PARTITION BY RANGE (criado_em)`) e definir por quanto tempo guardar.
+
+📌 Ações sem alteração de linha (ex.: superadmin "entrar como" a loja para suporte, enviar link de nova senha) também entram aqui, com o detalhe em `depois`.
 
 ---
 
@@ -348,8 +435,9 @@ erDiagram
     perfis ||--o{ funcionarios : ""
     cargos ||--o{ funcionarios : ""
 
-    funcionarios ||--o{ funcionario_horarios : "jornada"
-    funcionarios ||--o{ bloqueios_agenda : "folgas/férias"
+    perfis ||--o{ perfil_horarios : "jornada"
+    perfis ||--o{ bloqueios_agenda : "folgas do perfil"
+    funcionarios ||--o{ bloqueios_agenda : "férias/folgas"
     funcionarios ||--o{ servico_funcionarios : "realiza"
     servicos ||--o{ servico_funcionarios : ""
 
@@ -361,7 +449,6 @@ erDiagram
     servicos ||--o{ agendamentos : ""
     funcionarios ||--o{ agendamentos : "atende"
     agendamentos ||--o{ agendamento_materiais : "consumo"
-    agendamentos ||--o{ agendamento_historico : ""
 
     materiais ||--o{ movimentacoes_estoque : ""
     agendamentos ||--o{ movimentacoes_estoque : "baixa"
@@ -377,7 +464,9 @@ erDiagram
 
 ## 2.1 `perfis`
 
-Perfis de acesso dos funcionários dentro da loja. Cada perfil define, para cada recurso (1.8), um nível: **nenhum**, **leitura** ou **escrita** (2.2). Cada funcionário tem um perfil.
+Perfis dos funcionários dentro da loja. Cada perfil define, para cada recurso (1.8), um nível: **nenhum**, **leitura** ou **escrita** (2.2), e também a **jornada semanal** (2.5) e os bloqueios do grupo (2.6). Cada funcionário tem um perfil: é vinculado **uma vez só** e herda dele acessos e horários.
+
+📌 Funcionários com o mesmo acesso mas horários diferentes ficam em perfis diferentes (ex.: "Profissional · manhã" e "Profissional · tarde"). Ao criar um perfil, a tela permite copiar os níveis e a jornada de outro.
 
 | Coluna | Tipo | Regras |
 |---|---|---|
@@ -390,6 +479,8 @@ Perfis de acesso dos funcionários dentro da loja. Cada perfil define, para cada
 | criado_em | timestamptz | NOT NULL DEFAULT now() |
 | atualizado_em | timestamptz | NOT NULL DEFAULT now(). Atualizado automaticamente em todo UPDATE (trigger) |
 | atualizado_por | uuid | FK (loja_id, atualizado_por) → funcionarios. Funcionário que fez a última alteração na linha |
+| excluido_em | timestamptz | NULL = não excluído. Hora exata da exclusão |
+| excluido_por | uuid | FK (loja_id, excluido_por) → funcionarios. Quem excluiu |
 
 Perfis padrão criados com a loja (a loja pode editar Recepção e Profissional e criar outros):
 
@@ -397,7 +488,7 @@ Perfis padrão criados com a loja (a loja pode editar Recepção e Profissional 
 |---|---|---|---|
 | Minha agenda | escrita | escrita | escrita |
 | Agenda da equipe | escrita | escrita | nenhum |
-| Configurar agendamentos | escrita | leitura | nenhum |
+| Horários e bloqueios | escrita | leitura | nenhum |
 | Clientes | escrita | escrita | leitura |
 | Funcionários | escrita | nenhum | nenhum |
 | Perfis de acesso | escrita | nenhum | nenhum |
@@ -421,6 +512,8 @@ Nível de acesso de cada perfil em cada recurso.
 | criado_em | timestamptz | NOT NULL DEFAULT now() |
 | atualizado_em | timestamptz | NOT NULL DEFAULT now(). Atualizado automaticamente em todo UPDATE (trigger) |
 | atualizado_por | uuid | FK (loja_id, atualizado_por) → funcionarios. Funcionário que fez a última alteração na linha |
+| excluido_em | timestamptz | NULL = não excluído. Hora exata da exclusão |
+| excluido_por | uuid | FK (loja_id, excluido_por) → funcionarios. Quem excluiu |
 
 📌 **Níveis:**
 - `nenhum`: o item não aparece no menu e a API responde 403.
@@ -448,6 +541,8 @@ Cargos/especialidades da loja (no front-end: Dentista, Fisioterapeuta, Recepcion
 | criado_em | timestamptz | NOT NULL DEFAULT now() |
 | atualizado_em | timestamptz | NOT NULL DEFAULT now(). Atualizado automaticamente em todo UPDATE (trigger) |
 | atualizado_por | uuid | FK (loja_id, atualizado_por) → funcionarios. Funcionário que fez a última alteração na linha |
+| excluido_em | timestamptz | NULL = não excluído. Hora exata da exclusão |
+| excluido_por | uuid | FK (loja_id, excluido_por) → funcionarios. Quem excluiu |
 
 ## 2.4 `funcionarios`
 
@@ -472,8 +567,10 @@ Funcionários da loja. **São também os usuários que fazem login no Painel da 
 | criado_em | timestamptz | NOT NULL DEFAULT now() |
 | atualizado_em | timestamptz | NOT NULL DEFAULT now(). Atualizado automaticamente em todo UPDATE (trigger) |
 | atualizado_por | uuid | FK (loja_id, atualizado_por) → funcionarios. Funcionário que fez a última alteração na linha |
+| excluido_em | timestamptz | NULL = não excluído. Hora exata da exclusão |
+| excluido_por | uuid | FK (loja_id, excluido_por) → funcionarios. Quem excluiu |
 
-📌 **Quem cria funcionários:** o **superadmin** (para qualquer loja, a qualquer momento, com qualquer perfil, incluindo Administrador) e, dentro da loja, quem tem **escrita** em *Funcionários*. Exatamente uma das colunas `criado_por_*` é preenchida. Ações do superadmin vão para `superadmin_auditoria`.
+📌 **Quem cria funcionários:** no dia a dia, a própria loja (quem tem **escrita** em *Funcionários*). O **superadmin** cria o primeiro Administrador junto com a loja e pode criar/editar funcionários para dar suporte. Exatamente uma das colunas `criado_por_*` é preenchida. Tudo vai para a `auditoria` (1.9).
 
 📌 O superadmin também pode editar, inativar e redefinir a senha de qualquer funcionário.
 
@@ -483,33 +580,36 @@ Funcionários da loja. **São também os usuários que fazem login no Painel da 
 
 📌 Não é possível desativar o **último administrador** ativo da loja.
 
-## 2.5 `funcionario_horarios`
+## 2.5 `perfil_horarios`
 
-Jornada semanal do funcionário. Define em que horários ele pode ser agendado.
+Jornada semanal do **perfil**. Todo funcionário do perfil pode ser agendado nestes horários; trocar o funcionário de perfil troca também a jornada dele.
 
 | Coluna | Tipo | Regras |
 |---|---|---|
 | id | uuid | PK |
 | loja_id | uuid | |
-| funcionario_id | uuid | FK (loja_id, funcionario_id) → funcionarios |
+| perfil_id | uuid | NOT NULL, FK (loja_id, perfil_id) → perfis ON DELETE CASCADE |
 | dia_semana | smallint | 0 = domingo ... 6 = sábado |
 | hora_inicio | time | NOT NULL |
 | hora_fim | time | NOT NULL, CHECK (hora_fim > hora_inicio) |
 | criado_em | timestamptz | NOT NULL DEFAULT now() |
 | atualizado_em | timestamptz | NOT NULL DEFAULT now(). Atualizado automaticamente em todo UPDATE (trigger) |
 | atualizado_por | uuid | FK (loja_id, atualizado_por) → funcionarios. Funcionário que fez a última alteração na linha |
+| excluido_em | timestamptz | NULL = não excluído. Hora exata da exclusão |
+| excluido_por | uuid | FK (loja_id, excluido_por) → funcionarios. Quem excluiu |
 
 📌 Pode haver mais de uma faixa no mesmo dia (ex.: 08:00–12:00 e 13:00–18:00, com intervalo de almoço).
 
 ## 2.6 `bloqueios_agenda`
 
-Períodos em que o profissional **não** pode ser agendado (férias, folga, compromisso).
+Períodos em que **não** se pode agendar (feriado, folga do grupo, férias, compromisso). Vale para a loja inteira, para um perfil ou para um funcionário.
 
 | Coluna | Tipo | Regras |
 |---|---|---|
 | id | uuid | PK |
 | loja_id | uuid | |
-| funcionario_id | uuid | FK → funcionarios. NULL = bloqueio da loja inteira (ex.: feriado) |
+| perfil_id | uuid | FK (loja_id, perfil_id) → perfis ON DELETE CASCADE. Bloqueio de todos os funcionários do perfil |
+| funcionario_id | uuid | FK (loja_id, funcionario_id) → funcionarios. Bloqueio só desse funcionário (férias, consulta médica) |
 | inicio | timestamptz | NOT NULL |
 | fim | timestamptz | NOT NULL, CHECK (fim > inicio) |
 | motivo | varchar(150) | |
@@ -517,8 +617,14 @@ Períodos em que o profissional **não** pode ser agendado (férias, folga, comp
 | criado_em | timestamptz | NOT NULL DEFAULT now() |
 | atualizado_em | timestamptz | NOT NULL DEFAULT now(). Atualizado automaticamente em todo UPDATE (trigger) |
 | atualizado_por | uuid | FK (loja_id, atualizado_por) → funcionarios. Funcionário que fez a última alteração na linha |
+| excluido_em | timestamptz | NULL = não excluído. Hora exata da exclusão |
+| excluido_por | uuid | FK (loja_id, excluido_por) → funcionarios. Quem excluiu |
 
-📌 Jornadas (2.5) e bloqueios só são alterados por quem tem **escrita** em *Configurar agendamentos*.
+📌 `CHECK (perfil_id IS NULL OR funcionario_id IS NULL)`: no máximo um dos dois. Os dois NULL = loja inteira (ex.: feriado).
+
+📌 Um funcionário está bloqueado quando há bloqueio da loja inteira, do perfil dele ou dele próprio.
+
+📌 Jornadas (2.5) e bloqueios ficam na tela **Configurações › Perfis e horários** e só são alterados por quem tem **escrita** em *Horários e bloqueios*.
 
 ## 2.7 `clientes`
 
@@ -526,7 +632,8 @@ Períodos em que o profissional **não** pode ser agendado (férias, folga, comp
 |---|---|---|
 | id | uuid | PK |
 | loja_id | uuid | FK → lojas |
-| nome | varchar(150) | NOT NULL |
+| nome | varchar(60) | NOT NULL. Só o primeiro nome: é como a loja chama o cliente ("Olá, Maria") |
+| sobrenome | varchar(100) | NOT NULL |
 | cpf | varchar(14) | UNIQUE (loja_id, cpf) quando preenchido |
 | telefone | varchar(20) | NOT NULL |
 | email | varchar(150) | |
@@ -537,8 +644,12 @@ Períodos em que o profissional **não** pode ser agendado (férias, folga, comp
 | criado_em | timestamptz | NOT NULL DEFAULT now() |
 | atualizado_em | timestamptz | NOT NULL DEFAULT now(). Atualizado automaticamente em todo UPDATE (trigger) |
 | atualizado_por | uuid | FK (loja_id, atualizado_por) → funcionarios. Funcionário que fez a última alteração na linha |
+| excluido_em | timestamptz | NULL = não excluído. Hora exata da exclusão |
+| excluido_por | uuid | FK (loja_id, excluido_por) → funcionarios. Quem excluiu |
 
 📌 O mesmo cliente (mesma pessoa) em duas lojas diferentes gera **dois registros independentes**. Uma loja não vê os clientes da outra.
+
+📌 **Nome e sobrenome separados** em todo cadastro (painel e site). Listas e buscas usam o nome completo (`nome || ' ' || sobrenome`); mensagens ao cliente usam só o `nome`.
 
 📌 Cliente com agendamentos não é excluído fisicamente, apenas inativado.
 
@@ -558,6 +669,8 @@ Períodos em que o profissional **não** pode ser agendado (férias, folga, comp
 | criado_em | timestamptz | NOT NULL DEFAULT now() |
 | atualizado_em | timestamptz | NOT NULL DEFAULT now(). Atualizado automaticamente em todo UPDATE (trigger) |
 | atualizado_por | uuid | FK (loja_id, atualizado_por) → funcionarios. Funcionário que fez a última alteração na linha |
+| excluido_em | timestamptz | NULL = não excluído. Hora exata da exclusão |
+| excluido_por | uuid | FK (loja_id, excluido_por) → funcionarios. Quem excluiu |
 
 ## 2.9 `servico_funcionarios`
 
@@ -571,6 +684,8 @@ Quais profissionais podem realizar cada serviço.
 | criado_em | timestamptz | NOT NULL DEFAULT now() |
 | atualizado_em | timestamptz | NOT NULL DEFAULT now(). Atualizado automaticamente em todo UPDATE (trigger) |
 | atualizado_por | uuid | FK (loja_id, atualizado_por) → funcionarios. Funcionário que fez a última alteração na linha |
+| excluido_em | timestamptz | NULL = não excluído. Hora exata da exclusão |
+| excluido_por | uuid | FK (loja_id, excluido_por) → funcionarios. Quem excluiu |
 
 📌 Todo serviço ativo precisa ter **pelo menos um** profissional vinculado (validado no back-end).
 
@@ -586,6 +701,8 @@ Quais profissionais podem realizar cada serviço.
 | criado_em | timestamptz | NOT NULL DEFAULT now() |
 | atualizado_em | timestamptz | NOT NULL DEFAULT now(). Atualizado automaticamente em todo UPDATE (trigger) |
 | atualizado_por | uuid | FK (loja_id, atualizado_por) → funcionarios. Funcionário que fez a última alteração na linha |
+| excluido_em | timestamptz | NULL = não excluído. Hora exata da exclusão |
+| excluido_por | uuid | FK (loja_id, excluido_por) → funcionarios. Quem excluiu |
 
 ## 2.11 `materiais`
 
@@ -602,6 +719,8 @@ Quais profissionais podem realizar cada serviço.
 | criado_em | timestamptz | NOT NULL DEFAULT now() |
 | atualizado_em | timestamptz | NOT NULL DEFAULT now(). Atualizado automaticamente em todo UPDATE (trigger) |
 | atualizado_por | uuid | FK (loja_id, atualizado_por) → funcionarios. Funcionário que fez a última alteração na linha |
+| excluido_em | timestamptz | NULL = não excluído. Hora exata da exclusão |
+| excluido_por | uuid | FK (loja_id, excluido_por) → funcionarios. Quem excluiu |
 
 📌 `quantidade_atual` **nunca é alterada diretamente**: só muda através de um registro em `movimentacoes_estoque` (na mesma transação). Assim, todo o histórico do estoque fica rastreável.
 
@@ -620,6 +739,8 @@ Materiais consumidos por **um** atendimento do serviço.
 | criado_em | timestamptz | NOT NULL DEFAULT now() |
 | atualizado_em | timestamptz | NOT NULL DEFAULT now(). Atualizado automaticamente em todo UPDATE (trigger) |
 | atualizado_por | uuid | FK (loja_id, atualizado_por) → funcionarios. Funcionário que fez a última alteração na linha |
+| excluido_em | timestamptz | NULL = não excluído. Hora exata da exclusão |
+| excluido_por | uuid | FK (loja_id, excluido_por) → funcionarios. Quem excluiu |
 
 ## 2.13 `agendamentos`
 
@@ -643,6 +764,8 @@ Materiais consumidos por **um** atendimento do serviço.
 | criado_em | timestamptz | NOT NULL DEFAULT now() |
 | atualizado_em | timestamptz | NOT NULL DEFAULT now(). Atualizado automaticamente em todo UPDATE (trigger) |
 | atualizado_por | uuid | FK (loja_id, atualizado_por) → funcionarios. Funcionário que fez a última alteração na linha |
+| excluido_em | timestamptz | NULL = não excluído. Hora exata da exclusão |
+| excluido_por | uuid | FK (loja_id, excluido_por) → funcionarios. Quem excluiu |
 
 📌 **Duração:** `fim` é calculado como `inicio + servicos.duracao_minutos`, mas pode ser ajustado manualmente (o front-end permite alterar a duração). Com o módulo **Serviços desativado**, não há serviço: duração e preço são informados manualmente e a regra de `servico_funcionarios` não se aplica.
 
@@ -674,7 +797,7 @@ ALTER TABLE agendamentos ADD CONSTRAINT agendamentos_local_sem_conflito
 
 📌 **Local do agendamento:** com o módulo **Locais** ativo, o local precisa ser permitido para o serviço (ver 2.20) e estar ativo. A coluna fica nullable porque o módulo pode ser ligado ou desligado a qualquer momento, e os agendamentos antigos continuam válidos. Com o módulo **Serviços** desativado, qualquer local ativo serve.
 
-📌 **Disponibilidade:** o back-end só aceita agendamentos dentro da jornada do profissional (`funcionario_horarios`) e fora dos `bloqueios_agenda`. No site do consumidor, com o módulo Locais ativo, um horário só é oferecido se também houver um local permitido livre; o pedido já sai com esse local.
+📌 **Disponibilidade:** o back-end só aceita agendamentos dentro da jornada do perfil do profissional (`perfil_horarios`) e fora dos `bloqueios_agenda`. No site do consumidor, com o módulo Locais ativo, um horário só é oferecido se também houver um local permitido livre; o pedido já sai com esse local.
 
 📌 **Visibilidade:** funcionário com acesso apenas em *Minha agenda* (perfil Profissional) só vê agendamentos onde `funcionario_id` é ele mesmo. Com leitura em *Agenda da equipe* (Recepção, Administrador), vê todos. Em cada caso, **leitura** só vê e **escrita** pode criar, remarcar, mudar status e cancelar.
 
@@ -715,6 +838,8 @@ Materiais **efetivamente usados** no atendimento. Ao criar o agendamento, é pre
 | criado_em | timestamptz | NOT NULL DEFAULT now() |
 | atualizado_em | timestamptz | NOT NULL DEFAULT now(). Atualizado automaticamente em todo UPDATE (trigger) |
 | atualizado_por | uuid | FK (loja_id, atualizado_por) → funcionarios. Funcionário que fez a última alteração na linha |
+| excluido_em | timestamptz | NULL = não excluído. Hora exata da exclusão |
+| excluido_por | uuid | FK (loja_id, excluido_por) → funcionarios. Quem excluiu |
 
 📌 Alterar os materiais do serviço depois **não afeta** agendamentos já criados.
 
@@ -735,6 +860,8 @@ Histórico de toda entrada e saída de material.
 | criado_em | timestamptz | NOT NULL DEFAULT now() |
 | atualizado_em | timestamptz | NOT NULL DEFAULT now(). Atualizado automaticamente em todo UPDATE (trigger) |
 | atualizado_por | uuid | FK (loja_id, atualizado_por) → funcionarios. Funcionário que fez a última alteração na linha |
+| excluido_em | timestamptz | NULL = não excluído. Hora exata da exclusão |
+| excluido_por | uuid | FK (loja_id, excluido_por) → funcionarios. Quem excluiu |
 
 📌 **Baixa automática:** quando um agendamento muda para `concluido`, para cada linha de `agendamento_materiais` é criada uma movimentação `saida_atendimento` e `materiais.quantidade_atual` é atualizada, tudo na mesma transação.
 
@@ -759,33 +886,23 @@ Controle de tempo (entrada e saída) dos funcionários.
 | criado_em | timestamptz | NOT NULL DEFAULT now() |
 | atualizado_em | timestamptz | NOT NULL DEFAULT now(). Atualizado automaticamente em todo UPDATE (trigger) |
 | atualizado_por | uuid | FK (loja_id, atualizado_por) → funcionarios. Funcionário que fez a última alteração na linha |
+| excluido_em | timestamptz | NULL = não excluído. Hora exata da exclusão |
+| excluido_por | uuid | FK (loja_id, excluido_por) → funcionarios. Quem excluiu |
 
 📌 Só pode existir **um registro em aberto** (sem saída) por funcionário:
 
 ```sql
 CREATE UNIQUE INDEX registros_ponto_um_aberto
-  ON registros_ponto (funcionario_id) WHERE saida IS NULL;
+  ON registros_ponto (funcionario_id) WHERE saida IS NULL AND excluido_em IS NULL;
 ```
 
 📌 Horário de entrada/saída vem do **servidor**, não do navegador. Correções só por quem tem **escrita** em *Ponto da equipe*, com justificativa.
 
 📌 Horas trabalhadas = `saida - entrada` (calculado na consulta, não armazenado). A data exibida usa o fuso da loja.
 
-## 2.17 `agendamento_historico`
+## 2.17 *(removida)* `agendamento_historico`
 
-Histórico de alterações de cada agendamento (quem remarcou, cancelou, mudou status).
-
-| Coluna | Tipo | Regras |
-|---|---|---|
-| id | bigserial | PK |
-| loja_id | uuid | |
-| agendamento_id | uuid | FK (loja_id, agendamento_id) → agendamentos |
-| funcionario_id | uuid | FK → funcionarios (quem alterou) |
-| acao | varchar(40) | `criado`, `remarcado`, `status_alterado`, `profissional_alterado`, `local_alterado` |
-| dados | jsonb | valores antes/depois |
-| criado_em | timestamptz | NOT NULL DEFAULT now() |
-| atualizado_em | timestamptz | NOT NULL DEFAULT now(). Atualizado automaticamente em todo UPDATE (trigger) |
-| atualizado_por | uuid | FK (loja_id, atualizado_por) → funcionarios. Funcionário que fez a última alteração na linha |
+Substituída pela `auditoria` (1.9), que guarda o histórico de **todas** as tabelas, inclusive agendamentos (remarcação, mudança de status, troca de profissional ou local).
 
 ## 2.18 Configurações da loja (menu)
 
@@ -807,7 +924,7 @@ O que a loja pode editar (por enquanto):
 | Endereço completo | `cep`, `logradouro`, `numero`, `complemento`, `bairro`, `cidade`, `uf` | CEP pode preencher o restante automaticamente |
 | CNPJ | `cnpj` | Opcional. Validar dígitos; não pode repetir o de outra loja |
 
-O que **só o superadmin** altera (não aparece no menu da loja ou aparece só para leitura): `tipo_loja_id`, `slug`, `plano_id`, `status`, `fuso_horario` e os módulos (`loja_funcionalidades`).
+O que **só o superadmin** altera (não aparece no menu da loja ou aparece só para leitura): `tipo`, `slug`, `plano_id`, `status`, `fuso_horario` e os módulos (`loja_funcionalidades`).
 
 📌 **Logo:** o arquivo fica num storage de arquivos (ex.: S3 ou disco do servidor), separado por loja (ex.: `lojas/{loja_id}/logo.png`). No banco fica só o caminho. Ao trocar a logo, o arquivo anterior é apagado.
 
@@ -831,6 +948,8 @@ Onde o atendimento acontece. O nome é genérico: em cada loja vira **sala** (es
 | criado_em | timestamptz | NOT NULL DEFAULT now() |
 | atualizado_em | timestamptz | NOT NULL DEFAULT now(). Atualizado automaticamente em todo UPDATE (trigger) |
 | atualizado_por | uuid | FK (loja_id, atualizado_por) → funcionarios. Funcionário que fez a última alteração na linha |
+| excluido_em | timestamptz | NULL = não excluído. Hora exata da exclusão |
+| excluido_por | uuid | FK (loja_id, excluido_por) → funcionarios. Quem excluiu |
 
 📌 **Online:** um link de reunião também é um local. Link fixo fica em `link_padrao`; link gerado a cada atendimento vai em `agendamentos.link_reuniao`. Como o conflito de horário é verificado por local, cada link que pode ser usado ao mesmo tempo que outro deve ser um local separado (ex.: um por profissional).
 
@@ -850,6 +969,8 @@ Em quais locais cada serviço pode acontecer.
 | criado_em | timestamptz | NOT NULL DEFAULT now() |
 | atualizado_em | timestamptz | NOT NULL DEFAULT now(). Atualizado automaticamente em todo UPDATE (trigger) |
 | atualizado_por | uuid | FK (loja_id, atualizado_por) → funcionarios. Funcionário que fez a última alteração na linha |
+| excluido_em | timestamptz | NULL = não excluído. Hora exata da exclusão |
+| excluido_por | uuid | FK (loja_id, excluido_por) → funcionarios. Quem excluiu |
 
 📌 **Serviço sem nenhum local vinculado = pode acontecer em qualquer local ativo.** Exemplo de uma escola de música:
 
@@ -873,6 +994,8 @@ Opções da loja que não são dados cadastrais (ver 2.18). Uma linha por loja, 
 | criado_em | timestamptz | NOT NULL DEFAULT now() |
 | atualizado_em | timestamptz | NOT NULL DEFAULT now(). Atualizado automaticamente em todo UPDATE (trigger) |
 | atualizado_por | uuid | FK (loja_id, atualizado_por) → funcionarios. Funcionário que fez a última alteração na linha |
+| excluido_em | timestamptz | NULL = não excluído. Hora exata da exclusão |
+| excluido_por | uuid | FK (loja_id, excluido_por) → funcionarios. Quem excluiu |
 
 📌 Os rótulos são editados na própria tela de Locais, por quem tem **escrita** em *Locais*. Diferente do tipo da loja (1.2), que só muda os textos do site do consumidor, o rótulo muda os textos do **painel**.
 
@@ -889,6 +1012,9 @@ CREATE TYPE tipo_movimentacao  AS ENUM ('entrada', 'saida_atendimento', 'ajuste'
 CREATE TYPE origem_ponto       AS ENUM ('sistema', 'manual');
 CREATE TYPE nivel_acesso       AS ENUM ('nenhum', 'leitura', 'escrita');
 CREATE TYPE tipo_local         AS ENUM ('presencial', 'online');
+CREATE TYPE tipo_loja          AS ENUM ('clinica', 'barbearia', 'escola');
+CREATE TYPE operacao_auditoria AS ENUM ('inserir', 'alterar', 'excluir', 'restaurar');
+CREATE TYPE origem_auditoria   AS ENUM ('painel', 'superadmin', 'site', 'sistema');
 ```
 
 ---
@@ -898,7 +1024,7 @@ CREATE TYPE tipo_local         AS ENUM ('presencial', 'online');
 | Tela | Tabelas |
 |---|---|
 | Início | `agendamentos`, `clientes`, `registros_ponto`, `materiais` |
-| Agenda | `agendamentos`, `funcionarios`, `funcionario_horarios`, `bloqueios_agenda`, `locais` |
+| Agenda | `agendamentos`, `funcionarios`, `perfil_horarios`, `bloqueios_agenda`, `locais` |
 | Agendamentos | `agendamentos`, `clientes`, `servicos`, `servico_funcionarios`, `servico_locais`, `locais`, `agendamento_materiais` |
 | Clientes | `clientes` |
 | Funcionários | `funcionarios`, `cargos`, `perfis`, `perfil_acessos`, `recursos` |
@@ -907,9 +1033,10 @@ CREATE TYPE tipo_local         AS ENUM ('presencial', 'online');
 | Materiais | `materiais`, `categorias_material`, `movimentacoes_estoque` |
 | Controle de Tempo | `registros_ponto` |
 | *(futuro)* Login da loja | `lojas` (slug), `funcionarios`, `perfis`, `perfil_acessos`, `recursos`, `loja_funcionalidades` |
-| Site do consumidor (`/`, exemplo) | `lojas`, `tipos_loja`, `servicos`, `servico_funcionarios`, `servico_locais`, `locais`, `funcionario_horarios`, `bloqueios_agenda`, `agendamentos`, `clientes` |
+| Site do consumidor (`/`, exemplo) | `lojas` (`tipo` escolhe o site), `servicos`, `servico_funcionarios`, `servico_locais`, `locais`, `perfil_horarios`, `bloqueios_agenda`, `agendamentos`, `clientes` |
+| Configurações › Perfis e horários | `perfis`, `perfil_acessos`, `recursos`, `perfil_horarios`, `bloqueios_agenda` |
 | *(futuro)* Configurações | `lojas` (campos editáveis pela loja, ver 2.18) |
-| *(futuro)* Painel SUPERADMIN | todas as tabelas da seção 1 |
+| Painel SUPERADMIN (prévia) | `lojas`, `loja_funcionalidades`, `funcionarios`, `planos`, `superadmin_usuarios`, `auditoria` |
 
 Diferenças entre o mock atual e o banco:
 
@@ -940,8 +1067,9 @@ Diferenças entre o mock atual e o banco:
 - [ ] Financeiro (pagamentos dos atendimentos, comissão de profissionais).
 - [ ] Prontuário/anotações clínicas do atendimento (dados sensíveis, LGPD).
 - [ ] Um mesmo funcionário trabalhando em mais de uma loja (hoje seria um cadastro por loja).
-- [ ] Precisa de **histórico completo** de alterações (quem mudou o quê, com valores antes e depois) em outras tabelas além de agendamentos? Se sim, entra uma tabela genérica `loja_auditoria` alimentada pelos mesmos triggers.
-- [ ] Tipo da loja precisa de um **subtipo/segmento** (ex.: Escola → Música, Idiomas; Clínica → Odontológica, Estética)? Só faria diferença no futuro front-end do consumidor.
+- [ ] Tipo da loja precisa de um **subtipo/segmento** (ex.: Escola → Música, Idiomas; Clínica → Odontológica, Estética)? Só faria diferença no site do consumidor.
+- [ ] Por quanto tempo guardar a `auditoria`, e se linhas excluídas logicamente devem ser removidas de verdade depois de um prazo (LGPD: pedido de exclusão de dados do cliente).
+- [ ] Planos com limites (funcionários, agendamentos/mês, módulos incluídos): quando e como.
 - [ ] Com o módulo **Serviços desativado**, o agendamento sem serviço (duração e preço manuais) é o comportamento desejado?
 - [ ] Precisa de ajuste de acesso **por funcionário** (exceção ao perfil), ou o perfil basta?
 - [ ] Configurações da loja: a razão social também deve ser editável pela loja, ou só o nome fantasia?

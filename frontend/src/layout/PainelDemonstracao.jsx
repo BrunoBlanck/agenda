@@ -3,11 +3,12 @@ import { CrownOutlined } from '@ant-design/icons'
 import { useNavigate } from 'react-router-dom'
 import { useData } from '../data/DataContext.jsx'
 import { modulos } from '../data/acesso.js'
+import { opcoesTipoLoja } from '../data/plataforma.js'
 
 // Só existe enquanto não há login nem painel SUPERADMIN: permite simular quem está logado
 // e o que o superadmin liberou para a loja.
 export default function PainelDemonstracao({ open, onClose }) {
-  const { funcionarios, perfis, sessao, modulos: ativos, loja, tipos } = useData()
+  const { funcionarios, perfis, sessao, modulos: ativos, loja } = useData()
   const navigate = useNavigate()
   const nomePerfil = (id) => perfis.itens.find((p) => p.id === id)?.nome ?? '—'
 
@@ -50,13 +51,13 @@ export default function PainelDemonstracao({ open, onClose }) {
 
       <Typography.Title level={5}>Tipo da loja</Typography.Title>
       <Typography.Paragraph type="secondary">
-        Não muda nada no painel da loja. Será usado só no futuro site do consumidor final.
+        Não muda nada no painel da loja. Define qual site do consumidor final a loja usa.
       </Typography.Paragraph>
       <Select
         style={{ width: '100%' }}
         value={loja.dados.tipo}
         onChange={(tipo) => loja.atualizar({ tipo }, null)}
-        options={tipos.itens.filter((t) => t.ativo).map((t) => ({ value: t.codigo, label: t.nome }))}
+        options={opcoesTipoLoja}
       />
 
       <Divider />

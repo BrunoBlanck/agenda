@@ -109,7 +109,7 @@ export default function VisaoSemana({
                   style={{ top: Math.max(0, topo(b.ini)), height: Math.min(alturaTotal, topo(b.fim)) - Math.max(0, topo(b.ini)) }}
                   title={b.motivo}
                 >
-                  {b.funcionarioId == null ? b.motivo : `${nomeFunc(b.funcionarioId)}: ${b.motivo}`}
+                  {b.quem == null ? b.motivo : `${b.quem}: ${b.motivo}`}
                 </div>
               ))}
 

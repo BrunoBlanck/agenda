@@ -6,6 +6,7 @@ import UltimaAlteracao from './UltimaAlteracao.jsx'
 // Tela genérica de cadastro: busca + tabela + modal de formulário.
 // somenteLeitura: perfil com nível "leitura" (sem criar, editar ou excluir).
 // validar(valores, item): regra extra antes de salvar; retorna a mensagem de erro ou nada.
+// campoBusca: campo (ou função que recebe o item) usado na busca.
 // textoNovo: texto do botão de criar (padrão "Novo <titulo>"), para nomes femininos ou definidos pela loja.
 export default function CadastroTabela({
   titulo,
@@ -42,8 +43,9 @@ export default function CadastroTabela({
     setEditando(null)
   }
 
+  const textoBusca = typeof campoBusca === 'function' ? campoBusca : (i) => i[campoBusca]
   const dados = lista.itens.filter((i) =>
-    String(i[campoBusca] ?? '').toLowerCase().includes(busca.toLowerCase()),
+    String(textoBusca(i) ?? '').toLowerCase().includes(busca.toLowerCase()),
   )
 
   const colunaAcoes = {

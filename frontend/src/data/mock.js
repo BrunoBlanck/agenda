@@ -74,28 +74,30 @@ export const funcionariosIniciais = [
   { id: 3, nome: 'Juliana Alves', cor: '#d97706', cargo: 'Recepcionista', perfilId: 2, email: 'juliana@clinica.com', telefone: '(11) 99999-0003', ativo: true },
 ]
 
-// Jornada semanal (diaSemana: 0 = domingo ... 6 = sábado)
-const faixas = (funcionarioId, dias, lista) =>
-  dias.flatMap((diaSemana) => lista.map(([inicio, fim]) => ({ funcionarioId, diaSemana, inicio, fim })))
+// Jornada semanal do perfil (diaSemana: 0 = domingo ... 6 = sábado). Todo funcionário do perfil segue esta jornada.
+const faixas = (perfilId, dias, lista) =>
+  dias.flatMap((diaSemana) => lista.map(([inicio, fim]) => ({ perfilId, diaSemana, inicio, fim })))
 
 export const jornadasIniciais = [
   ...faixas(1, [1, 2, 3, 4, 5], [['08:00', '12:00'], ['13:00', '18:00']]),
-  ...faixas(2, [1, 2, 3, 4, 5], [['09:00', '17:00']]),
-  ...faixas(2, [6], [['08:00', '12:00']]),
-  ...faixas(3, [1, 2, 3, 4, 5, 6], [['07:30', '17:00']]),
+  ...faixas(3, [1, 2, 3, 4, 5], [['09:00', '17:00']]),
+  ...faixas(3, [6], [['08:00', '12:00']]),
+  ...faixas(2, [1, 2, 3, 4, 5, 6], [['07:30', '17:00']]),
 ].map((j, i) => ({ ...j, id: i + 1 }))
 
-// funcionarioId null = bloqueio da loja inteira (ex.: feriado)
+// perfilId e funcionarioId null = bloqueio da loja inteira (ex.: feriado).
+// perfilId = todos os funcionários do perfil; funcionarioId = só ele (férias, consulta médica...)
 const proximaSegunda = dayjs().day(8).format('YYYY-MM-DD')
 export const bloqueiosIniciais = [
-  { id: 1, funcionarioId: null, inicio: `${proximaSegunda} 00:00`, fim: `${proximaSegunda} 23:59`, motivo: 'Feriado' },
-  { id: 2, funcionarioId: 2, inicio: `${amanha} 15:00`, fim: `${amanha} 17:00`, motivo: 'Consulta médica' },
+  { id: 1, perfilId: null, funcionarioId: null, inicio: `${proximaSegunda} 00:00`, fim: `${proximaSegunda} 23:59`, motivo: 'Feriado' },
+  { id: 2, perfilId: null, funcionarioId: 2, inicio: `${amanha} 15:00`, fim: `${amanha} 17:00`, motivo: 'Consulta médica' },
 ]
 
+// nome e sobrenome separados: o nome é como a loja chama o cliente ("Olá, Maria")
 export const clientesIniciais = [
-  { id: 1, nome: 'Maria Oliveira', cpf: '123.456.789-00', telefone: '(11) 98888-1111', email: 'maria@email.com', nascimento: '1985-04-12', canais: ['loja', 'whatsapp'] },
-  { id: 2, nome: 'João Pereira', cpf: '987.654.321-00', telefone: '(11) 98888-2222', email: 'joao@email.com', nascimento: '1990-09-30', canais: ['whatsapp'] },
-  { id: 3, nome: 'Fernanda Costa', cpf: '111.222.333-44', telefone: '(11) 98888-3333', email: 'fernanda@email.com', nascimento: '1978-01-05', canais: ['loja', 'site'] },
+  { id: 1, nome: 'Maria', sobrenome: 'Oliveira', cpf: '123.456.789-00', telefone: '(11) 98888-1111', email: 'maria@email.com', nascimento: '1985-04-12', canais: ['loja', 'whatsapp'] },
+  { id: 2, nome: 'João', sobrenome: 'Pereira', cpf: '987.654.321-00', telefone: '(11) 98888-2222', email: 'joao@email.com', nascimento: '1990-09-30', canais: ['whatsapp'] },
+  { id: 3, nome: 'Fernanda', sobrenome: 'Costa', cpf: '111.222.333-44', telefone: '(11) 98888-3333', email: 'fernanda@email.com', nascimento: '1978-01-05', canais: ['loja', 'site'] },
 ]
 
 export const materiaisIniciais = [

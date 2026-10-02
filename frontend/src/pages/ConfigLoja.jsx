@@ -4,7 +4,7 @@ import { UploadOutlined, DeleteOutlined, ShopOutlined, SaveOutlined } from '@ant
 import { useData } from '../data/DataContext.jsx'
 import { useAcesso } from '../data/useAcesso.js'
 import { modulos } from '../data/acesso.js'
-import { statusLoja as situacao } from '../data/plataforma.js'
+import { statusLoja as situacao, tiposLoja } from '../data/plataforma.js'
 import UltimaAlteracao from '../components/UltimaAlteracao.jsx'
 import { cnpjValido, mascaraCep, mascaraCnpj, mascaraTelefone, soDigitos } from '../utils/formatos.js'
 
@@ -14,7 +14,7 @@ const LOGO_MAX_MB = 2
 
 // Configurações > Dados da loja (estrutura.md, 2.18)
 export default function ConfigLoja() {
-  const { loja, tipos, planos } = useData()
+  const { loja, planos } = useData()
   const { pode, moduloAtivo } = useAcesso()
   const [form] = Form.useForm()
   const [logo, setLogo] = useState(loja.dados.logoUrl)
@@ -184,9 +184,9 @@ export default function ConfigLoja() {
 
       <Card title="Definido pela plataforma" extra={<Typography.Text type="secondary">Para alterar, fale com o suporte</Typography.Text>}>
         <Descriptions column={{ xs: 1, md: 2, xl: 3 }}>
-          <Descriptions.Item label="Tipo">{tipos.itens.find((t) => t.codigo === dados.tipo)?.nome}</Descriptions.Item>
+          <Descriptions.Item label="Tipo">{tiposLoja[dados.tipo]?.nome}</Descriptions.Item>
           <Descriptions.Item label="Endereço de acesso">/{dados.slug}</Descriptions.Item>
-          <Descriptions.Item label="Plano">{planos.itens.find((p) => p.id === dados.planoId)?.nome}</Descriptions.Item>
+          <Descriptions.Item label="Plano">{planos.todos.find((p) => p.id === dados.planoId)?.nome}</Descriptions.Item>
           <Descriptions.Item label="Situação">
             <Tag color={situacao[dados.status]?.color}>{situacao[dados.status]?.label}</Tag>
           </Descriptions.Item>

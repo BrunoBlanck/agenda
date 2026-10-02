@@ -3,6 +3,7 @@ import { CalendarOutlined, UserOutlined, TeamOutlined, WarningOutlined, GlobalOu
 import dayjs from 'dayjs'
 import { useData } from '../data/DataContext.jsx'
 import { useAcesso } from '../data/useAcesso.js'
+import { nomeCompleto } from '../utils/formatos.js'
 import { statusAgendamento } from '../data/mock.js'
 import AceiteSolicitacao from '../components/AceiteSolicitacao.jsx'
 
@@ -24,7 +25,7 @@ export default function Dashboard() {
   const emServico = pontos.itens.filter((p) => p.data === hoje && !p.saida).length
   const aRepor = materiais.itens.filter((m) => m.quantidade < m.minimo)
 
-  const nomeCliente = (id) => clientes.itens.find((c) => c.id === id)?.nome ?? '—'
+  const nomeCliente = (id) => nomeCompleto(clientes.itens.find((c) => c.id === id)) || '—'
   const nomeFunc = (id) => funcionarios.itens.find((f) => f.id === id)?.nome ?? '—'
   const nomeServico = (id) => servicos.itens.find((s) => s.id === id)?.nome ?? '—'
 

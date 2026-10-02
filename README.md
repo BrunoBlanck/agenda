@@ -11,15 +11,14 @@ Sistema web para gestão de uma clínica com vários funcionários: agenda de at
 | **Início** | Resumo do dia: agendamentos de hoje, clientes cadastrados, funcionários em serviço e materiais a repor |
 | **Agenda** | Visão por **semana** (uma coluna por dia, horários na vertical, clique num horário vazio para agendar) ou por **mês**, com filtro por profissional e painel lateral com os atendimentos do dia selecionado em ordem |
 | **Agendamentos** | Lista de agendamentos com filtro por profissional, local e período; criar, editar e excluir |
-| **Clientes** | Cadastro de clientes (nome, CPF, telefone, e-mail, nascimento) |
+| **Clientes** | Cadastro de clientes (nome e sobrenome separados, CPF, telefone, e-mail, nascimento) |
 | **Funcionários** | Cadastro de funcionários (nome, cargo, e-mail de login, telefone, ativo/inativo) |
 | **Serviços** | Cadastro de serviços com duração, preço, profissionais habilitados, locais onde podem acontecer e materiais usados por atendimento |
 | **Locais** | Onde o atendimento acontece: salas, cadeiras, macas, consultórios ou links online. A loja escolhe o nome que aparece no menu (ex.: "Salas", "Cadeiras") |
 | **Materiais** | Controle de estoque com quantidade mínima e alerta de reposição |
 | **Controle de Tempo** | Registro de entrada/saída dos funcionários e total de horas trabalhadas por dia |
 | **Configurações › Dados da loja** | Logo, nome, razão social, contato, endereço (com busca por CEP) e CNPJ |
-| **Configurações › Horários e bloqueios** | Jornada semanal de cada funcionário e bloqueios (folgas, férias, feriados) |
-| **Configurações › Perfis de acesso** | Nível de acesso (nenhum, leitura ou escrita) de cada perfil em cada área do sistema |
+| **Configurações › Perfis e horários** | Cada perfil reúne o nível de acesso (nenhum, leitura ou escrita) em cada área, a jornada semanal e os bloqueios (folgas, férias, feriados). O funcionário é vinculado ao perfil uma vez só e herda tudo |
 
 ### Acessos e módulos
 
@@ -34,13 +33,13 @@ Em `/superadmin` (ou pelo botão **Demonstração › Abrir prévia do painel SU
 
 | Menu | Descrição |
 |---|---|
-| **Visão geral** | Lojas ativas/suspensas, funcionários, receita dos planos, lojas por tipo, módulos em uso e últimas ações |
-| **Lojas** | Lista com filtros e criação de loja (já com o primeiro Administrador). No detalhe: dados gerais, módulos (ligar/desligar, observação e prazo), funcionários (criar, editar, redefinir senha) e histórico |
-| **Tipos de loja** | Clínica, Barbearia, Escola... |
-| **Planos** | Preço, limites e módulos sugeridos na criação da loja |
-| **Módulos e recursos** | Catálogo de módulos e dos recursos usados nos níveis de acesso (consulta) |
-| **Usuários da plataforma** | Superadmins |
-| **Auditoria** | Tudo o que os superadmins fizeram, com filtros |
+| **Visão geral** | Lojas ativas/suspensas, funcionários, receita dos planos, lojas por tipo, módulos em uso e últimas ações dos admins |
+| **Lojas** | Lista com filtros e criação de loja (tipo, plano, módulos que a loja vai usar e o primeiro Administrador). No detalhe: dados gerais, módulos (ligar/desligar, observação e prazo), funcionários (suporte: criar, editar, redefinir senha) e histórico |
+| **Planos** | Nome e preço. O plano não define módulos: eles são escolhidos loja a loja |
+| **Usuários admin** | Só as contas de superadmin. Usuários das lojas são cadastrados na loja |
+| **Auditoria** | Uma loja por vez: escolhe a loja, a tabela e o período e vê o que mudou (antes → depois) e quem fez |
+
+O tipo da loja (Clínica, Barbearia, Escola) é uma constante do sistema: cada tipo terá o próprio site do consumidor. Nada é apagado de verdade: excluir marca a data/hora e quem excluiu, e tudo fica na auditoria.
 
 A "Clínica Sorriso" é a loja aberta no painel da loja: o que o superadmin muda nela (módulos, dados, funcionários) aparece no painel na hora.
 

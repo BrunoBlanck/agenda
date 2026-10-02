@@ -1,11 +1,12 @@
 import { ehHoje, inativo, mesmoDia, nomesDias } from './util.js'
+import { bloqueioDaLoja } from '../../data/horarios.js'
 
 const MAX_POR_DIA = 3
 
 // Grade mensal com 6 semanas fixas. Clicar num dia só seleciona: a grade nunca muda de lugar.
 export default function VisaoMes({ dias, mes, agendamentos, bloqueios, diaSelecionado, onSelecionarDia, nomeCliente, corDe }) {
   const temBloqueioLoja = (dia) =>
-    bloqueios.some((b) => b.funcionarioId == null && dia.isBefore(b.fim) && dia.endOf('day').isAfter(b.inicio))
+    bloqueios.some((b) => bloqueioDaLoja(b) && dia.isBefore(b.fim) && dia.endOf('day').isAfter(b.inicio))
 
   return (
     <div className="agenda-mes">

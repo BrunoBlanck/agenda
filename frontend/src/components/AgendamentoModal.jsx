@@ -1,26 +1,31 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { Modal, Form, Select, DatePicker, TimePicker, InputNumber, Alert, Button, Input, Tag } from 'antd'
 import dayjs from 'dayjs'
 import { useData } from '../data/DataContext.jsx'
 import { useAcesso } from '../data/useAcesso.js'
 import { statusAgendamento, tiposLocal } from '../data/mock.js'
 import { localOcupado, locaisDoServico, rotulosLocal } from '../data/locais.js'
+import { nomeCompleto } from '../utils/formatos.js'
+import { bloqueioAtinge, jornadaDe } from '../data/horarios.js'
 import UltimaAlteracao from './UltimaAlteracao.jsx'
+import HistoricoCliente from './HistoricoCliente.jsx'
+import ResumoCliente from './ResumoCliente.jsx'
 
 // Avisa quando o horário cai fora da jornada do profissional ou dentro de um bloqueio.
 // No sistema real essa validação é feita pelo back-end.
-function avisoDisponibilidade({ funcionarioId, data, hora, duracao }, jornadas, bloqueios) {
-  if (!funcionarioId || !data || !hora) return null
+// A jornada e os bloqueios do profissional vêm do perfil dele (data/horarios.js).
+function avisoDisponibilidade({ data, hora, duracao }, funcionario, jornadas, bloqueios) {
+  if (!funcionario || !data || !hora) return null
   const inicio = data.hour(hora.hour()).minute(hora.minute()).second(0)
   const fim = inicio.add(duracao ?? 0, 'minute')
   const [ini, fi] = [inicio.format('HH:mm'), fim.format('HH:mm')]
 
-  const dentroJornada = jornadas.some(
-    (j) => j.funcionarioId === funcionarioId && j.diaSemana === inicio.day() && j.inicio <= ini && fi <= j.fim,
+  const dentroJornada = jornadaDe(funcionario, jornadas).some(
+    (j) => j.diaSemana === inicio.day() && j.inicio <= ini && fi <= j.fim,
   )
   const bloqueio = bloqueios.find(
     (b) =>
-      (b.funcionarioId == null || b.funcionarioId === funcionarioId) &&
+      bloqueioAtinge(b, funcionario) &&
       inicio.isBefore(dayjs(b.fim)) &&
       fim.isAfter(dayjs(b.inicio)),
   )
@@ -34,6 +39,7 @@ export default function AgendamentoModal({ open, onClose, agendamento, dataInici
   const { clientes, funcionarios, agendamentos, servicos, materiais, jornadas, bloqueios, locais, loja } = useData()
   const { usuario, moduloAtivo, agenda } = useAcesso()
   const [form] = Form.useForm()
+  const [verHistorico, setVerHistorico] = useState(false)
   const valores = Form.useWatch([], form) ?? {}
   const servico = servicos.itens.find((s) => s.id === valores.servicoId)
 
@@ -90,7 +96,8 @@ export default function AgendamentoModal({ open, onClose, agendamento, dataInici
       })
       .join(', ')
 
-  const aviso = avisoDisponibilidade(valores, jornadas.itens, bloqueios.itens)
+  const profissionalEscolhido = funcionarios.itens.find((f) => f.id === valores.funcionarioId)
+  const aviso = avisoDisponibilidade(valores, profissionalEscolhido, jornadas.itens, bloqueios.itens)
 
   useEffect(() => {
     if (!open) return
@@ -140,9 +147,10 @@ export default function AgendamentoModal({ open, onClose, agendamento, dataInici
           <Select
             showSearch
             optionFilterProp="label"
-            options={clientes.itens.map((c) => ({ value: c.id, label: c.nome }))}
+            options={clientes.itens.map((c) => ({ value: c.id, label: nomeCompleto(c) }))}
           />
         </Form.Item>
+        <ResumoCliente clienteId={valores.clienteId} agendamentoId={agendamento?.id} onAbrir={() => setVerHistorico(true)} />
         {comServicos && (
           <Form.Item name="servicoId" label="Serviço" rules={[{ required: true }]}>
             <Select
@@ -229,6 +237,7 @@ export default function AgendamentoModal({ open, onClose, agendamento, dataInici
         </Form.Item>
       </Form>
       <UltimaAlteracao item={agendamento} />
+      <HistoricoCliente clienteId={valores.clienteId} open={verHistorico} onClose={() => setVerHistorico(false)} />
     </Modal>
   )
 }

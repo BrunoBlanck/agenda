@@ -34,10 +34,10 @@ export const recursos = [
   },
   {
     codigo: 'config_agendamentos',
-    nome: 'Configurar agendamentos',
+    nome: 'Horários e bloqueios',
     modulo: 'agenda',
-    leitura: 'Ver jornadas e bloqueios',
-    escrita: 'Editar jornadas, bloqueios, folgas e feriados',
+    leitura: 'Ver a jornada dos perfis e os bloqueios',
+    escrita: 'Editar a jornada dos perfis, bloqueios, folgas e feriados',
   },
   { codigo: 'clientes', nome: 'Clientes', modulo: 'clientes', leitura: 'Ver lista e ficha', escrita: 'Cadastrar, editar, inativar' },
   {

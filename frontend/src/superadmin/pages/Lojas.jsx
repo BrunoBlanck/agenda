@@ -1,10 +1,10 @@
 import { useState } from 'react'
-import { Card, Table, Input, Select, Flex, Button, Tag, Avatar, Typography, Modal, Form, Row, Col, Divider } from 'antd'
+import { Card, Table, Input, Select, Flex, Button, Tag, Avatar, Typography, Modal, Form, Row, Col, Divider, Checkbox } from 'antd'
 import { PlusOutlined, SearchOutlined, RightOutlined } from '@ant-design/icons'
 import { useNavigate } from 'react-router-dom'
 import { useData } from '../../data/DataContext.jsx'
 import { modulos } from '../../data/acesso.js'
-import { statusLoja } from '../../data/plataforma.js'
+import { opcoesTipoLoja, statusLoja } from '../../data/plataforma.js'
 import { usePlataforma } from '../usePlataforma.js'
 
 const opcionais = modulos.filter((m) => m.opcional)
@@ -18,7 +18,7 @@ const gerarSlug = (texto = '') =>
     .replace(/^-|-$/g, '')
 
 export default function Lojas() {
-  const { lojas, tipos, planos } = useData()
+  const { lojas, planos } = useData()
   const { nomeTipo, plano, funcionariosDe, criarLoja, ehAtual } = usePlataforma()
   const navigate = useNavigate()
   const [busca, setBusca] = useState('')
@@ -110,7 +110,7 @@ export default function Lojas() {
             placeholder="Todos os tipos"
             style={{ width: 160 }}
             onChange={setTipo}
-            options={tipos.itens.map((t) => ({ value: t.codigo, label: t.nome }))}
+            options={opcoesTipoLoja}
           />
           <Select
             allowClear
@@ -160,12 +160,12 @@ export default function Lojas() {
               </Form.Item>
             </Col>
             <Col span={12}>
-              <Form.Item name="tipo" label="Tipo" rules={[{ required: true }]}>
-                <Select options={tipos.itens.filter((t) => t.ativo).map((t) => ({ value: t.codigo, label: t.nome }))} />
+              <Form.Item name="tipo" label="Tipo" rules={[{ required: true }]} extra="Define o site do consumidor final.">
+                <Select options={opcoesTipoLoja} />
               </Form.Item>
             </Col>
             <Col span={12}>
-              <Form.Item name="planoId" label="Plano" rules={[{ required: true }]} extra="Define os módulos iniciais da loja.">
+              <Form.Item name="planoId" label="Plano" rules={[{ required: true }]}>
                 <Select options={planos.itens.filter((p) => p.ativo).map((p) => ({ value: p.id, label: p.nome }))} />
               </Form.Item>
             </Col>
@@ -190,6 +190,14 @@ export default function Lojas() {
               </Form.Item>
             </Col>
           </Row>
+          <Form.Item
+            name="modulos"
+            label="Módulos que a loja vai usar"
+            initialValue={[]}
+            extra="O que ficar desmarcado não aparece no menu da loja. Dá para mudar depois, em Módulos."
+          >
+            <Checkbox.Group options={opcionais.map((m) => ({ value: m.codigo, label: m.nome }))} />
+          </Form.Item>
           <Divider titlePlacement="start" plain>
             Primeiro funcionário (Administrador)
           </Divider>

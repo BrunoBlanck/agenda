@@ -11,16 +11,19 @@ import {
   UserOutlined,
 } from '@ant-design/icons'
 import dayjs from 'dayjs'
-import { useData } from '../data/DataContext.jsx'
+import { SITE, useData } from '../data/DataContext.jsx'
+import { tiposLoja } from '../data/plataforma.js'
 import { useAcesso } from '../data/useAcesso.js'
 import { mascaraTelefone, moeda, soDigitos } from '../utils/formatos.js'
 import { capitalizar, COR_PADRAO } from '../components/agenda/util.js'
 import { horariosLivres } from './horariosLivres.js'
 import { locaisDoServico } from '../data/locais.js'
+import { jornadaDe } from '../data/horarios.js'
 
 const DIAS_A_FRENTE = 14
 
-// O tipo da loja muda só os textos do site (estrutura.md, 1.2)
+// Por enquanto o tipo da loja muda só os textos deste site de exemplo. No sistema real cada tipo
+// terá o próprio site (layout e fluxo), escolhido pelo código do tipo (estrutura.md, 1.2)
 const termosPorTipo = {
   clinica: { profissional: 'Profissional', servico: 'Serviço', chamada: 'Agende sua consulta' },
   barbearia: { profissional: 'Barbeiro', servico: 'Serviço', chamada: 'Agende seu horário' },
@@ -31,21 +34,22 @@ const termosPorTipo = {
 // faz um cadastro e a solicitação entra no painel da loja como "Aguardando aceite".
 export default function SiteLoja() {
   const navigate = useNavigate()
-  const { loja, tipos, servicos, funcionarios, jornadas, bloqueios, agendamentos, clientes, locais } = useData()
+  const { loja, servicos, funcionarios, jornadas, bloqueios, agendamentos, clientes, locais } = useData()
   const { moduloAtivo } = useAcesso()
   const [etapa, setEtapa] = useState(0)
   const [servicoId, setServicoId] = useState(null)
   const [profissional, setProfissional] = useState('qualquer')
   const [dia, setDia] = useState(null)
   const [horario, setHorario] = useState(null)
+  const [nomeCliente, setNomeCliente] = useState('') // só o nome, para chamar o cliente por ele
   const [form] = Form.useForm()
 
   const dados = loja.dados
   const termos = termosPorTipo[dados.tipo] ?? termosPorTipo.clinica
-  const nomeTipo = tipos.itens.find((t) => t.codigo === dados.tipo)?.nome
+  const nomeTipo = tiposLoja[dados.tipo]?.nome
 
   // Sem o módulo Serviços, o site oferece um atendimento genérico de 30 minutos
-  const comJornada = funcionarios.itens.filter((f) => f.ativo && jornadas.itens.some((j) => j.funcionarioId === f.id))
+  const comJornada = funcionarios.itens.filter((f) => f.ativo && jornadaDe(f, jornadas.itens).length > 0)
   const opcoes = moduloAtivo('servicos')
     ? servicos.itens.filter((s) => s.funcionarioIds.length > 0)
     : [{ id: 'atendimento', nome: 'Atendimento', duracao: 30, preco: null, funcionarioIds: comJornada.map((f) => f.id) }]
@@ -59,6 +63,7 @@ export default function SiteLoja() {
       ? horariosLivres({
           data,
           funcionarioIds: idsConsulta,
+          funcionarios: funcionarios.itens,
           duracao: servico.duracao,
           jornadas: jornadas.itens,
           bloqueios: bloqueios.itens,
@@ -87,9 +92,9 @@ export default function SiteLoja() {
     let clienteId = existente?.id
     if (existente) {
       const canais = [...new Set([...(existente.canais ?? []), 'site'])]
-      clientes.atualizar(existente.id, { canais }, null)
+      clientes.atualizar(existente.id, { canais }, SITE)
     } else {
-      clienteId = clientes.adicionar({ nome: v.nome, telefone: v.telefone, email: v.email, canais: ['site'] }, null)
+      clienteId = clientes.adicionar({ nome: v.nome.trim(), sobrenome: v.sobrenome.trim(), telefone: v.telefone, email: v.email, canais: ['site'] }, SITE)
     }
     agendamentos.adicionar(
       {
@@ -104,8 +109,9 @@ export default function SiteLoja() {
         status: 'pendente',
         origem: 'site',
       },
-      null,
+      SITE,
     )
+    setNomeCliente(existente?.nome ?? v.nome.trim())
     setEtapa(3)
   }
 
@@ -315,9 +321,18 @@ export default function SiteLoja() {
                     Seu cadastro
                   </Typography.Title>
                   <Form form={form} layout="vertical">
-                    <Form.Item name="nome" label="Nome completo" rules={[{ required: true }]}>
-                      <Input />
-                    </Form.Item>
+                    <Row gutter={12}>
+                      <Col xs={24} sm={10}>
+                        <Form.Item name="nome" label="Nome" rules={[{ required: true, whitespace: true, message: 'Informe seu nome' }]}>
+                          <Input maxLength={60} />
+                        </Form.Item>
+                      </Col>
+                      <Col xs={24} sm={14}>
+                        <Form.Item name="sobrenome" label="Sobrenome" rules={[{ required: true, whitespace: true, message: 'Informe seu sobrenome' }]}>
+                          <Input maxLength={100} />
+                        </Form.Item>
+                      </Col>
+                    </Row>
                     <Form.Item
                       name="telefone"
                       label="WhatsApp"
@@ -352,7 +367,7 @@ export default function SiteLoja() {
             {etapa === 3 && (
               <Result
                 status="success"
-                title="Solicitação enviada!"
+                title={`Solicitação enviada, ${nomeCliente}!`}
                 subTitle={`${dados.nomeFantasia} vai confirmar seu horário de ${dia.format('DD/MM')} às ${horario.hora}. Você recebe a confirmação pelo WhatsApp.`}
                 extra={[
                   <Button key="novo" onClick={recomecar}>

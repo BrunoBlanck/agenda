@@ -1,30 +1,16 @@
-import { Alert, Checkbox, Flex, Form, Input, InputNumber, Switch, Tag } from 'antd'
+import { Alert, Flex, Form, Input, InputNumber, Switch, Tag } from 'antd'
 import CadastroTabela from '../../components/CadastroTabela.jsx'
 import { useData } from '../../data/DataContext.jsx'
-import { modulos } from '../../data/acesso.js'
 import { moeda } from '../../utils/formatos.js'
-import { comAuditoria } from '../usePlataforma.js'
 
-const opcionais = modulos.filter((m) => m.opcional)
-const limite = (v) => (v == null ? 'Ilimitado' : v)
-
+// planos: só comercial. Os módulos de cada loja são escolhidos na própria loja.
 export default function Planos() {
-  const { planos, lojas, registrarAuditoria } = useData()
+  const { planos, lojas } = useData()
 
   const colunas = [
     { title: 'Plano', dataIndex: 'nome' },
+    { title: 'Descrição', dataIndex: 'descricao' },
     { title: 'Preço mensal', dataIndex: 'precoMensal', render: moeda },
-    { title: 'Funcionários', dataIndex: 'limiteFuncionarios', render: limite },
-    { title: 'Agendamentos/mês', dataIndex: 'limiteAgendamentosMes', render: limite },
-    {
-      title: 'Módulos sugeridos',
-      dataIndex: 'modulos',
-      render: (lista = []) => (
-        <Flex gap={4} wrap>
-          {opcionais.filter((m) => lista.includes(m.codigo)).map((m) => <Tag key={m.codigo} color="cyan">{m.nome}</Tag>)}
-        </Flex>
-      ),
-    },
     {
       title: 'Lojas ativas',
       key: 'lojas',
@@ -39,11 +25,11 @@ export default function Planos() {
       <Alert
         type="info"
         showIcon
-        title="Os módulos do plano só servem de sugestão quando a loja é criada. Depois disso, os módulos de cada loja são ligados e desligados na própria loja."
+        title="O plano define só o valor cobrado. Os módulos (Serviços, Materiais, Controle de Tempo, Locais) são ligados loja a loja, em Lojas › Módulos, para esconder o que a loja não usa."
       />
       <CadastroTabela
         titulo="Plano"
-        lista={comAuditoria(planos, registrarAuditoria, 'plano')}
+        lista={planos}
         colunas={colunas}
         permitirExcluir={false}
         campos={
@@ -56,17 +42,6 @@ export default function Planos() {
             </Form.Item>
             <Form.Item name="precoMensal" label="Preço mensal" rules={[{ required: true }]}>
               <InputNumber min={0} step={10} precision={2} decimalSeparator="," prefix="R$" style={{ width: 180 }} />
-            </Form.Item>
-            <Flex gap={16}>
-              <Form.Item name="limiteFuncionarios" label="Limite de funcionários" extra="Vazio = ilimitado">
-                <InputNumber min={1} style={{ width: 180 }} />
-              </Form.Item>
-              <Form.Item name="limiteAgendamentosMes" label="Agendamentos por mês" extra="Vazio = ilimitado">
-                <InputNumber min={1} style={{ width: 180 }} />
-              </Form.Item>
-            </Flex>
-            <Form.Item name="modulos" label="Módulos sugeridos" initialValue={[]}>
-              <Checkbox.Group options={opcionais.map((m) => ({ value: m.codigo, label: m.nome }))} />
             </Form.Item>
             <Form.Item name="ativo" label="Ativo" valuePropName="checked" initialValue={true}>
               <Switch />

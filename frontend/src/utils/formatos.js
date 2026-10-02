@@ -41,3 +41,6 @@ export function cnpjValido(valor) {
 
 export const moeda = (valor) =>
   valor != null ? valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : '—'
+
+// Cliente: nome e sobrenome ficam separados; nas listas aparece o nome completo
+export const nomeCompleto = (pessoa) => [pessoa?.nome, pessoa?.sobrenome].filter(Boolean).join(' ')

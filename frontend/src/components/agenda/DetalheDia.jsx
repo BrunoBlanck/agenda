@@ -47,7 +47,7 @@ export default function DetalheDia({ dia, agendamentos, bloqueios, podeCriar, po
           type="warning"
           showIcon
           style={{ marginBottom: 12 }}
-          title={b.funcionarioId == null ? `Loja fechada: ${b.motivo}` : `${nomeFunc(b.funcionarioId)} indisponível: ${b.motivo}`}
+          title={b.quem == null ? `Loja fechada: ${b.motivo}` : `${b.quem} indisponível: ${b.motivo}`}
         />
       ))}
 

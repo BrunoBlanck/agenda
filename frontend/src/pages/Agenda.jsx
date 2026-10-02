@@ -9,6 +9,8 @@ import VisaoSemana from '../components/agenda/VisaoSemana.jsx'
 import VisaoMes from '../components/agenda/VisaoMes.jsx'
 import DetalheDia from '../components/agenda/DetalheDia.jsx'
 import { COR_PADRAO, capitalizar, diasDaSemana, diasDoMes, minutosDe } from '../components/agenda/util.js'
+import { alvoBloqueio, bloqueioAtinge, jornadaDe } from '../data/horarios.js'
+import { nomeCompleto } from '../utils/formatos.js'
 
 const unidade = { semana: 'week', mes: 'month' }
 
@@ -30,7 +32,7 @@ const gravarPainel = (aberto) => {
 }
 
 export default function Agenda() {
-  const { agendamentos, clientes, funcionarios, servicos, jornadas, bloqueios, locais } = useData()
+  const { agendamentos, clientes, funcionarios, perfis, servicos, jornadas, bloqueios, locais } = useData()
   const { agenda, usuario, moduloAtivo } = useAcesso()
   const [modo, setModo] = useState('semana')
   const [referencia, setReferencia] = useState(dayjs()) // semana/mês exibido
@@ -44,7 +46,7 @@ export default function Agenda() {
   }
 
   const func = (id) => funcionarios.itens.find((f) => f.id === id)
-  const nomeCliente = (id) => clientes.itens.find((c) => c.id === id)?.nome ?? '—'
+  const nomeCliente = (id) => nomeCompleto(clientes.itens.find((c) => c.id === id)) || '—'
   const nomeFunc = (id) => func(id)?.nome ?? '—'
   const nomeServico = (id) => servicos.itens.find((s) => s.id === id)?.nome ?? 'Atendimento'
   const corDe = (id) => func(id)?.cor ?? COR_PADRAO
@@ -52,11 +54,14 @@ export default function Agenda() {
   // Quem só vê a própria agenda fica sempre filtrado em si mesmo
   const filtroFunc = agenda.verEquipe ? profissional : usuario?.id
   const visiveis = agendamentos.itens.filter(agenda.ver).filter((a) => !filtroFunc || a.funcionarioId === filtroFunc)
-  const bloqueiosVisiveis = bloqueios.itens.filter((b) => b.funcionarioId == null || !filtroFunc || b.funcionarioId === filtroFunc)
+  // quem: para quem é o bloqueio (null = loja inteira)
+  const bloqueiosVisiveis = bloqueios.itens
+    .filter((b) => !filtroFunc || bloqueioAtinge(b, func(filtroFunc)))
+    .map((b) => ({ ...b, quem: alvoBloqueio(b, funcionarios.itens, perfis.itens) }))
 
   // Faixa de horas da semana: cobre as jornadas e os agendamentos, com mínimo de 08:00 às 18:00
   const minutosUsados = [
-    ...jornadas.itens.filter((j) => !filtroFunc || j.funcionarioId === filtroFunc).flatMap((j) => [minutosDe(j.inicio), minutosDe(j.fim)]),
+    ...(filtroFunc ? jornadaDe(func(filtroFunc), jornadas.itens) : jornadas.itens).flatMap((j) => [minutosDe(j.inicio), minutosDe(j.fim)]),
     ...visiveis.flatMap((a) => [minutosDe(a.hora), minutosDe(a.hora) + (a.duracao ?? 0)]),
   ]
   const horaInicio = Math.min(8, ...minutosUsados.map((m) => Math.floor(m / 60)))

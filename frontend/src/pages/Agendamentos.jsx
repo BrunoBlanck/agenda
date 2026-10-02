@@ -4,6 +4,7 @@ import { PlusOutlined, EditOutlined, DeleteOutlined, EyeOutlined } from '@ant-de
 import dayjs from 'dayjs'
 import { useData } from '../data/DataContext.jsx'
 import { useAcesso } from '../data/useAcesso.js'
+import { nomeCompleto } from '../utils/formatos.js'
 import { statusAgendamento } from '../data/mock.js'
 import AgendamentoModal from '../components/AgendamentoModal.jsx'
 import { rotulosLocal } from '../data/locais.js'
@@ -17,7 +18,7 @@ export default function Agendamentos() {
   const [periodo, setPeriodo] = useState(null)
   const [modal, setModal] = useState({ open: false, agendamento: null })
 
-  const nomeCliente = (id) => clientes.itens.find((c) => c.id === id)?.nome ?? '—'
+  const nomeCliente = (id) => nomeCompleto(clientes.itens.find((c) => c.id === id)) || '—'
   const nomeFunc = (id) => funcionarios.itens.find((f) => f.id === id)?.nome ?? '—'
   const nomeServico = (id) => servicos.itens.find((s) => s.id === id)?.nome ?? '—'
   const comLocais = moduloAtivo('locais')

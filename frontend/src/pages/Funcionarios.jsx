@@ -40,7 +40,7 @@ export default function Funcionarios() {
     },
     { title: 'Cargo', dataIndex: 'cargo', filters: cargos.map((c) => ({ text: c, value: c })), onFilter: (v, r) => r.cargo === v },
     {
-      title: 'Perfil de acesso',
+      title: 'Perfil',
       dataIndex: 'perfilId',
       render: (id) => <Tag color={perfil(id)?.acessoTotal ? 'gold' : 'default'}>{perfil(id)?.nome ?? '—'}</Tag>,
     },
@@ -67,7 +67,12 @@ export default function Funcionarios() {
           <Form.Item name="cargo" label="Cargo" rules={[{ required: true }]} extra="Informativo. Quem define o acesso é o perfil.">
             <Select options={cargos.map((c) => ({ value: c, label: c }))} />
           </Form.Item>
-          <Form.Item name="perfilId" label="Perfil de acesso" rules={[{ required: true }]}>
+          <Form.Item
+            name="perfilId"
+            label="Perfil"
+            rules={[{ required: true }]}
+            extra="O perfil define os acessos e a jornada de trabalho (Configurações › Perfis e horários)."
+          >
             <Select options={opcoesPerfil} />
           </Form.Item>
           <Form.Item name="email" label="E-mail (login)" rules={[{ required: true }]}><Input type="email" /></Form.Item>

@@ -8,13 +8,14 @@ import { ArrowLeftOutlined, SaveOutlined, PlusOutlined, EditOutlined, KeyOutline
 import dayjs from 'dayjs'
 import { useData } from '../../data/DataContext.jsx'
 import { modulos } from '../../data/acesso.js'
-import { acoesAuditoria, statusLoja } from '../../data/plataforma.js'
+import { opcoesTipoLoja, statusLoja } from '../../data/plataforma.js'
 import { cnpjValido, mascaraCep, mascaraCnpj, mascaraTelefone } from '../../utils/formatos.js'
 import UltimaAlteracao from '../../components/UltimaAlteracao.jsx'
 import { usePlataforma } from '../usePlataforma.js'
+import HistoricoAlteracoes from '../HistoricoAlteracoes.jsx'
 
 function DadosGerais({ loja }) {
-  const { tipos, planos } = useData()
+  const { planos } = useData()
   const { editarLoja } = usePlataforma()
   const [form] = Form.useForm()
   const [msg, contextHolder] = message.useMessage()
@@ -31,12 +32,12 @@ function DadosGerais({ loja }) {
         <Typography.Title level={5}>Plataforma</Typography.Title>
         <Row gutter={16}>
           <Col xs={24} md={6}>
-            <Form.Item name="tipo" label="Tipo" rules={[{ required: true }]} extra="Usado só no futuro site do consumidor.">
-              <Select options={tipos.itens.map((t) => ({ value: t.codigo, label: t.nome, disabled: !t.ativo }))} />
+            <Form.Item name="tipo" label="Tipo" rules={[{ required: true }]} extra="Define o site do consumidor final.">
+              <Select options={opcoesTipoLoja} />
             </Form.Item>
           </Col>
           <Col xs={24} md={6}>
-            <Form.Item name="planoId" label="Plano" rules={[{ required: true }]} extra="Trocar o plano não altera os módulos.">
+            <Form.Item name="planoId" label="Plano" rules={[{ required: true }]} extra="Só o valor cobrado. Não altera os módulos.">
               <Select options={planos.itens.map((p) => ({ value: p.id, label: p.nome, disabled: !p.ativo }))} />
             </Form.Item>
           </Col>
@@ -140,7 +141,7 @@ function DadosGerais({ loja }) {
 }
 
 function Modulos({ loja }) {
-  const { definirModulo, definirInfoModulo } = usePlataforma()
+  const { definirModulo } = usePlataforma()
 
   const colunas = [
     { title: 'Módulo', dataIndex: 'nome', render: (n) => <Typography.Text strong>{n}</Typography.Text> },
@@ -154,7 +155,7 @@ function Modulos({ loja }) {
             checked={!!loja.modulos?.[m.codigo]}
             checkedChildren="Ativo"
             unCheckedChildren="Desativado"
-            onChange={(v) => definirModulo(loja, m.codigo, m.nome, v)}
+            onChange={(ativo) => definirModulo(loja, m.codigo, { ativo })}
           />
         ) : (
           <Tag>Sempre ativo</Tag>
@@ -169,7 +170,10 @@ function Modulos({ loja }) {
             key={`${loja.id}-${m.codigo}`}
             defaultValue={loja.modulosInfo?.[m.codigo]?.observacao}
             placeholder='Ex.: "liberado como cortesia até dez/2026"'
-            onBlur={(e) => definirInfoModulo(loja, m.codigo, { observacao: e.target.value })}
+            onBlur={(e) =>
+              e.target.value !== (loja.modulosInfo?.[m.codigo]?.observacao ?? '') &&
+              definirModulo(loja, m.codigo, { observacao: e.target.value })
+            }
           />
         ),
     },
@@ -183,7 +187,7 @@ function Modulos({ loja }) {
             format="DD/MM/YYYY"
             placeholder="Sem prazo"
             value={loja.modulosInfo?.[m.codigo]?.expiraEm ? dayjs(loja.modulosInfo[m.codigo].expiraEm) : null}
-            onChange={(d) => definirInfoModulo(loja, m.codigo, { expiraEm: d ? d.endOf('day').toISOString() : null })}
+            onChange={(d) => definirModulo(loja, m.codigo, { expiraEm: d ? d.endOf('day').toISOString() : null })}
           />
         ),
     },
@@ -195,7 +199,7 @@ function Modulos({ loja }) {
         type="info"
         showIcon
         style={{ marginBottom: 16 }}
-        title="O acesso da loja é definido aqui, módulo a módulo. Não depende do tipo nem do plano. Desativar não apaga dados: o menu some e volta ao reativar."
+        title="Ligue só o que a loja usa: o que estiver desligado some do menu da loja. Não depende do tipo nem do plano. Desativar não apaga dados: tudo volta ao reativar."
       />
       <Table rowKey="codigo" pagination={false} columns={colunas} dataSource={modulos} />
     </>
@@ -203,8 +207,7 @@ function Modulos({ loja }) {
 }
 
 function Funcionarios({ loja }) {
-  const { funcionariosDe, perfisDe, salvarFuncionario } = usePlataforma()
-  const { registrarAuditoria } = useData()
+  const { funcionariosDe, perfisDe, salvarFuncionario, redefinirSenha: registrarSenha } = usePlataforma()
   const [editando, setEditando] = useState(null)
   const [form] = Form.useForm()
   const [msg, contextHolder] = message.useMessage()
@@ -228,7 +231,7 @@ function Funcionarios({ loja }) {
   }
 
   const redefinirSenha = (f) => {
-    registrarAuditoria('funcionario.senha', loja.id, { nome: f.nome })
+    registrarSenha(loja, f)
     msg.success(`Link para criar nova senha enviado para ${f.email}.`)
   }
 
@@ -309,23 +312,6 @@ function Funcionarios({ loja }) {
   )
 }
 
-function Historico({ loja }) {
-  const { auditoria, superadmins } = useData()
-  const dados = auditoria.itens.filter((a) => a.lojaId === loja.id).sort((a, b) => b.criadoEm.localeCompare(a.criadoEm))
-  return (
-    <Table
-      rowKey="id"
-      dataSource={dados}
-      columns={[
-        { title: 'Quando', dataIndex: 'criadoEm', width: 160, render: (d) => dayjs(d).format('DD/MM/YYYY HH:mm') },
-        { title: 'Quem', dataIndex: 'superadminId', render: (id) => superadmins.itens.find((s) => s.id === id)?.nome },
-        { title: 'Ação', dataIndex: 'acao', render: (a) => <Tag color={acoesAuditoria[a]?.color}>{acoesAuditoria[a]?.label ?? a}</Tag> },
-        { title: 'Detalhes', dataIndex: 'dados', render: (d) => Object.values(d ?? {}).join(' · ') || '—' },
-      ]}
-    />
-  )
-}
-
 export default function LojaDetalhe() {
   const { id } = useParams()
   const navigate = useNavigate()
@@ -399,7 +385,7 @@ export default function LojaDetalhe() {
             { key: 'dados', label: 'Dados gerais', children: <DadosGerais key={`${loja.id}-${loja.status}`} loja={loja} /> },
             { key: 'modulos', label: 'Módulos', children: <Modulos loja={loja} /> },
             { key: 'funcionarios', label: 'Funcionários', children: <Funcionarios loja={loja} /> },
-            { key: 'historico', label: 'Histórico', children: <Historico loja={loja} /> },
+            { key: 'historico', label: 'Histórico', children: <HistoricoAlteracoes lojaId={loja.id} /> },
           ]}
         />
       </Card>

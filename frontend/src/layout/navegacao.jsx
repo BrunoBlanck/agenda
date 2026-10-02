@@ -9,7 +9,6 @@ import {
   ExperimentOutlined,
   SettingOutlined,
   ShopOutlined,
-  ClockCircleOutlined,
   SafetyOutlined,
   EnvironmentOutlined,
 } from '@ant-design/icons'
@@ -46,17 +45,12 @@ export const menu = [
     label: 'Configurações',
     children: [
       { key: '/painel/configuracoes/loja', icon: <ShopOutlined />, label: 'Dados da loja', permitido: (a) => a.pode('config_loja') },
-      {
-        key: '/painel/configuracoes/agendamentos',
-        icon: <ClockCircleOutlined />,
-        label: 'Horários e bloqueios',
-        permitido: (a) => a.pode('config_agendamentos'),
-      },
+      // Perfis reúnem níveis de acesso, jornada semanal e bloqueios
       {
         key: '/painel/configuracoes/perfis',
         icon: <SafetyOutlined />,
-        label: 'Perfis de acesso',
-        permitido: (a) => a.pode('perfis_acesso'),
+        label: 'Perfis e horários',
+        permitido: (a) => a.pode('perfis_acesso') || a.pode('config_agendamentos'),
       },
     ],
   },

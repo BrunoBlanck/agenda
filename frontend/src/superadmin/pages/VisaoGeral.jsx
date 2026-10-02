@@ -4,12 +4,12 @@ import { useNavigate } from 'react-router-dom'
 import dayjs from 'dayjs'
 import { useData } from '../../data/DataContext.jsx'
 import { modulos } from '../../data/acesso.js'
-import { acoesAuditoria, statusLoja } from '../../data/plataforma.js'
+import { operacoesHistorico, statusLoja, tabelasLoja, tabelasPlataforma, tiposLoja } from '../../data/plataforma.js'
 import { moeda } from '../../utils/formatos.js'
 import { usePlataforma } from '../usePlataforma.js'
 
 export default function VisaoGeral() {
-  const { lojas, tipos, auditoria, superadmins } = useData()
+  const { lojas, historico, superadmins } = useData()
   const { funcionariosDe, plano } = usePlataforma()
   const navigate = useNavigate()
 
@@ -20,7 +20,12 @@ export default function VisaoGeral() {
 
   const nomeLoja = (id) => lojas.itens.find((l) => l.id === id)?.nomeFantasia
   const nomeSuperadmin = (id) => superadmins.itens.find((s) => s.id === id)?.nome ?? '—'
-  const ultimas = [...auditoria.itens].sort((a, b) => b.criadoEm.localeCompare(a.criadoEm)).slice(0, 6)
+  // Últimas alterações feitas pelos usuários admin, em qualquer loja
+  const ultimas = historico
+    .filter((h) => h.superadminId)
+    .sort((a, b) => b.criadoEm.localeCompare(a.criadoEm))
+    .slice(0, 6)
+  const nomeTabela = (t) => tabelasLoja[t] ?? tabelasPlataforma[t] ?? t
 
   const cards = [
     { titulo: 'Lojas ativas', valor: ativas.length, icone: <ShopOutlined /> },
@@ -42,15 +47,15 @@ export default function VisaoGeral() {
       <Col xs={24} xl={8}>
         <Card title="Lojas por tipo" style={{ height: '100%' }}>
           <Flex vertical gap={12}>
-            {tipos.itens.map((t) => {
-              const doTipo = lojas.itens.filter((l) => l.tipo === t.codigo)
+            {Object.entries(tiposLoja).map(([codigo, t]) => {
+              const doTipo = lojas.itens.filter((l) => l.tipo === codigo)
               return (
-                <Flex key={t.id} justify="space-between" align="center">
+                <Flex key={codigo} justify="space-between" align="center">
                   <Typography.Text strong>{t.nome}</Typography.Text>
                   <Flex gap={4}>
-                    {Object.entries(statusLoja).map(([codigo, s]) => {
-                      const n = doTipo.filter((l) => l.status === codigo).length
-                      return n > 0 && <Tag key={codigo} color={s.color}>{n} {s.label.toLowerCase()}{n > 1 ? 's' : ''}</Tag>
+                    {Object.entries(statusLoja).map(([status, s]) => {
+                      const n = doTipo.filter((l) => l.status === status).length
+                      return n > 0 && <Tag key={status} color={s.color}>{n} {s.label.toLowerCase()}{n > 1 ? 's' : ''}</Tag>
                     })}
                     {doTipo.length === 0 && <Typography.Text type="secondary">nenhuma</Typography.Text>}
                   </Flex>
@@ -83,7 +88,7 @@ export default function VisaoGeral() {
 
       <Col xs={24} xl={8}>
         <Card
-          title="Últimas ações"
+          title="Últimas ações dos admins"
           style={{ height: '100%' }}
           extra={<Button type="link" onClick={() => navigate('/superadmin/auditoria')}>Ver tudo</Button>}
         >
@@ -92,7 +97,10 @@ export default function VisaoGeral() {
               <div key={a.id}>
                 {i > 0 && <Divider style={{ margin: '10px 0' }} />}
                 <Flex justify="space-between" gap={8}>
-                  <Tag color={acoesAuditoria[a.acao]?.color}>{acoesAuditoria[a.acao]?.label ?? a.acao}</Tag>
+                  <span>
+                    <Tag color={operacoesHistorico[a.operacao]?.color}>{operacoesHistorico[a.operacao]?.label}</Tag>
+                    {nomeTabela(a.tabela)}
+                  </span>
                   <Typography.Text type="secondary" style={{ fontSize: 12 }}>
                     {dayjs(a.criadoEm).format('DD/MM HH:mm')}
                   </Typography.Text>

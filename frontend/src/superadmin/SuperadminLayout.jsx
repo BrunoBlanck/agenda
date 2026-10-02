@@ -5,9 +5,7 @@ import {
   CrownOutlined,
   DashboardOutlined,
   ShopOutlined,
-  TagsOutlined,
   CreditCardOutlined,
-  AppstoreOutlined,
   UserOutlined,
   TeamOutlined,
   AuditOutlined,
@@ -23,10 +21,8 @@ const FUNDO_MENU = '#1e1b4b'
 const itensMenu = [
   { key: '/superadmin', icon: <DashboardOutlined />, label: 'Visão geral' },
   { key: '/superadmin/lojas', icon: <ShopOutlined />, label: 'Lojas' },
-  { key: '/superadmin/tipos', icon: <TagsOutlined />, label: 'Tipos de loja' },
   { key: '/superadmin/planos', icon: <CreditCardOutlined />, label: 'Planos' },
-  { key: '/superadmin/catalogo', icon: <AppstoreOutlined />, label: 'Módulos e recursos' },
-  { key: '/superadmin/usuarios', icon: <TeamOutlined />, label: 'Usuários da plataforma' },
+  { key: '/superadmin/usuarios', icon: <TeamOutlined />, label: 'Usuários admin' },
   { key: '/superadmin/auditoria', icon: <AuditOutlined />, label: 'Auditoria' },
 ]
 
