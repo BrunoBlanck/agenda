@@ -143,3 +143,8 @@ def paginar(db: Session, consulta: Select, pag: Paginacao) -> tuple[list[Any], i
     total = db.scalar(select(func.count()).select_from(consulta.order_by(None).subquery())) or 0
     linhas = list(db.scalars(consulta.limit(pag.por_pagina).offset(pag.offset)))
     return linhas, total
+
+
+def hoje(zona: ZoneInfo) -> date:
+    """Data de hoje no fuso da loja."""
+    return datetime.now(zona).date()
