@@ -1,12 +1,25 @@
 import { useState } from 'react'
-import { Card, Table, Button, Modal, Form, Input, Flex, Popconfirm } from 'antd'
+import { Card, Table, Button, Modal, Form, Input, Flex, Popconfirm, Tag, message } from 'antd'
 import { PlusOutlined, EditOutlined, DeleteOutlined, SearchOutlined } from '@ant-design/icons'
+import UltimaAlteracao from './UltimaAlteracao.jsx'
 
 // Tela genérica de cadastro: busca + tabela + modal de formulário.
-export default function CadastroTabela({ titulo, lista, colunas, campos, campoBusca = 'nome' }) {
+// somenteLeitura: perfil com nível "leitura" (sem criar, editar ou excluir).
+// validar(valores, item): regra extra antes de salvar; retorna a mensagem de erro ou nada.
+export default function CadastroTabela({
+  titulo,
+  lista,
+  colunas,
+  campos,
+  campoBusca = 'nome',
+  somenteLeitura = false,
+  permitirExcluir = true,
+  validar,
+}) {
   const [busca, setBusca] = useState('')
   const [editando, setEditando] = useState(null) // null = fechado, {} = novo, item = edição
   const [form] = Form.useForm()
+  const [msg, contextHolder] = message.useMessage()
 
   const abrir = (item) => {
     setEditando(item)
@@ -16,6 +29,11 @@ export default function CadastroTabela({ titulo, lista, colunas, campos, campoBu
 
   const salvar = async () => {
     const valores = await form.validateFields()
+    const erro = validar?.(valores, editando)
+    if (erro) {
+      msg.error(erro)
+      return
+    }
     if (editando.id) lista.atualizar(editando.id, valores)
     else lista.adicionar(valores)
     setEditando(null)
@@ -32,15 +50,18 @@ export default function CadastroTabela({ titulo, lista, colunas, campos, campoBu
     render: (_, item) => (
       <Flex gap={4}>
         <Button type="text" icon={<EditOutlined />} onClick={() => abrir(item)} />
-        <Popconfirm title="Remover este registro?" onConfirm={() => lista.remover(item.id)}>
-          <Button type="text" danger icon={<DeleteOutlined />} />
-        </Popconfirm>
+        {permitirExcluir && (
+          <Popconfirm title="Remover este registro?" onConfirm={() => lista.remover(item.id)}>
+            <Button type="text" danger icon={<DeleteOutlined />} />
+          </Popconfirm>
+        )}
       </Flex>
     ),
   }
 
   return (
     <Card>
+      {contextHolder}
       <Flex justify="space-between" gap={16} style={{ marginBottom: 16 }}>
         <Input
           prefix={<SearchOutlined />}
@@ -49,11 +70,20 @@ export default function CadastroTabela({ titulo, lista, colunas, campos, campoBu
           style={{ maxWidth: 300 }}
           onChange={(e) => setBusca(e.target.value)}
         />
-        <Button type="primary" icon={<PlusOutlined />} onClick={() => abrir({})}>
-          Novo {titulo.toLowerCase()}
-        </Button>
+        {somenteLeitura ? (
+          <Tag color="blue">Somente leitura</Tag>
+        ) : (
+          <Button type="primary" icon={<PlusOutlined />} onClick={() => abrir({})}>
+            Novo {titulo.toLowerCase()}
+          </Button>
+        )}
       </Flex>
-      <Table rowKey="id" columns={[...colunas, colunaAcoes]} dataSource={dados} scroll={{ x: true }} />
+      <Table
+        rowKey="id"
+        columns={somenteLeitura ? colunas : [...colunas, colunaAcoes]}
+        dataSource={dados}
+        scroll={{ x: true }}
+      />
       <Modal
         title={editando?.id ? `Editar ${titulo.toLowerCase()}` : `Novo ${titulo.toLowerCase()}`}
         open={!!editando}
@@ -64,6 +94,7 @@ export default function CadastroTabela({ titulo, lista, colunas, campos, campoBu
         <Form form={form} layout="vertical">
           {campos}
         </Form>
+        <UltimaAlteracao item={editando} />
       </Modal>
     </Card>
   )

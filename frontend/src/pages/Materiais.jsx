@@ -1,6 +1,7 @@
 import { Form, Input, InputNumber, Select, Tag } from 'antd'
 import CadastroTabela from '../components/CadastroTabela.jsx'
 import { useData } from '../data/DataContext.jsx'
+import { useAcesso } from '../data/useAcesso.js'
 
 const categorias = ['Descartáveis', 'Medicamentos', 'Curativos', 'Instrumentais', 'Limpeza']
 
@@ -18,11 +19,13 @@ const colunas = [
 
 export default function Materiais() {
   const { materiais } = useData()
+  const { pode } = useAcesso()
   return (
     <CadastroTabela
       titulo="Material"
       lista={materiais}
       colunas={colunas}
+      somenteLeitura={!pode('materiais', 'escrita')}
       campos={
         <>
           <Form.Item name="nome" label="Nome" rules={[{ required: true }]}><Input /></Form.Item>
