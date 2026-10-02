@@ -2,7 +2,7 @@
 
 Sistema web para gestão de uma clínica com vários funcionários: agenda de atendimentos, cadastro de clientes, funcionários, serviços e materiais, além do controle de ponto (entrada e saída) da equipe.
 
-> **Status:** esboço inicial. Por enquanto existe apenas o front-end, com dados de exemplo mantidos em memória (ao recarregar a página, os dados voltam ao estado inicial). Ainda não há back-end, banco de dados nem login.
+> **Status:** o front-end ainda usa dados de exemplo em memória (ao recarregar a página, os dados voltam ao estado inicial). O back-end está em construção em [`backend/`](backend/README.md): já tem o banco completo (PostgreSQL), dados de exemplo, login de funcionário e de superadmin e as regras de acesso; as rotas de cada menu ainda não existem, então o front ainda não está ligado à API.
 
 ## Funcionalidades
 
@@ -53,12 +53,18 @@ A "Clínica Sorriso" é a loja aberta no painel da loja: o que o superadmin muda
 
 ## Tecnologias
 
+Front-end:
+
 - [React 19](https://react.dev/) + [Vite](https://vite.dev/)
 - [Ant Design](https://ant.design/) (UI kit, em português via `pt_BR`)
 - [React Router](https://reactrouter.com/)
 - [Day.js](https://day.js.org/) para datas
 
+Back-end ([`backend/`](backend/README.md)): Python, FastAPI, PostgreSQL 16, SQLAlchemy 2 e Alembic.
+
 ## Como rodar
+
+O back-end tem as próprias instruções em [`backend/README.md`](backend/README.md). Para o front-end:
 
 Pré-requisito: [Node.js](https://nodejs.org/) 20 ou superior.
 
@@ -107,8 +113,8 @@ frontend/src/
 
 ## Próximos passos
 
-- Back-end com API e banco de dados
-- Login (os perfis e níveis de acesso já existem no front-end)
+- Back-end: rotas de cada menu do painel da loja, do painel SUPERADMIN e do site do consumidor
+- Ligar o front-end à API (login real no lugar do botão Demonstração)
 - Painel SUPERADMIN
 - Validação de conflito de horários por profissional
 - Baixa automática de materiais no estoque ao concluir um atendimento

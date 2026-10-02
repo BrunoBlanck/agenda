@@ -1075,3 +1075,24 @@ Diferenças entre o mock atual e o banco:
 - [ ] Configurações da loja: a razão social também deve ser editável pela loja, ou só o nome fantasia?
 - [ ] **Quem liga o módulo Locais:** hoje, como os outros módulos, só o superadmin. A ideia original era a própria loja escolher se usa locais. Se for isso, Locais vira um módulo que a loja liga em Configurações (sem passar pelo superadmin), ou um módulo opcional do plano que a loja ativa quando quiser.
 - [ ] **Atendimentos em grupo** (ex.: aula de teoria musical com 5 alunos na mesma sala e horário). Hoje cada local e cada profissional aceitam um agendamento por vez. Para grupos, seria preciso `capacidade` no local/serviço e uma tabela de participantes do agendamento.
+
+---
+
+# 6. Notas da implementação (back-end)
+
+Como o back-end (`backend/`, migrações `0001` e `0002`) aplica este documento, nos pontos em que ele detalha ou reforça o texto acima:
+
+- **Contexto da transação:** além de `app.funcionario_id`, `app.superadmin_id`, `app.origem` e `app.loja_id`, o back-end grava `app.ip`, usado na coluna `auditoria.ip`. Tudo com `set_config(..., true)` (equivale a `SET LOCAL`).
+- **Colunas de controle:** os triggers também fixam `criado_em` (no `INSERT` vale `now()` e depois nunca muda) e cuidam de `excluido_em`/`excluido_por`: excluir (por `DELETE` ou por `UPDATE` de `excluido_em`) grava a hora e quem excluiu; restaurar (`excluido_em = NULL`) limpa `excluido_por`. Colunas "quem criou" (`lojas.criado_por`, `funcionarios.criado_por_*`, `agendamentos.criado_por`, `bloqueios_agenda.criado_por`, `movimentacoes_estoque.funcionario_id`) têm `DEFAULT` lido do contexto.
+- **Auditoria:** não guarda `senha_hash` em `antes`/`depois` (só aparece em `campos_alterados`, indicando que a senha mudou). `campos_alterados` é preenchido em `alterar`. `UPDATE` que não muda nenhum valor não gera linha. Além do `REVOKE`, um trigger impede `UPDATE`/`DELETE` na auditoria até para o dono do schema.
+- **Leitura sem excluídos:** em vez de uma view `*_ativos` por tabela, o ORM do back-end acrescenta `excluido_em IS NULL` a toda consulta (com opção explícita para incluir os excluídos). As políticas de RLS não escondem excluídos (senão não daria para restaurar).
+- **RLS ligado** nas 19 tabelas da seção 2 (`loja_id = app.loja_id`). Com `app.superadmin_id` preenchido, todas as lojas ficam visíveis. A API conecta com um usuário sem privilégio de dono, para o RLS e o `REVOKE` valerem.
+- **Unicidade:** e-mails (`superadmin_usuarios`, `funcionarios`) são únicos sem diferenciar maiúsculas (`lower(email)`). `funcionalidades.codigo` e `recursos.codigo` também usam índice parcial. `UNIQUE (loja_id, id)` continua comum (não parcial), porque é alvo das FKs compostas.
+- **FKs compostas** também em `criado_por`, `editado_por`, `movimentacoes_estoque.agendamento_id`/`funcionario_id`, `funcionarios.criado_por_funcionario`, `lojas (id, atualizado_por_funcionario)` e `auditoria (loja_id, funcionario_id)`.
+- **Conflito de horário:** as duas restrições `EXCLUDE` de `agendamentos` ignoram também linhas excluídas (`excluido_em IS NULL`).
+- **`funcionarios.criado_por_*`:** a regra "exatamente uma preenchida" virou "no máximo uma" (`CHECK num_nonnulls(...) <= 1`), porque cargas automáticas (seed, rotinas) não têm funcionário nem superadmin.
+- **Estoque:** `materiais.quantidade_atual` nasce 0 e só muda por trigger ao inserir em `movimentacoes_estoque`; alteração direta é recusada. Movimentações não podem ser alteradas nem excluídas (corrige-se com um `ajuste`).
+- **`loja_funcionalidades`:** trigger recusa módulos com `opcional = false`.
+- **Restrições extras (`CHECK`):** `slug` só com letras minúsculas, números e hífens; `cor_agenda` no formato `#rrggbb`; `motivo_cancelamento` obrigatório quando `status = cancelado`; `justificativa` obrigatória no ponto `manual`; `motivo` obrigatório em `ajuste`/`perda`; `agendamento_id` obrigatório em `saida_atendimento`; sinal da quantidade (entrada > 0; saída de atendimento e perda < 0); `link_padrao` só em local `online`; preços e estoque mínimo não negativos; `dia_semana` entre 0 e 6.
+- **`NOT NULL` explícito** em colunas com `DEFAULT` que o documento não marcava (`ativo`, `padrao`, `acesso_total`, `status`, `origem`, `fuso_horario`, `estoque_minimo`) e em `perfil_horarios.dia_semana`.
+- **`recursos.descricao`** guarda o texto "Leitura: ... Escrita: ..." da tabela da seção 1.8.
