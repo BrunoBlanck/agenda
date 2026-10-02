@@ -1075,3 +1075,63 @@ Diferenças entre o mock atual e o banco:
 - [ ] Configurações da loja: a razão social também deve ser editável pela loja, ou só o nome fantasia?
 - [ ] **Quem liga o módulo Locais:** hoje, como os outros módulos, só o superadmin. A ideia original era a própria loja escolher se usa locais. Se for isso, Locais vira um módulo que a loja liga em Configurações (sem passar pelo superadmin), ou um módulo opcional do plano que a loja ativa quando quiser.
 - [ ] **Atendimentos em grupo** (ex.: aula de teoria musical com 5 alunos na mesma sala e horário). Hoje cada local e cada profissional aceitam um agendamento por vez. Para grupos, seria preciso `capacidade` no local/serviço e uma tabela de participantes do agendamento.
+
+---
+
+# 6. Notas da implementação (back-end)
+
+Como o back-end (`backend/`, migrações `0001` e `0002`) aplica este documento, nos pontos em que ele detalha ou reforça o texto acima:
+
+- **Contexto da transação:** além de `app.funcionario_id`, `app.superadmin_id`, `app.origem` e `app.loja_id`, o back-end grava `app.ip`, usado na coluna `auditoria.ip`. Tudo com `set_config(..., true)` (equivale a `SET LOCAL`).
+- **Colunas de controle:** os triggers também fixam `criado_em` (no `INSERT` vale `now()` e depois nunca muda) e cuidam de `excluido_em`/`excluido_por`: excluir (por `DELETE` ou por `UPDATE` de `excluido_em`) grava a hora e quem excluiu; restaurar (`excluido_em = NULL`) limpa `excluido_por`. Colunas "quem criou" (`lojas.criado_por`, `funcionarios.criado_por_*`, `agendamentos.criado_por`, `bloqueios_agenda.criado_por`, `movimentacoes_estoque.funcionario_id`) têm `DEFAULT` lido do contexto.
+- **Auditoria:** não guarda `senha_hash` em `antes`/`depois` (só aparece em `campos_alterados`, indicando que a senha mudou). `campos_alterados` é preenchido em `alterar`. `UPDATE` que não muda nenhum valor não gera linha. Além do `REVOKE`, um trigger impede `UPDATE`/`DELETE` na auditoria até para o dono do schema.
+- **Leitura sem excluídos:** em vez de uma view `*_ativos` por tabela, o ORM do back-end acrescenta `excluido_em IS NULL` a toda consulta (com opção explícita para incluir os excluídos). As políticas de RLS não escondem excluídos (senão não daria para restaurar).
+- **RLS ligado** nas 19 tabelas da seção 2 (`loja_id = app.loja_id`). Com `app.superadmin_id` preenchido, todas as lojas ficam visíveis. A API conecta com um usuário sem privilégio de dono, para o RLS e o `REVOKE` valerem.
+- **Unicidade:** e-mails (`superadmin_usuarios`, `funcionarios`) são únicos sem diferenciar maiúsculas (`lower(email)`). `funcionalidades.codigo` e `recursos.codigo` também usam índice parcial. `UNIQUE (loja_id, id)` continua comum (não parcial), porque é alvo das FKs compostas.
+- **FKs compostas** também em `criado_por`, `editado_por`, `movimentacoes_estoque.agendamento_id`/`funcionario_id`, `funcionarios.criado_por_funcionario`, `lojas (id, atualizado_por_funcionario)` e `auditoria (loja_id, funcionario_id)`.
+- **Conflito de horário:** as duas restrições `EXCLUDE` de `agendamentos` ignoram também linhas excluídas (`excluido_em IS NULL`).
+- **`funcionarios.criado_por_*`:** a regra "exatamente uma preenchida" virou "no máximo uma" (`CHECK num_nonnulls(...) <= 1`), porque cargas automáticas (seed, rotinas) não têm funcionário nem superadmin.
+- **Estoque:** `materiais.quantidade_atual` nasce 0 e só muda por trigger ao inserir em `movimentacoes_estoque`; alteração direta é recusada. Movimentações não podem ser alteradas nem excluídas (corrige-se com um `ajuste`).
+- **`loja_funcionalidades`:** trigger recusa módulos com `opcional = false`.
+- **Restrições extras (`CHECK`):** `slug` só com letras minúsculas, números e hífens; `cor_agenda` no formato `#rrggbb`; `motivo_cancelamento` obrigatório quando `status = cancelado`; `justificativa` obrigatória no ponto `manual`; `motivo` obrigatório em `ajuste`/`perda`; `agendamento_id` obrigatório em `saida_atendimento`; sinal da quantidade (entrada > 0; saída de atendimento e perda < 0); `link_padrao` só em local `online`; preços e estoque mínimo não negativos; `dia_semana` entre 0 e 6.
+- **`NOT NULL` explícito** em colunas com `DEFAULT` que o documento não marcava (`ativo`, `padrao`, `acesso_total`, `status`, `origem`, `fuso_horario`, `estoque_minimo`) e em `perfil_horarios.dia_semana`.
+- **`recursos.descricao`** guarda o texto "Leitura: ... Escrita: ..." da tabela da seção 1.8.
+
+## 6.1 Etapa 2: rotas do painel da loja
+
+Decisões tomadas ao implementar as rotas `/api/loja/...` (detalham regras que o texto acima deixava em aberto; as marcadas como *provisórias* respondem a pontos da seção 5 de forma conservadora e são fáceis de trocar):
+
+- **Fluxo de status (2.13), aplicado à risca:** `pendente → confirmado | cancelado`; `agendado → confirmado | cancelado | nao_compareceu`; `confirmado → concluido | cancelado | nao_compareceu`. `agendado` não vai direto para `concluido`. Um agendamento criado no painel começa `agendado` ou `confirmado`; `pendente` só vem do site. Dos finais só o Administrador (`acesso_total`) sai, reabrindo para `agendado`/`confirmado`. Constante `TRANSICOES` em `app/services/agendamentos.py`.
+- **Reabrir um concluído** gera o estorno dos materiais como movimentação `ajuste` positiva, com `agendamento_id` e motivo "Estorno: atendimento reaberto". Concluir de novo gera nova `saida_atendimento`.
+- **Estoque negativo (provisória):** permitido; a conclusão não é bloqueada e o material aparece em "Repor". Chave `PERMITIR_ESTOQUE_NEGATIVO` em `app/services/estoque.py`.
+- **Agendamento final** (`concluido`, `cancelado`, `nao_compareceu`) não é editado; é preciso reabrir antes. **Concluído não é excluído** (os materiais já saíram do estoque).
+- **Jornada e bloqueios** são conferidos ao criar e quando muda o horário ou o profissional (não ao só mudar o status). O atendimento precisa caber inteiro numa faixa da jornada, no mesmo dia (fuso da loja).
+- **Módulo Serviços desligado:** agendamento sem serviço, duração obrigatória e preço manual; ao editar, o `servico_id` antigo é mantido. **Locais desligado:** `local_id` é ignorado (os antigos são mantidos). Os vínculos de serviço com locais e materiais só são lidos e gravados com os respectivos módulos ligados.
+- **Materiais do agendamento** são copiados de `servico_materiais` ao criar (com o módulo Materiais ligado) e recopiados se o serviço mudar antes de concluir; podem ser ajustados até a conclusão.
+- **Listas de apoio (2.2):** `GET /api/loja/apoio/agendamento` devolve clientes ativos (id e nome), serviços ativos com vínculos, profissionais ativos e locais ativos para quem tem escrita na agenda. Quem só tem escrita em *Minha agenda* recebe só ele mesmo e os serviços que realiza. `GET /api/loja/apoio/disponibilidade` informa jornada/bloqueio e o que está ocupado no horário.
+- **Histórico do cliente** exige leitura em *Clientes* e mostra só os agendamentos que o usuário pode ver na agenda (`parcial = true` quando há outros).
+- **Exclusões:** cliente com agendamentos, cargo com funcionários, categoria com materiais e material usado em serviço respondem 409 (inative em vez de excluir). Funcionário e local não têm rota de exclusão: são inativados. Perfil padrão não é renomeado nem excluído; perfil com funcionários (mesmo inativos) não é excluído; excluir um perfil exclui junto os níveis, a jornada e os bloqueios dele.
+- **Materiais:** o cadastro aceita `quantidade_inicial`, lançada como `entrada`; a edição não mexe no estoque. Perda é informada positiva e gravada negativa; ajuste aceita os dois sinais. `saida_atendimento` não é lançada à mão.
+- **Funcionários:** senha obrigatória no cadastro (mínimo de 8 caracteres) e opcional na edição (troca a senha).
+- **Ponto:** a hora de entrada/saída é a do servidor; correções e lançamentos manuais não podem ficar no futuro e gravam `editado_por`.
+- **Dados da loja:** CNPJ validado pelos dígitos e gravado com máscara; CEP com máscara; UF em maiúsculas. Quem fez a última alteração (loja ou superadmin) vem da `auditoria`, porque `lojas` guarda as duas colunas `atualizado_por_*` sem dizer qual foi a última. **Envio da logo** ainda não existe (depende do storage); só é possível remover.
+- **Locais:** a lista traz só a *contagem* de próximos agendamentos de cada local; a lista dos agendamentos fica em `/agendamentos?local_id=` (com as regras de visibilidade da agenda).
+
+## 6.2 Etapa 3: SUPERADMIN e site do consumidor
+
+Decisões tomadas ao implementar `/api/superadmin/...` e `/api/site/{slug}/...` (nenhuma tabela ou coluna nova; as *provisórias* respondem de forma conservadora a pontos ainda em aberto e são fáceis de trocar):
+
+- **Senha sem e-mail (provisória):** como ainda não há envio de e-mail, criar loja (primeiro Administrador), funcionário pelo suporte ou usuário admin sem senha gera uma **senha provisória** aleatória, devolvida uma única vez na resposta. "Redefinir senha" troca o `senha_hash` na hora (informada ou provisória): entra na auditoria como `alterar` com `campos_alterados = {senha_hash}`, sem o valor, `atualizado_por` NULL e o `superadmin_id`. Quando houver e-mail, vira "enviar link" (`gerar_senha_provisoria` em `app/auth/senhas.py`).
+- **Ações sem alteração de linha (1.9):** `registrar_acao` (`app/services/auditoria.py`) grava uma linha `alterar` com o detalhe em `depois`, `campos_alterados` = chaves do detalhe, e quem fez, origem e IP lidos do contexto da transação, como nos triggers. Pronto para "enviar link de nova senha" e "entrar como a loja".
+- **Situação da loja:** qualquer troca entre `ativa`, `suspensa` e `cancelada` é permitida (inclusive reativar uma cancelada). **Excluir** (lógica) só loja `cancelada`; o `slug` fica livre de novo. Loja excluída some do painel, do login e do site.
+- **Plano:** plano inativo não pode ser escolhido para loja nova nem trocado numa loja (a loja que já o tem mantém). Plano com lojas não excluídas não é excluído (inative).
+- **Usuários admin:** ninguém se exclui nem se desativa; a regra "pelo menos um superadmin ativo" é conferida com as contas ativas travadas (`FOR UPDATE`).
+- **Funcionários pelo suporte:** o superadmin atribui qualquer perfil (inclusive Administrador), mas a loja não fica sem Administrador ativo (mesma regra do painel). `criado_por_superadmin` vem do contexto.
+- **Módulos:** `PATCH` só muda os campos enviados (habilitado, observação, prazo). `expira_em` sem fuso é lido no fuso da loja; prazo vencido = módulo desativado.
+- **Auditoria (tela):** os períodos (hoje, 7/30/90 dias, último ano, intervalo) usam os dias do fuso da loja; a "Plataforma" usa `America/Sao_Paulo`. Só as tabelas do catálogo de cada área podem ser filtradas. Pessoa: `f:<id>`, `s:<id>`, `site` (origem `site`) ou `sistema` (rotinas e cargas).
+- **Site, loja indisponível:** loja inexistente, excluída, suspensa ou cancelada responde **404** (não revela que existe).
+- **Site, horários (provisória, ponto "antecedência mínima" da seção 5):** como `horariosLivres.js`: passos de 30 min, 60 min de antecedência, até 31 dias por consulta. Com "qualquer profissional", cada horário fica com o primeiro livre (ordem alfabética); com o módulo Locais, com o primeiro local permitido e livre (ordem alfabética). O pedido só é aceito num horário oferecido.
+- **Site sem o módulo Serviços:** um "Atendimento" genérico de 30 min, sem preço, com os funcionários ativos que têm jornada.
+- **Site, cliente (2.7):** identificado pelo telefone (só dígitos, na mesma loja; havendo mais de um, o mais antigo). O cadastro existente só ganha o canal `site`: nome, e-mail e situação não mudam (*provisória*: um cliente inativo não é reativado) e nada dele é devolvido ao site. O telefone é gravado com máscara (`(11) 98888-1111`) e precisa ter DDD.
+- **Site, pedido:** `pendente`, `origem = site`, preço do serviço congelado, local reservado, materiais do serviço copiados (módulo Materiais), contexto `app.origem = 'site'` sem funcionário (`atualizado_por` e `criado_por` NULL). O `EXCLUDE` do banco recusa a corrida entre dois pedidos.
+- **Ainda não feito:** limite de requisições e captcha nas rotas públicas do site.
