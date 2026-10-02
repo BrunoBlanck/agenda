@@ -37,10 +37,11 @@ select = ["E", "F", "W", "I", "B", "UP", "N", "SIM", "RUF", "S", "PT"]
 ignore = [
     "RUF001", "RUF002", "RUF003",  # textos em português têm acentos e sinais que o ruff confunde
     "B008",                        # Depends() em argumentos padrão é o padrão do FastAPI
+    "N818",                        # exceções com nome em português (ex.: TokenInvalido)
 ]
 
 [tool.ruff.lint.per-file-ignores]
-"tests/**" = ["S101", "S105", "S106", "S608"]
+"tests/**" = ["S101", "S105", "S106", "S608", "E501", "PT012"]  # SQL em texto e blocos de transação
 "migrations/**" = ["S608", "E501"]
 "scripts/**" = ["S105", "S106"]
 
@@ -50,3 +51,7 @@ quote-style = "single"
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q"
+filterwarnings = [
+    # O TestClient do Starlette avisa que prefere httpx2; usamos httpx, como definido no projeto
+    "ignore:Using `httpx` with `starlette.testclient`",
+]

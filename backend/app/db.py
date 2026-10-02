@@ -22,7 +22,8 @@ Origem = Literal['painel', 'superadmin', 'site', 'sistema']
 @lru_cache
 def get_engine() -> Engine:
     url = get_settings().database_url.get_secret_value()
-    return create_engine(url, pool_pre_ping=True)
+    # hide_parameters: erros e logs do SQLAlchemy não mostram valores (CPF, telefone, senha...)
+    return create_engine(url, pool_pre_ping=True, hide_parameters=True)
 
 
 @lru_cache
