@@ -15,6 +15,7 @@ from pydantic import (
     PlainSerializer,
     StringConstraints,
 )
+from pydantic_core import PydanticCustomError
 
 
 class Esquema(BaseModel):
@@ -66,6 +67,14 @@ class Erro(BaseModel):
 # ---------------------------------------------------------------------------------------------
 # Tipos de campo
 # ---------------------------------------------------------------------------------------------
+
+
+def regra(mensagem: str) -> PydanticCustomError:
+    """Erro de validação com mensagem em português que chega ao usuário como está.
+
+    Use em validadores: ``raise regra('O fim deve ser depois do início.')``.
+    """
+    return PydanticCustomError('regra', mensagem)
 
 
 def vazio_para_none(valor: Any) -> Any:

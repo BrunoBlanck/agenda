@@ -59,6 +59,8 @@ MENSAGENS_VALIDACAO = {
 
 def _mensagem_validacao(erro: dict) -> str:
     tipo = erro.get('type', '')
+    if tipo == 'regra':  # app.schemas.comum.regra: mensagem já em português
+        return str(erro.get('msg', ''))
     if tipo == 'value_error' and 'email' in str(erro.get('msg', '')).lower():
         return 'E-mail inválido.'
     modelo = MENSAGENS_VALIDACAO.get(tipo)
