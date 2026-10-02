@@ -1,12 +1,12 @@
 import {
-  DashboardOutlined,
+  HomeOutlined,
   CalendarOutlined,
   ScheduleOutlined,
   UserOutlined,
   TeamOutlined,
-  MedicineBoxOutlined,
+  InboxOutlined,
   FieldTimeOutlined,
-  ExperimentOutlined,
+  TagsOutlined,
   SettingOutlined,
   ShopOutlined,
   SafetyOutlined,
@@ -19,12 +19,12 @@ import { rotulosLocal } from '../data/locais.js'
 const verAgenda = (a) => a.pode('agenda_propria') || a.pode('agenda_equipe')
 
 export const menu = [
-  { key: '/painel', icon: <DashboardOutlined />, label: 'Início', permitido: () => true },
+  { key: '/painel', icon: <HomeOutlined />, label: 'Início', permitido: () => true },
   { key: '/painel/agenda', icon: <CalendarOutlined />, label: 'Agenda', permitido: verAgenda },
   { key: '/painel/agendamentos', icon: <ScheduleOutlined />, label: 'Agendamentos', permitido: verAgenda },
   { key: '/painel/clientes', icon: <UserOutlined />, label: 'Clientes', permitido: (a) => a.pode('clientes') },
   { key: '/painel/funcionarios', icon: <TeamOutlined />, label: 'Funcionários', permitido: (a) => a.pode('funcionarios') },
-  { key: '/painel/servicos', icon: <ExperimentOutlined />, label: 'Serviços', permitido: (a) => a.pode('servicos') },
+  { key: '/painel/servicos', icon: <TagsOutlined />, label: 'Serviços', permitido: (a) => a.pode('servicos') },
   {
     key: '/painel/locais',
     icon: <EnvironmentOutlined />,
@@ -32,11 +32,11 @@ export const menu = [
     labelDe: (loja) => rotulosLocal(loja).plural,
     permitido: (a) => a.pode('locais'),
   },
-  { key: '/painel/materiais', icon: <MedicineBoxOutlined />, label: 'Materiais', permitido: (a) => a.pode('materiais') },
+  { key: '/painel/materiais', icon: <InboxOutlined />, label: 'Materiais', permitido: (a) => a.pode('materiais') },
   {
     key: '/painel/controle-tempo',
     icon: <FieldTimeOutlined />,
-    label: 'Controle de Tempo',
+    label: 'Controle de tempo',
     permitido: (a) => a.pode('ponto_proprio') || a.pode('ponto_equipe'),
   },
   {

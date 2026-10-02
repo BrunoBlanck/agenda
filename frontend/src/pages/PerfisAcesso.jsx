@@ -1,11 +1,17 @@
 import { useState } from 'react'
-import { Card, Row, Col, Table, Segmented, Tag, Button, Flex, Typography, Alert, Modal, Form, Input, Popconfirm, Tooltip, Tabs, Select } from 'antd'
-import { PlusOutlined, DeleteOutlined, LockOutlined } from '@ant-design/icons'
+import { Alert, App, Button, Form, Input, Popconfirm, Segmented, Select, Tabs, Tooltip, Typography } from 'antd'
+import { DeleteOutlined, EyeOutlined, LockOutlined, PlusOutlined } from '@ant-design/icons'
 import { useData } from '../data/DataContext.jsx'
 import { useAcesso } from '../data/useAcesso.js'
 import { modulos, niveis, recursos } from '../data/acesso.js'
 import JornadaPerfil from '../components/perfis/JornadaPerfil.jsx'
 import BloqueiosPerfil from '../components/perfis/BloqueiosPerfil.jsx'
+import Pagina from '../components/base/Pagina.jsx'
+import Secao from '../components/base/Secao.jsx'
+import Tabela from '../components/base/Tabela.jsx'
+import Etiqueta from '../components/base/Etiqueta.jsx'
+import PainelFormulario from '../components/base/PainelFormulario.jsx'
+import { plural } from '../utils/formatos.js'
 
 const opcoesNivel = Object.entries(niveis).map(([value, n]) => ({ value, label: n.label }))
 const nomeModulo = (codigo) => modulos.find((m) => m.codigo === codigo)?.nome
@@ -15,6 +21,7 @@ const nomeModulo = (codigo) => modulos.find((m) => m.codigo === codigo)?.nome
 export default function PerfisAcesso() {
   const { perfis, funcionarios, jornadas, bloqueios } = useData()
   const { pode, moduloAtivo } = useAcesso()
+  const { message } = App.useApp()
   const verAcessos = pode('perfis_acesso')
   const somenteLeitura = !pode('perfis_acesso', 'escrita')
   const verHorarios = pode('config_agendamentos')
@@ -25,15 +32,13 @@ export default function PerfisAcesso() {
 
   const perfil = perfis.itens.find((p) => p.id === selecionadoId) ?? perfis.itens[0]
   const doPerfil = (id) => funcionarios.itens.filter((f) => f.perfilId === id)
-  const usuarios = (id) => doPerfil(id).length
   const bloqueado = somenteLeitura || perfil?.acessoTotal
+  const semJornada = (id) => !jornadas.itens.some((j) => j.perfilId === id)
 
-  const definirNivel = (codigo, nivel) =>
-    perfis.atualizar(perfil.id, { acessos: { ...perfil.acessos, [codigo]: nivel } })
+  const definirNivel = (codigo, nivel) => perfis.atualizar(perfil.id, { acessos: { ...perfil.acessos, [codigo]: nivel } })
 
   // Novo perfil pode partir de outro: copia os níveis e a jornada (útil para o mesmo cargo em outro horário)
-  const criar = async () => {
-    const { copiarDe, ...v } = await form.validateFields()
+  const criar = ({ copiarDe, ...v }) => {
     const base = perfis.itens.find((p) => p.id === copiarDe)
     const id = perfis.adicionar({ ...v, padrao: false, acessos: base && !base.acessoTotal ? { ...base.acessos } : {} })
     jornadas.itens
@@ -41,6 +46,7 @@ export default function PerfisAcesso() {
       .forEach(({ diaSemana, inicio, fim }) => jornadas.adicionar({ perfilId: id, diaSemana, inicio, fim }))
     setSelecionadoId(id)
     setNovo(false)
+    message.success('Perfil criado.')
   }
 
   // Jornada e bloqueios do perfil saem junto com ele
@@ -49,36 +55,35 @@ export default function PerfisAcesso() {
     bloqueios.itens.filter((b) => b.perfilId === perfil.id).forEach((b) => bloqueios.remover(b.id))
     perfis.remover(perfil.id)
     setSelecionadoId(perfis.itens.find((p) => p.id !== perfil.id)?.id)
+    message.success('Perfil excluído.')
   }
-
-  const semJornada = (id) => !jornadas.itens.some((j) => j.perfilId === id)
 
   const colunas = [
     {
-      title: 'Recurso',
+      title: 'Área',
       key: 'recurso',
       render: (_, r) => (
-        <Flex vertical gap={2}>
-          <Typography.Text strong>{r.nome}</Typography.Text>
-          <Flex gap={4}>
-            <Tag>{nomeModulo(r.modulo)}</Tag>
-            {!moduloAtivo(r.modulo) && <Tag color="red">Módulo desativado</Tag>}
-          </Flex>
-        </Flex>
+        <div className="recurso">
+          <strong>{r.nome}</strong>
+          <span className="texto-apoio">
+            {nomeModulo(r.modulo)}
+            {!moduloAtivo(r.modulo) && ' (módulo desligado nesta loja)'}
+          </span>
+        </div>
       ),
     },
     {
-      title: 'O que permite',
+      title: 'O que cada nível permite',
       key: 'descricao',
       render: (_, r) => (
-        <Flex vertical>
-          <Typography.Text type="secondary">
-            <b>Leitura:</b> {r.leitura}
-          </Typography.Text>
-          <Typography.Text type="secondary">
-            <b>Escrita:</b> {r.escrita}
-          </Typography.Text>
-        </Flex>
+        <div className="recurso texto-ajuda">
+          <span>
+            <strong>Leitura:</strong> {r.leitura}
+          </span>
+          <span>
+            <strong>Escrita:</strong> {r.escrita}
+          </span>
+        </div>
       ),
     },
     {
@@ -87,168 +92,159 @@ export default function PerfisAcesso() {
       width: 250,
       render: (_, r) => (
         <Segmented
+          size="small"
           options={opcoesNivel}
           value={perfil.acessoTotal ? 'escrita' : (perfil.acessos[r.codigo] ?? 'nenhum')}
           disabled={bloqueado}
+          aria-label={`Nível de acesso: ${r.nome}`}
           onChange={(nivel) => definirNivel(r.codigo, nivel)}
         />
       ),
     },
   ]
 
+  const abas = [
+    verAcessos && {
+      key: 'acessos',
+      label: 'Níveis de acesso',
+      children: (
+        <div className="pilha">
+          {perfil?.acessoTotal && (
+            <Alert type="info" showIcon icon={<LockOutlined />} title="O Administrador tem escrita em tudo o que estiver ativo na loja. Esses níveis não mudam." />
+          )}
+          <Tabela rowKey="codigo" size="small" pagination={false} scroll={{ x: 760 }} columns={colunas} dataSource={recursos} />
+        </div>
+      ),
+    },
+    verHorarios && {
+      key: 'jornada',
+      label: 'Jornada semanal',
+      children: perfil && <JornadaPerfil perfil={perfil} somenteLeitura={horariosSomenteLeitura} />,
+    },
+    verHorarios && {
+      key: 'bloqueios',
+      label: 'Bloqueios, folgas e feriados',
+      children: perfil && <BloqueiosPerfil perfil={perfil} somenteLeitura={horariosSomenteLeitura} />,
+    },
+  ].filter(Boolean)
+
+  const botaoExcluir =
+    !somenteLeitura &&
+    perfil &&
+    !perfil.padrao &&
+    (doPerfil(perfil.id).length > 0 ? (
+      <Tooltip title="Há funcionários com este perfil. Troque o perfil deles antes de excluir.">
+        <Button danger icon={<DeleteOutlined />} disabled>
+          Excluir perfil
+        </Button>
+      </Tooltip>
+    ) : (
+      <Popconfirm
+        title="Excluir este perfil?"
+        description="A jornada e os bloqueios do perfil também saem."
+        okText="Excluir"
+        okButtonProps={{ danger: true }}
+        cancelText="Cancelar"
+        onConfirm={excluir}
+      >
+        <Button danger icon={<DeleteOutlined />}>
+          Excluir perfil
+        </Button>
+      </Popconfirm>
+    ))
+
+  const funcionariosDoPerfil = perfil ? doPerfil(perfil.id) : []
+
   return (
-    <Row gutter={[16, 16]}>
-      <Col xs={24} lg={7}>
-        <Card
-          title="Perfis"
-          extra={
-            !somenteLeitura && (
-              <Button
-                icon={<PlusOutlined />}
-                onClick={() => {
-                  form.resetFields()
-                  setNovo(true)
-                }}
-              >
-                Novo
-              </Button>
-            )
-          }
-        >
-          <Flex vertical gap={8}>
+    <Pagina
+      titulo="Perfis e horários"
+      descricao="Cada perfil reúne o que o funcionário pode acessar, a jornada semanal e as folgas. O funcionário herda tudo do perfil dele."
+      acoes={
+        somenteLeitura ? (
+          <Etiqueta icone={<EyeOutlined />}>Somente leitura</Etiqueta>
+        ) : (
+          <Button type="primary" icon={<PlusOutlined />} onClick={() => setNovo(true)}>
+            Novo perfil
+          </Button>
+        )
+      }
+    >
+      <div className="grade-lista-detalhe">
+        <Secao rente titulo="Perfis">
+          <ul className="lista-opcoes">
             {perfis.itens.map((p) => (
-              <Card
-                key={p.id}
-                size="small"
-                hoverable
-                onClick={() => setSelecionadoId(p.id)}
-                style={p.id === perfil?.id ? { borderColor: '#0f766e', background: '#f0fdfa' } : undefined}
-              >
-                <Flex justify="space-between" align="center">
-                  <Typography.Text strong>
-                    {p.acessoTotal && <LockOutlined style={{ marginRight: 6 }} />}
+              <li key={p.id}>
+                <button
+                  type="button"
+                  className="opcao-lista"
+                  aria-pressed={p.id === perfil?.id}
+                  onClick={() => setSelecionadoId(p.id)}
+                >
+                  <span className="opcao-lista-titulo">
+                    {p.acessoTotal && <LockOutlined aria-label="Acesso total" />}
                     {p.nome}
-                  </Typography.Text>
-                  <Flex gap={4}>
-                    {p.padrao && <Tag>Padrão</Tag>}
-                    {verHorarios && semJornada(p.id) && <Tag color="orange">Sem jornada</Tag>}
-                    <Tag color="blue">{usuarios(p.id)} func.</Tag>
-                  </Flex>
-                </Flex>
-                {p.descricao && <Typography.Text type="secondary">{p.descricao}</Typography.Text>}
-              </Card>
+                  </span>
+                  {p.descricao && <span className="texto-apoio">{p.descricao}</span>}
+                  <span className="opcao-lista-meta">
+                    <span className="texto-apoio">{plural(doPerfil(p.id).length, 'funcionário', 'funcionários')}</span>
+                    {p.padrao && <Etiqueta tom="contorno">Padrão</Etiqueta>}
+                    {verHorarios && semJornada(p.id) && <Etiqueta tom="atencao">Sem jornada</Etiqueta>}
+                  </span>
+                </button>
+              </li>
             ))}
-          </Flex>
-        </Card>
-      </Col>
-      <Col xs={24} lg={17}>
+          </ul>
+        </Secao>
+
         {perfil && (
-          <Card
-            title={
+          <Secao
+            titulo={
               <Typography.Text
-                strong
-                editable={!somenteLeitura && !perfil.padrao ? { onChange: (nome) => nome && perfis.atualizar(perfil.id, { nome }) } : false}
+                className="titulo-editavel"
+                editable={!somenteLeitura && !perfil.padrao ? { onChange: (nome) => nome.trim() && perfis.atualizar(perfil.id, { nome: nome.trim() }), tooltip: 'Renomear' } : false}
               >
                 {perfil.nome}
               </Typography.Text>
             }
-            extra={
-              !somenteLeitura &&
-              !perfil.padrao &&
-              (usuarios(perfil.id) > 0 ? (
-                <Tooltip title="Há funcionários com este perfil. Troque o perfil deles antes de excluir.">
-                  <Button danger icon={<DeleteOutlined />} disabled>
-                    Excluir
-                  </Button>
-                </Tooltip>
-              ) : (
-                <Popconfirm title="Excluir este perfil?" onConfirm={excluir}>
-                  <Button danger icon={<DeleteOutlined />}>
-                    Excluir
-                  </Button>
-                </Popconfirm>
-              ))
+            descricao={
+              funcionariosDoPerfil.length
+                ? `Funcionários: ${funcionariosDoPerfil.map((f) => (f.ativo ? f.nome : `${f.nome} (inativo)`)).join(', ')}.`
+                : 'Nenhum funcionário neste perfil.'
             }
+            acoes={botaoExcluir}
           >
-            <Flex gap={6} wrap align="center" style={{ marginBottom: 8 }}>
-              <Typography.Text type="secondary">Funcionários neste perfil:</Typography.Text>
-              {doPerfil(perfil.id).length ? (
-                doPerfil(perfil.id).map((f) => (
-                  <Tag key={f.id}>
-                    {f.nome}
-                    {!f.ativo && ' (inativo)'}
-                  </Tag>
-                ))
-              ) : (
-                <Typography.Text type="secondary">nenhum</Typography.Text>
-              )}
-            </Flex>
-            <Tabs
-              items={[
-                verAcessos && {
-                  key: 'acessos',
-                  label: 'Níveis de acesso',
-                  children: (
-                    <>
-                      {perfil.acessoTotal && (
-                        <Alert
-                          type="warning"
-                          showIcon
-                          title="O Administrador tem escrita em tudo o que estiver ativo na loja e não pode ser alterado."
-                          style={{ marginBottom: 16 }}
-                        />
-                      )}
-                      {somenteLeitura && !perfil.acessoTotal && (
-                        <Alert type="info" showIcon title="Você tem acesso somente para leitura nesta parte." style={{ marginBottom: 16 }} />
-                      )}
-                      <Table rowKey="codigo" pagination={false} columns={colunas} dataSource={recursos} scroll={{ x: true }} />
-                    </>
-                  ),
-                },
-                verHorarios && {
-                  key: 'jornada',
-                  label: 'Jornada semanal',
-                  children: <JornadaPerfil perfil={perfil} somenteLeitura={horariosSomenteLeitura} />,
-                },
-                verHorarios && {
-                  key: 'bloqueios',
-                  label: 'Bloqueios, folgas e feriados',
-                  children: <BloqueiosPerfil perfil={perfil} somenteLeitura={horariosSomenteLeitura} />,
-                },
-              ].filter(Boolean)}
-            />
-          </Card>
+            <Tabs items={abas} />
+          </Secao>
         )}
-      </Col>
-      <Modal title="Novo perfil" open={novo} onOk={criar} onCancel={() => setNovo(false)} okText="Criar">
-        <Form form={form} layout="vertical">
-          <Form.Item
-            name="nome"
-            label="Nome"
-            rules={[
-              { required: true },
-              {
-                validator: (_, v) =>
-                  perfis.itens.some((p) => p.nome.toLowerCase() === v?.trim().toLowerCase())
-                    ? Promise.reject(new Error('Já existe um perfil com esse nome'))
-                    : Promise.resolve(),
-              },
-            ]}
-          >
-            <Input maxLength={60} />
-          </Form.Item>
-          <Form.Item name="descricao" label="Descrição">
-            <Input.TextArea rows={2} />
-          </Form.Item>
-          <Form.Item
-            name="copiarDe"
-            label="Copiar níveis e jornada de"
-            extra="Em branco, o perfil começa sem acesso a nada e sem jornada. Ajuste depois de criar."
-          >
-            <Select allowClear placeholder="Começar do zero" options={perfis.itens.map((p) => ({ value: p.id, label: p.nome }))} />
-          </Form.Item>
-        </Form>
-      </Modal>
-    </Row>
+      </div>
+
+      <PainelFormulario titulo="Novo perfil" open={novo} form={form} textoSalvar="Criar perfil" onCancelar={() => setNovo(false)} onSalvar={criar}>
+        <Form.Item
+          name="nome"
+          label="Nome"
+          rules={[
+            { required: true, whitespace: true, message: 'Informe o nome' },
+            {
+              validator: (_, v) =>
+                perfis.itens.some((p) => p.nome.toLowerCase() === v?.trim().toLowerCase())
+                  ? Promise.reject(new Error('Já existe um perfil com esse nome'))
+                  : Promise.resolve(),
+            },
+          ]}
+        >
+          <Input maxLength={60} placeholder="Ex.: Profissional manhã" />
+        </Form.Item>
+        <Form.Item name="descricao" label="Descrição">
+          <Input.TextArea rows={2} placeholder="Para que serve este perfil" />
+        </Form.Item>
+        <Form.Item
+          name="copiarDe"
+          label="Copiar níveis e jornada de"
+          extra="Em branco, o perfil começa sem acesso a nada e sem jornada. Ajuste depois de criar."
+        >
+          <Select allowClear placeholder="Começar do zero" options={perfis.itens.map((p) => ({ value: p.id, label: p.nome }))} />
+        </Form.Item>
+      </PainelFormulario>
+    </Pagina>
   )
 }

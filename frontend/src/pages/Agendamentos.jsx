@@ -1,83 +1,120 @@
 import { useState } from 'react'
-import { Card, Table, Tag, Button, Flex, Select, DatePicker, Popconfirm } from 'antd'
-import { PlusOutlined, EditOutlined, DeleteOutlined, EyeOutlined } from '@ant-design/icons'
+import { App, Button, DatePicker, Popconfirm, Select, Tooltip } from 'antd'
+import { DeleteOutlined, EditOutlined, EyeOutlined, PlusOutlined } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import { useData } from '../data/DataContext.jsx'
 import { useAcesso } from '../data/useAcesso.js'
-import { nomeCompleto } from '../utils/formatos.js'
-import { statusAgendamento } from '../data/mock.js'
-import AgendamentoModal from '../components/AgendamentoModal.jsx'
+import { useNomes } from '../data/useNomes.js'
 import { rotulosLocal } from '../data/locais.js'
+import { dataBR, duracaoTexto, horaCurta } from '../utils/formatos.js'
+import AgendamentoPainel from '../components/AgendamentoPainel.jsx'
+import { usePainel } from '../components/base/usePainel.js'
 import LocalInfo from '../components/LocalInfo.jsx'
+import { EtiquetaStatus } from '../components/Etiquetas.jsx'
+import Pagina from '../components/base/Pagina.jsx'
+import Secao from '../components/base/Secao.jsx'
+import BarraFiltros from '../components/base/BarraFiltros.jsx'
+import Tabela from '../components/base/Tabela.jsx'
+import EstadoVazio from '../components/base/EstadoVazio.jsx'
+
+const noPeriodo = (data, periodo) =>
+  !periodo || (!dayjs(data).isBefore(periodo[0], 'day') && !dayjs(data).isAfter(periodo[1], 'day'))
 
 export default function Agendamentos() {
-  const { agendamentos, clientes, funcionarios, servicos, locais, loja } = useData()
+  const { agendamentos, funcionarios, locais, loja } = useData()
   const { agenda, moduloAtivo } = useAcesso()
+  const nomes = useNomes()
+  const { message } = App.useApp()
   const [profissional, setProfissional] = useState(null)
   const [local, setLocal] = useState(null)
   const [periodo, setPeriodo] = useState(null)
-  const [modal, setModal] = useState({ open: false, agendamento: null })
+  const painel = usePainel()
 
-  const nomeCliente = (id) => nomeCompleto(clientes.itens.find((c) => c.id === id)) || '—'
-  const nomeFunc = (id) => funcionarios.itens.find((f) => f.id === id)?.nome ?? '—'
-  const nomeServico = (id) => servicos.itens.find((s) => s.id === id)?.nome ?? '—'
   const comLocais = moduloAtivo('locais')
   const rotulos = rotulosLocal(loja.dados)
+  const filtrando = profissional || local || periodo
 
   const dados = agendamentos.itens
     .filter(agenda.ver)
     .filter((a) => !profissional || a.funcionarioId === profissional)
     .filter((a) => !comLocais || !local || a.localId === local)
-    .filter((a) => !periodo || (!dayjs(a.data).isBefore(periodo[0], 'day') && !dayjs(a.data).isAfter(periodo[1], 'day')))
+    .filter((a) => noPeriodo(a.data, periodo))
     .sort((a, b) => `${a.data} ${a.hora}`.localeCompare(`${b.data} ${b.hora}`))
 
   const colunas = [
-    { title: 'Data', dataIndex: 'data', render: (d) => dayjs(d).format('DD/MM/YYYY') },
-    { title: 'Hora', dataIndex: 'hora' },
-    { title: 'Cliente', dataIndex: 'clienteId', render: nomeCliente },
-    agenda.verEquipe && { title: 'Profissional', dataIndex: 'funcionarioId', render: nomeFunc },
-    moduloAtivo('servicos') && { title: 'Serviço', dataIndex: 'servicoId', render: nomeServico },
-    comLocais && {
-      title: rotulos.singular,
-      dataIndex: 'localId',
-      render: (id) => <LocalInfo local={locais.itens.find((l) => l.id === id)} />,
-    },
-    { title: 'Duração', dataIndex: 'duracao', render: (d) => `${d} min` },
+    { title: 'Data', dataIndex: 'data', render: dataBR },
+    { title: 'Horário', dataIndex: 'hora', render: horaCurta },
+    { title: 'Cliente', dataIndex: 'clienteId', render: (id) => <strong>{nomes.cliente(id)}</strong> },
+    agenda.verEquipe && { title: 'Profissional', dataIndex: 'funcionarioId', render: nomes.profissional },
+    moduloAtivo('servicos') && { title: 'Serviço', dataIndex: 'servicoId', render: nomes.servico },
+    comLocais && { title: rotulos.singular, dataIndex: 'localId', render: (id) => <LocalInfo local={nomes.local(id)} /> },
+    { title: 'Duração', dataIndex: 'duracao', align: 'right', render: duracaoTexto },
+    { title: 'Situação', dataIndex: 'status', render: (s) => <EtiquetaStatus status={s} /> },
     {
-      title: 'Status',
-      dataIndex: 'status',
-      render: (s) => <Tag color={statusAgendamento[s]?.color}>{statusAgendamento[s]?.label}</Tag>,
-    },
-    {
-      title: 'Ações',
+      title: <span className="sr-only">Ações</span>,
       key: 'acoes',
-      width: 110,
+      width: 96,
+      align: 'right',
+      fixed: 'right',
       render: (_, a) => (
-        <Flex gap={4}>
-          <Button
-            type="text"
-            icon={agenda.editar(a) ? <EditOutlined /> : <EyeOutlined />}
-            onClick={() => setModal({ open: true, agendamento: a })}
-          />
+        <span className="acoes-linha">
+          <Tooltip title={agenda.editar(a) ? 'Editar' : 'Ver'}>
+            <Button
+              type="text"
+              size="small"
+              icon={agenda.editar(a) ? <EditOutlined /> : <EyeOutlined />}
+              aria-label={agenda.editar(a) ? 'Editar' : 'Ver'}
+              onClick={() => painel.abrir(a)}
+            />
+          </Tooltip>
           {agenda.editar(a) && (
-            <Popconfirm title="Remover agendamento?" onConfirm={() => agendamentos.remover(a.id)}>
-              <Button type="text" danger icon={<DeleteOutlined />} />
+            <Popconfirm
+              title="Excluir este agendamento?"
+              description="Para registrar que o cliente desmarcou, prefira mudar a situação para Cancelado."
+              okText="Excluir"
+              okButtonProps={{ danger: true }}
+              cancelText="Cancelar"
+              onConfirm={() => {
+                agendamentos.remover(a.id)
+                message.success('Agendamento excluído.')
+              }}
+            >
+              <Tooltip title="Excluir">
+                <Button type="text" size="small" danger icon={<DeleteOutlined />} aria-label="Excluir" />
+              </Tooltip>
             </Popconfirm>
           )}
-        </Flex>
+        </span>
       ),
     },
   ].filter(Boolean)
 
+  const limpar = () => {
+    setProfissional(null)
+    setLocal(null)
+    setPeriodo(null)
+  }
+
   return (
-    <Card>
-      <Flex justify="space-between" wrap gap={16} style={{ marginBottom: 16 }}>
-        <Flex gap={8} wrap>
+    <Pagina
+      titulo="Agendamentos"
+      descricao="Todos os agendamentos em lista, para buscar por profissional, local ou período."
+      acoes={
+        agenda.criar && (
+          <Button type="primary" icon={<PlusOutlined />} onClick={() => painel.abrir({})}>
+            Agendar
+          </Button>
+        )
+      }
+    >
+      <Secao rente>
+        <BarraFiltros acoes={filtrando && <Button type="link" onClick={limpar}>Limpar filtros</Button>}>
           {agenda.verEquipe && (
             <Select
               allowClear
               placeholder="Todos os profissionais"
-              style={{ minWidth: 220 }}
+              aria-label="Profissional"
+              value={profissional}
               onChange={setProfissional}
               options={funcionarios.itens.map((f) => ({ value: f.id, label: f.nome }))}
             />
@@ -86,25 +123,37 @@ export default function Agendamentos() {
             <Select
               allowClear
               placeholder={`Qualquer ${rotulos.singular.toLowerCase()}`}
-              style={{ minWidth: 200 }}
+              aria-label={rotulos.singular}
+              value={local}
               onChange={setLocal}
               options={locais.itens.map((l) => ({ value: l.id, label: l.nome }))}
             />
           )}
-          <DatePicker.RangePicker format="DD/MM/YYYY" onChange={setPeriodo} />
-        </Flex>
-        {agenda.criar && (
-          <Button type="primary" icon={<PlusOutlined />} onClick={() => setModal({ open: true, agendamento: null })}>
-            Novo agendamento
-          </Button>
-        )}
-      </Flex>
-      <Table rowKey="id" columns={colunas} dataSource={dados} scroll={{ x: true }} />
-      <AgendamentoModal
-        open={modal.open}
-        agendamento={modal.agendamento}
-        onClose={() => setModal({ open: false, agendamento: null })}
-      />
-    </Card>
+          <DatePicker.RangePicker
+            className="busca"
+            format="DD/MM/YYYY"
+            placeholder={['De', 'Até']}
+            value={periodo}
+            onChange={setPeriodo}
+          />
+        </BarraFiltros>
+        <Tabela
+          columns={colunas}
+          dataSource={dados}
+          destaqueId={painel.destaqueId}
+          vazio={
+            filtrando ? (
+              <EstadoVazio compacto titulo="Nenhum agendamento com esses filtros" acao={<Button onClick={limpar}>Limpar filtros</Button>} />
+            ) : (
+              <EstadoVazio
+                titulo="Nenhum agendamento ainda"
+                acao={agenda.criar && <Button onClick={() => painel.abrir({})}>Agendar horário</Button>}
+              />
+            )
+          }
+        />
+      </Secao>
+      <AgendamentoPainel open={painel.aberto} agendamento={painel.registro?.id ? painel.registro : null} onClose={painel.fechar} />
+    </Pagina>
   )
 }

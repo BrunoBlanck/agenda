@@ -1,9 +1,18 @@
+import dayjs from 'dayjs'
+
 export const soDigitos = (valor) => String(valor ?? '').replace(/\D/g, '')
 
 export const mascaraCep = (valor) =>
   soDigitos(valor)
     .slice(0, 8)
     .replace(/^(\d{5})(\d)/, '$1-$2')
+
+export const mascaraCpf = (valor) =>
+  soDigitos(valor)
+    .slice(0, 11)
+    .replace(/^(\d{3})(\d)/, '$1.$2')
+    .replace(/^(\d{3})\.(\d{3})(\d)/, '$1.$2.$3')
+    .replace(/\.(\d{3})(\d)/, '.$1-$2')
 
 export const mascaraCnpj = (valor) =>
   soDigitos(valor)
@@ -44,3 +53,27 @@ export const moeda = (valor) =>
 
 // Cliente: nome e sobrenome ficam separados; nas listas aparece o nome completo
 export const nomeCompleto = (pessoa) => [pessoa?.nome, pessoa?.sobrenome].filter(Boolean).join(' ')
+
+export const capitalizar = (texto = '') => texto.charAt(0).toUpperCase() + texto.slice(1)
+
+// "1 atendimento", "3 atendimentos"
+export const plural = (n, um, varios) => `${n} ${n === 1 ? um : varios}`
+
+export const dataBR = (data) => (data ? dayjs(data).format('DD/MM/YYYY') : '—')
+
+export const dataHoraBR = (data) => (data ? dayjs(data).format('DD/MM/YYYY [às] HH:mm') : '—')
+
+// "09:00" -> "9h", "14:30" -> "14h30" (como a recepção fala e escreve na agenda)
+export function horaCurta(hora) {
+  if (!hora) return '—'
+  const [h, m] = hora.split(':')
+  return `${Number(h)}h${m === '00' ? '' : m}`
+}
+
+// 45 -> "45 min", 90 -> "1h30", 120 -> "2h"
+export function duracaoTexto(minutos) {
+  if (minutos == null) return '—'
+  if (minutos < 60) return `${minutos} min`
+  const resto = minutos % 60
+  return `${Math.floor(minutos / 60)}h${resto ? String(resto).padStart(2, '0') : ''}`
+}

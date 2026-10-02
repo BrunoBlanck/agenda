@@ -1,24 +1,32 @@
 import { useState } from 'react'
-import { Card, Table, Button, Flex, Select, Tag, DatePicker, TimePicker, Typography, Modal, Form, Input, Tooltip, message } from 'antd'
-import { LoginOutlined, LogoutOutlined, EditOutlined } from '@ant-design/icons'
+import { App, Button, Col, DatePicker, Form, Input, Row, Select, TimePicker, Tooltip } from 'antd'
+import { EditOutlined, LoginOutlined, LogoutOutlined } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import { useData } from '../data/DataContext.jsx'
 import { useAcesso } from '../data/useAcesso.js'
+import { useNomes } from '../data/useNomes.js'
+import { dataBR, duracaoTexto, horaCurta } from '../utils/formatos.js'
+import Pagina from '../components/base/Pagina.jsx'
+import Secao from '../components/base/Secao.jsx'
+import BarraFiltros from '../components/base/BarraFiltros.jsx'
+import Tabela from '../components/base/Tabela.jsx'
+import Etiqueta from '../components/base/Etiqueta.jsx'
+import PainelFormulario from '../components/base/PainelFormulario.jsx'
+import { usePainel } from '../components/base/usePainel.js'
 
-function horasTrabalhadas(p) {
-  if (!p.saida) return null
-  const min = dayjs(`${p.data} ${p.saida}`).diff(dayjs(`${p.data} ${p.entrada}`), 'minute')
-  return `${Math.floor(min / 60)}h ${String(min % 60).padStart(2, '0')}min`
-}
+const minutosTrabalhados = (p) =>
+  p.saida ? dayjs(`${p.data} ${p.saida}`).diff(dayjs(`${p.data} ${p.entrada}`), 'minute') : null
 
 export default function ControleTempo() {
   const { pontos, funcionarios } = useData()
   const { usuario, pode } = useAcesso()
+  const nomes = useNomes()
+  const { message } = App.useApp()
   const [escolhido, setEscolhido] = useState(null)
   const [data, setData] = useState(dayjs())
-  const [corrigindo, setCorrigindo] = useState(null)
+  const correcao = usePainel()
+  const corrigindo = correcao.registro
   const [form] = Form.useForm()
-  const [msg, contextHolder] = message.useMessage()
 
   const verEquipe = pode('ponto_equipe')
   const corrigir = pode('ponto_equipe', 'escrita')
@@ -26,8 +34,6 @@ export default function ControleTempo() {
 
   // Quem corrige o ponto da equipe pode registrar para outro funcionário; os demais, só para si
   const funcionarioId = corrigir ? (escolhido ?? usuario?.id) : usuario?.id
-
-  const nomeFunc = (id) => funcionarios.itens.find((f) => f.id === id)?.nome ?? '—'
   const hoje = dayjs().format('YYYY-MM-DD')
   const aberto = pontos.itens.find((p) => p.funcionarioId === funcionarioId && p.data === hoje && !p.saida)
 
@@ -35,24 +41,14 @@ export default function ControleTempo() {
     const agora = dayjs().format('HH:mm')
     if (aberto) {
       pontos.atualizar(aberto.id, { saida: agora })
-      msg.success(`Saída registrada às ${agora}`)
+      message.success(`Saída registrada às ${horaCurta(agora)}.`)
     } else {
       pontos.adicionar({ funcionarioId, data: hoje, entrada: agora, saida: null, origem: 'sistema' })
-      msg.success(`Entrada registrada às ${agora}`)
+      message.success(`Entrada registrada às ${horaCurta(agora)}.`)
     }
   }
 
-  const abrirCorrecao = (p) => {
-    setCorrigindo(p)
-    form.setFieldsValue({
-      entrada: dayjs(p.entrada, 'HH:mm'),
-      saida: p.saida ? dayjs(p.saida, 'HH:mm') : null,
-      justificativa: '',
-    })
-  }
-
-  const salvarCorrecao = async () => {
-    const v = await form.validateFields()
+  const salvarCorrecao = (v) => {
     pontos.atualizar(corrigindo.id, {
       entrada: v.entrada.format('HH:mm'),
       saida: v.saida ? v.saida.format('HH:mm') : null,
@@ -60,7 +56,8 @@ export default function ControleTempo() {
       justificativa: v.justificativa,
       editadoPor: usuario?.id,
     })
-    setCorrigindo(null)
+    message.success('Correção salva.')
+    correcao.fechar()
   }
 
   const dados = pontos.itens
@@ -68,49 +65,66 @@ export default function ControleTempo() {
     .filter((p) => !data || p.data === data.format('YYYY-MM-DD'))
 
   const colunas = [
-    verEquipe && { title: 'Funcionário', dataIndex: 'funcionarioId', render: nomeFunc },
-    { title: 'Data', dataIndex: 'data', render: (d) => dayjs(d).format('DD/MM/YYYY') },
-    { title: 'Entrada', dataIndex: 'entrada' },
-    { title: 'Saída', dataIndex: 'saida', render: (s) => s ?? <Tag color="processing">Em serviço</Tag> },
-    { title: 'Total', key: 'total', render: (_, p) => horasTrabalhadas(p) ?? '—' },
+    verEquipe && { title: 'Funcionário', dataIndex: 'funcionarioId', render: (id) => <strong>{nomes.profissional(id)}</strong> },
+    { title: 'Data', dataIndex: 'data', render: dataBR },
+    { title: 'Entrada', dataIndex: 'entrada', align: 'right', render: horaCurta },
+    {
+      title: 'Saída',
+      dataIndex: 'saida',
+      align: 'right',
+      render: (s) => (s ? horaCurta(s) : <Etiqueta tom="sucesso">Em serviço</Etiqueta>),
+    },
+    { title: 'Total', key: 'total', align: 'right', render: (_, p) => (p.saida ? duracaoTexto(minutosTrabalhados(p)) : '—') },
     {
       title: 'Origem',
       dataIndex: 'origem',
       render: (o, p) =>
         o === 'manual' ? (
-          <Tooltip title={`${p.justificativa} (por ${nomeFunc(p.editadoPor)})`}>
-            <Tag color="orange">Ajuste manual</Tag>
+          <Tooltip title={`${p.justificativa} (por ${nomes.profissional(p.editadoPor)})`}>
+            <span>
+              <Etiqueta tom="atencao" icone={<EditOutlined />}>
+                Corrigido
+              </Etiqueta>
+            </span>
           </Tooltip>
         ) : (
-          <Tag>Sistema</Tag>
+          <span className="texto-apoio">Registro normal</span>
         ),
     },
     corrigir && {
-      title: 'Ações',
+      title: <span className="sr-only">Ações</span>,
       key: 'acoes',
-      width: 80,
-      render: (_, p) => <Button type="text" icon={<EditOutlined />} onClick={() => abrirCorrecao(p)} />,
+      width: 56,
+      align: 'right',
+      render: (_, p) => (
+        <Tooltip title="Corrigir">
+          <Button type="text" size="small" icon={<EditOutlined />} aria-label="Corrigir registro" onClick={() => correcao.abrir(p)} />
+        </Tooltip>
+      ),
     },
   ].filter(Boolean)
 
   return (
-    <Flex vertical gap={16}>
-      {contextHolder}
+    <Pagina
+      titulo="Controle de tempo"
+      descricao={verEquipe ? 'Entradas e saídas da equipe. Correções ficam marcadas com a justificativa.' : 'Suas entradas e saídas.'}
+    >
       {(registrarProprio || corrigir) && (
-        <Card title="Registrar ponto">
-          <Flex gap={8} wrap align="center">
+        <Secao titulo="Registrar ponto">
+          <div className="registro-ponto">
             {corrigir ? (
               <Select
-                style={{ minWidth: 260 }}
+                aria-label="Funcionário"
                 value={funcionarioId}
                 onChange={setEscolhido}
                 options={funcionarios.itens.filter((f) => f.ativo).map((f) => ({ value: f.id, label: f.nome }))}
               />
             ) : (
-              <Typography.Text strong>{usuario?.nome}</Typography.Text>
+              <strong>{usuario?.nome}</strong>
             )}
             <Button
               type="primary"
+              size="large"
               danger={!!aberto}
               disabled={!funcionarioId}
               icon={aberto ? <LogoutOutlined /> : <LoginOutlined />}
@@ -118,28 +132,41 @@ export default function ControleTempo() {
             >
               {aberto ? 'Registrar saída' : 'Registrar entrada'}
             </Button>
-            {aberto && <Typography.Text type="secondary">Entrada às {aberto.entrada}</Typography.Text>}
-          </Flex>
-        </Card>
+            <span className="texto-apoio">
+              {aberto ? `Entrada às ${horaCurta(aberto.entrada)}, ${duracaoTexto(dayjs().diff(dayjs(`${aberto.data} ${aberto.entrada}`), 'minute'))} em serviço.` : 'Nenhuma entrada aberta hoje.'}
+            </span>
+          </div>
+        </Secao>
       )}
-      <Card
-        title={verEquipe ? 'Registros da equipe' : 'Meus registros'}
-        extra={<DatePicker format="DD/MM/YYYY" value={data} onChange={setData} />}
+      <Secao rente titulo={verEquipe ? 'Registros da equipe' : 'Meus registros'}>
+        <BarraFiltros>
+          <DatePicker format="DD/MM/YYYY" value={data} onChange={setData} placeholder="Todos os dias" aria-label="Dia" />
+        </BarraFiltros>
+        <Tabela columns={colunas} dataSource={dados} destaqueId={correcao.destaqueId} vazio={data ? `Nenhum registro em ${data.format('DD/MM/YYYY')}` : 'Nenhum registro'} />
+      </Secao>
+      <PainelFormulario
+        titulo={corrigindo ? `Corrigir ponto de ${dataBR(corrigindo.data)}` : 'Corrigir ponto'}
+        nome={corrigindo && nomes.profissional(corrigindo.funcionarioId)}
+        cor={corrigindo && nomes.corDe(corrigindo.funcionarioId)}
+        open={correcao.aberto}
+        form={form}
+        valoresIniciais={
+          corrigindo && {
+            entrada: dayjs(corrigindo.entrada, 'HH:mm'),
+            saida: corrigindo.saida ? dayjs(corrigindo.saida, 'HH:mm') : null,
+          }
+        }
+        textoSalvar="Salvar correção"
+        onCancelar={correcao.fechar}
+        onSalvar={salvarCorrecao}
       >
-        <Table rowKey="id" columns={colunas} dataSource={dados} scroll={{ x: true }} />
-      </Card>
-      <Modal
-        title={`Corrigir ponto de ${nomeFunc(corrigindo?.funcionarioId)}`}
-        open={!!corrigindo}
-        onOk={salvarCorrecao}
-        onCancel={() => setCorrigindo(null)}
-        okText="Salvar correção"
-      >
-        <Form form={form} layout="vertical">
-          <Flex gap={16}>
-            <Form.Item name="entrada" label="Entrada" rules={[{ required: true }]}>
-              <TimePicker format="HH:mm" />
+        <Row gutter={12}>
+          <Col xs={12}>
+            <Form.Item name="entrada" label="Entrada" rules={[{ required: true, message: 'Informe a entrada' }]}>
+              <TimePicker format="HH:mm" needConfirm={false} />
             </Form.Item>
+          </Col>
+          <Col xs={12}>
             <Form.Item
               name="saida"
               label="Saída"
@@ -149,18 +176,18 @@ export default function ControleTempo() {
                   validator: (_, saida) =>
                     !saida || saida.isAfter(getFieldValue('entrada'))
                       ? Promise.resolve()
-                      : Promise.reject(new Error('Saída deve ser depois da entrada')),
+                      : Promise.reject(new Error('A saída precisa ser depois da entrada')),
                 }),
               ]}
             >
-              <TimePicker format="HH:mm" />
+              <TimePicker format="HH:mm" needConfirm={false} />
             </Form.Item>
-          </Flex>
-          <Form.Item name="justificativa" label="Justificativa" rules={[{ required: true, message: 'Informe o motivo da correção' }]}>
-            <Input.TextArea rows={2} />
-          </Form.Item>
-        </Form>
-      </Modal>
-    </Flex>
+          </Col>
+        </Row>
+        <Form.Item name="justificativa" label="Justificativa" rules={[{ required: true, whitespace: true, message: 'Explique o motivo da correção' }]}>
+          <Input.TextArea rows={2} placeholder="Ex.: esqueceu de registrar a saída" />
+        </Form.Item>
+      </PainelFormulario>
+    </Pagina>
   )
 }

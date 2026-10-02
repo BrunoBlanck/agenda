@@ -1,8 +1,8 @@
 import dayjs from 'dayjs'
+import { cores } from '../../tema.js'
 
-export const COR_PADRAO = '#64748b'
-
-export const capitalizar = (texto) => texto.charAt(0).toUpperCase() + texto.slice(1)
+// Cor de quem não tem cor definida na agenda
+export const COR_PADRAO = cores.textoTerciario
 
 export const minutosDe = (hora) => {
   const [h, m] = hora.split(':').map(Number)

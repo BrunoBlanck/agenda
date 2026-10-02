@@ -158,15 +158,15 @@ export const historicoInicial = [
 ].map((r, i) => ({ ...r, id: i + 1 }))
 
 export const statusLoja = {
-  ativa: { label: 'Ativa', color: 'green' },
-  suspensa: { label: 'Suspensa', color: 'orange' },
-  cancelada: { label: 'Cancelada', color: 'red' },
+  ativa: { label: 'Ativa', tom: 'sucesso' },
+  suspensa: { label: 'Suspensa', tom: 'atencao' },
+  cancelada: { label: 'Cancelada', tom: 'perigo' },
 }
 
 export const operacoesHistorico = {
-  inserir: { label: 'Inclusão', color: 'green' },
-  alterar: { label: 'Alteração', color: 'blue' },
-  excluir: { label: 'Exclusão', color: 'red' },
+  inserir: { label: 'Inclusão', tom: 'sucesso' },
+  alterar: { label: 'Alteração', tom: 'tinta' },
+  excluir: { label: 'Exclusão', tom: 'perigo' },
 }
 
 // Tabelas que podem ser consultadas na auditoria

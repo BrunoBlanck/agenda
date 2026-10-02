@@ -51,6 +51,15 @@ A "Clínica Sorriso" é a loja aberta no painel da loja: o que o superadmin muda
 - Os **materiais** do serviço são exibidos no momento do agendamento.
 - Com o módulo **Locais** ativo, o agendamento exige um local permitido para o serviço (serviço sem local vinculado aceita qualquer um) e não deixa escolher um local já ocupado no horário. Local online pode ter um link fixo ou um link por atendimento.
 
+## Arquitetura planejada
+
+| Área | Tecnologia | Por quê |
+|---|---|---|
+| Painel da loja (`/painel`) e SUPERADMIN (`/superadmin`) | SPA em React (esta pasta `frontend/`) | Áreas logadas, sem SEO e muito interativas |
+| Site do consumidor (`/`) | HTML renderizado no servidor pelo back-end Python, com JS mínimo | Público: precisa de SEO, link bonito no WhatsApp e abrir rápido no celular. Um modelo de site por tipo de loja |
+
+O site do consumidor que existe hoje em `frontend/src/site/` é só um **protótipo do fluxo** e será substituído pela versão do back-end. As regras de negócio (horários livres, conflitos etc.) ficarão no back-end e serão usadas pelo site e pela API dos painéis.
+
 ## Tecnologias
 
 Front-end:
@@ -96,7 +105,7 @@ Abra o endereço exibido no terminal (por padrão http://localhost:5173).
 
 | Endereço | O que é |
 |---|---|
-| `/` | Site do consumidor final (exemplo): escolhe o serviço, vê horários livres, faz um cadastro e solicita o agendamento |
+| `/` | Protótipo do site do consumidor final (será renderizado pelo back-end Python): escolhe o serviço, vê horários livres, faz um cadastro e solicita o agendamento |
 | `/painel` | Painel da loja (todos os menus ficam em `/painel/...`) |
 | `/superadmin` | Prévia do painel SUPERADMIN |
 
@@ -113,14 +122,20 @@ Abra o endereço exibido no terminal (por padrão http://localhost:5173).
 ```
 frontend/src/
 ├── main.jsx                  # Inicialização (tema, idioma, rotas, dados)
-├── App.jsx                   # Definição das rotas
+├── App.jsx                   # Definição das rotas (cada tela carregada sob demanda)
+├── tema.js                   # Identidade visual: cores e tema do Ant Design (espelhado em index.css)
+├── index.css                 # Variáveis CSS (tokens) e estilos comuns
 ├── layout/
-│   ├── AppLayout.jsx         # Menu lateral, cabeçalho e bloqueio de telas sem acesso
+│   ├── Casca.jsx             # Estrutura comum aos dois painéis (menu lateral, topo, conteúdo)
+│   ├── AppLayout.jsx         # Painel da loja e bloqueio de telas sem acesso
 │   ├── navegacao.jsx         # Itens do menu e regra de acesso de cada tela
 │   └── PainelDemonstracao.jsx # Troca de usuário e módulos (provisório)
 ├── components/
-│   ├── AgendamentoModal.jsx  # Formulário de agendamento
-│   └── CadastroTabela.jsx    # Tela genérica de cadastro (busca + tabela + formulário)
+│   ├── base/                 # Peças de tela: Pagina, Secao, Tabela, BarraFiltros, EstadoVazio, Etiqueta...
+│   │                         # PainelLateral (consulta) e PainelFormulario (formulário): todo painel que abre por cima de uma tela
+│   ├── Etiquetas.jsx         # Etiquetas de status (agendamento, loja, situação, auditoria)
+│   ├── AgendamentoPainel.jsx # Formulário de agendamento (painel lateral)
+│   └── CadastroTabela.jsx    # Tela de cadastro completa (cabeçalho, busca, tabela e formulário no painel lateral)
 ├── data/
 │   ├── mock.js               # Dados de exemplo
 │   ├── acesso.js             # Catálogos: módulos, recursos e níveis de acesso

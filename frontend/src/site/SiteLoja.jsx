@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Avatar, Button, Card, Checkbox, Col, Empty, Flex, Form, Input, Result, Row, Select, Steps, Tag, Typography } from 'antd'
+import { Avatar, Button, Checkbox, Col, ConfigProvider, Empty, Flex, Form, Input, Result, Row, Select, Steps } from 'antd'
 import {
   ArrowLeftOutlined,
   CalendarOutlined,
@@ -15,10 +15,13 @@ import { SITE, useData } from '../data/DataContext.jsx'
 import { tiposLoja } from '../data/plataforma.js'
 import { useAcesso } from '../data/useAcesso.js'
 import { mascaraTelefone, moeda, soDigitos } from '../utils/formatos.js'
-import { capitalizar, COR_PADRAO } from '../components/agenda/util.js'
+import { capitalizar } from '../utils/formatos.js'
+import { COR_PADRAO } from '../components/agenda/util.js'
 import { horariosLivres } from './horariosLivres.js'
 import { locaisDoServico } from '../data/locais.js'
 import { jornadaDe } from '../data/horarios.js'
+import { temasSite } from '../tema.js'
+import './site.css'
 
 const DIAS_A_FRENTE = 14
 
@@ -47,6 +50,7 @@ export default function SiteLoja() {
   const dados = loja.dados
   const termos = termosPorTipo[dados.tipo] ?? termosPorTipo.clinica
   const nomeTipo = tiposLoja[dados.tipo]?.nome
+  const temaSite = temasSite[dados.tipo] ?? temasSite.clinica
 
   // Sem o módulo Serviços, o site oferece um atendimento genérico de 30 minutos
   const comJornada = funcionarios.itens.filter((f) => f.ativo && jornadaDe(f, jornadas.itens).length > 0)
@@ -125,21 +129,21 @@ export default function SiteLoja() {
 
   const endereco = [dados.logradouro && `${dados.logradouro}, ${dados.numero}`, dados.bairro, dados.cidade && `${dados.cidade}/${dados.uf}`]
     .filter(Boolean)
-    .join(' · ')
+    .join(', ')
 
   return (
-    <div className="site">
+    <ConfigProvider theme={{ token: { colorPrimary: temaSite.cor, colorLink: temaSite.cor } }}>
+    <div className="site" data-tipo={dados.tipo} style={{ '--site-cor': temaSite.cor, '--site-topo': temaSite.topo }}>
+      <title>{`${dados.nomeFantasia}: ${termos.chamada.toLowerCase()}`}</title>
       <header className="site-topo">
-        <Flex align="center" gap={10}>
-          <Avatar shape="square" size={36} src={dados.logoUrl} style={{ background: '#0f766e' }}>
+        <div className="site-marca">
+          <Avatar shape="square" size={36} src={dados.logoUrl} className="site-logo">
             {dados.nomeFantasia[0]}
           </Avatar>
-          <Typography.Text strong style={{ fontSize: 17 }}>
-            {dados.nomeFantasia}
-          </Typography.Text>
-        </Flex>
+          <strong>{dados.nomeFantasia}</strong>
+        </div>
         <Flex align="center" gap={8}>
-          <Tag color="purple">Exemplo</Tag>
+          <span className="site-aviso">Protótipo</span>
           <Button type="text" onClick={() => navigate('/painel')}>
             Área da loja
           </Button>
@@ -148,12 +152,10 @@ export default function SiteLoja() {
 
       <section className="site-capa">
         <div className="site-conteudo">
-          <Tag color="cyan" style={{ marginBottom: 12 }}>
-            {nomeTipo}
-          </Tag>
+          <span className="site-tipo">{nomeTipo}</span>
           <h1>{dados.nomeFantasia}</h1>
           <p>{termos.chamada} online, em poucos passos.</p>
-          <Flex gap={24} wrap className="site-contato">
+          <div className="site-contato">
             {endereco && (
               <span>
                 <EnvironmentOutlined /> {endereco}
@@ -164,27 +166,29 @@ export default function SiteLoja() {
                 <PhoneOutlined /> {dados.telefone}
               </span>
             )}
-          </Flex>
+          </div>
         </div>
       </section>
 
       <main className="site-conteudo site-principal">
         {dados.status !== 'ativa' ? (
-          <Card>
+          <div className="site-cartao">
             <Result status="warning" title="Agendamento online indisponível" subTitle="Entre em contato com a loja pelo telefone." />
-          </Card>
+          </div>
         ) : (
-          <Card>
+          <div className="site-cartao">
             <Steps
               current={etapa}
               size="small"
-              style={{ marginBottom: 32 }}
+              responsive={false}
+              titlePlacement="vertical"
+              className="site-etapas"
               items={[{ title: termos.servico }, { title: 'Horário' }, { title: 'Seus dados' }, { title: 'Pronto' }]}
             />
 
             {etapa === 0 && (
               <>
-                <Typography.Title level={4}>Escolha {termos.servico === 'Aula' ? 'a aula' : 'o serviço'}</Typography.Title>
+                <h2>Escolha {termos.servico === 'Aula' ? 'a aula' : 'o serviço'}</h2>
                 <Row gutter={[16, 16]}>
                   {opcoes.map((s) => (
                     <Col key={s.id} xs={24} sm={12}>
@@ -203,12 +207,12 @@ export default function SiteLoja() {
 
             {etapa === 1 && servico && (
               <>
-                <Flex justify="space-between" align="center" wrap gap={12} style={{ marginBottom: 20 }}>
-                  <Typography.Title level={4} style={{ margin: 0 }}>
-                    {servico.nome} · {servico.duracao} min
-                  </Typography.Title>
+                <div className="site-servico-escolhido">
+                  <h2>
+                    {servico.nome}, {servico.duracao} min
+                  </h2>
                   <Select
-                    style={{ minWidth: 240 }}
+                    aria-label={termos.profissional}
                     value={profissional}
                     onChange={(v) => {
                       setProfissional(v)
@@ -220,16 +224,16 @@ export default function SiteLoja() {
                         value: f.id,
                         label: (
                           <Flex align="center" gap={8}>
-                            <span className="agenda-cor" style={{ background: f.cor ?? COR_PADRAO }} />
+                            <span className="site-cor-profissional" style={{ background: f.cor ?? COR_PADRAO }} />
                             {f.nome}
                           </Flex>
                         ),
                       })),
                     ]}
                   />
-                </Flex>
+                </div>
 
-                <Typography.Text strong>Escolha o dia</Typography.Text>
+                <span className="site-rotulo">Escolha o dia</span>
                 <div className="site-dias">
                   {dias.map((d) => {
                     const total = livresEm(d).length
@@ -255,7 +259,7 @@ export default function SiteLoja() {
 
                 {dia && (
                   <>
-                    <Typography.Text strong>Horários livres em {dia.format('DD/MM')}</Typography.Text>
+                    <span className="site-rotulo">Horários livres em {dia.format('DD/MM')}</span>
                     {livresDoDia.length === 0 ? (
                       <Empty description="Nenhum horário livre neste dia" />
                     ) : (
@@ -274,14 +278,14 @@ export default function SiteLoja() {
                   </>
                 )}
 
-                <Flex justify="space-between" style={{ marginTop: 24 }}>
+                <div className="site-navegacao">
                   <Button icon={<ArrowLeftOutlined />} onClick={() => setEtapa(0)}>
                     Voltar
                   </Button>
                   <Button type="primary" disabled={!horario} onClick={() => setEtapa(2)}>
                     Continuar
                   </Button>
-                </Flex>
+                </div>
               </>
             )}
 
@@ -289,13 +293,13 @@ export default function SiteLoja() {
               <Row gutter={[24, 24]}>
                 <Col xs={24} md={10}>
                   <div className="site-resumo">
-                    <Typography.Text type="secondary">Resumo</Typography.Text>
-                    <strong style={{ fontSize: 18 }}>{servico.nome}</strong>
+                    <span className="site-aviso">Resumo</span>
+                    <strong>{servico.nome}</strong>
                     <span>
                       <CalendarOutlined /> {capitalizar(dia.format('dddd, DD [de] MMMM'))}
                     </span>
                     <span>
-                      <ClockCircleOutlined /> {horario.hora} · {servico.duracao} min
+                      <ClockCircleOutlined /> {horario.hora}, {servico.duracao} min
                     </span>
                     <span>
                       <UserOutlined /> {nomeFunc(horario.funcionarioId)}
@@ -317,9 +321,7 @@ export default function SiteLoja() {
                   </div>
                 </Col>
                 <Col xs={24} md={14}>
-                  <Typography.Title level={4} style={{ marginTop: 0 }}>
-                    Seu cadastro
-                  </Typography.Title>
+                  <h2>Seu cadastro</h2>
                   <Form form={form} layout="vertical">
                     <Row gutter={12}>
                       <Col xs={24} sm={10}>
@@ -352,14 +354,14 @@ export default function SiteLoja() {
                       <Checkbox>Entendo que este é um cadastro de exemplo</Checkbox>
                     </Form.Item>
                   </Form>
-                  <Flex justify="space-between">
+                  <div className="site-navegacao">
                     <Button icon={<ArrowLeftOutlined />} onClick={() => setEtapa(1)}>
                       Voltar
                     </Button>
                     <Button type="primary" onClick={enviar}>
                       Solicitar agendamento
                     </Button>
-                  </Flex>
+                  </div>
                 </Col>
               </Row>
             )}
@@ -379,15 +381,18 @@ export default function SiteLoja() {
                 ]}
               />
             )}
-          </Card>
+          </div>
         )}
       </main>
 
       <footer className="site-rodape">
-        {dados.nomeFantasia} · {endereco}
-        <br />
-        <span>Agendamento online · exemplo genérico do site do consumidor</span>
+        <p>
+          {dados.nomeFantasia}
+          {endereco && `, ${endereco}`}
+        </p>
+        <p>Protótipo do site de agendamento. A versão final será gerada pelo servidor.</p>
       </footer>
     </div>
+    </ConfigProvider>
   )
 }

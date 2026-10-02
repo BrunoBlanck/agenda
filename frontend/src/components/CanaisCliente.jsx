@@ -2,25 +2,22 @@ import { Checkbox, Flex, Tooltip } from 'antd'
 import { ShopOutlined, WhatsAppOutlined, GlobalOutlined } from '@ant-design/icons'
 import { canaisCliente } from '../data/mock.js'
 
-const icones = {
-  loja: { icone: <ShopOutlined />, cor: '#0f766e' },
-  whatsapp: { icone: <WhatsAppOutlined />, cor: '#25d366' },
-  site: { icone: <GlobalOutlined />, cor: '#2563eb' },
-}
+const icones = { loja: <ShopOutlined />, whatsapp: <WhatsAppOutlined />, site: <GlobalOutlined /> }
 
 // Ícones dos canais em que o cliente está conectado; os não usados ficam apagados
 export function IconesCanais({ canais = [] }) {
+  const conectados = Object.entries(canaisCliente).filter(([codigo]) => canais.includes(codigo))
   return (
-    <Flex gap={10} style={{ fontSize: 18 }}>
+    <span className="canais" role="img" aria-label={`Canais: ${conectados.map(([, nome]) => nome).join(', ') || 'nenhum'}`}>
       {Object.entries(canaisCliente).map(([codigo, nome]) => {
         const ativo = canais.includes(codigo)
         return (
           <Tooltip key={codigo} title={ativo ? nome : `${nome}: não conectado`}>
-            <span style={{ color: ativo ? icones[codigo].cor : '#d9d9d9' }}>{icones[codigo].icone}</span>
+            <span className={ativo ? `canal-${codigo}` : undefined}>{icones[codigo]}</span>
           </Tooltip>
         )
       })}
-    </Flex>
+    </span>
   )
 }
 
@@ -33,7 +30,7 @@ export function SeletorCanais(props) {
         value,
         label: (
           <Flex gap={6} align="center">
-            <span style={{ color: icones[value].cor }}>{icones[value].icone}</span>
+            <span className={`canal-${value}`}>{icones[value]}</span>
             {nome}
           </Flex>
         ),

@@ -3,13 +3,13 @@
 // opcional = o superadmin pode ativar/desativar por loja
 export const modulos = [
   { codigo: 'inicio', nome: 'Início', opcional: false },
-  { codigo: 'agenda', nome: 'Agenda e Agendamentos', opcional: false },
+  { codigo: 'agenda', nome: 'Agenda e agendamentos', opcional: false },
   { codigo: 'clientes', nome: 'Clientes', opcional: false },
   { codigo: 'funcionarios', nome: 'Funcionários', opcional: false },
   { codigo: 'configuracoes', nome: 'Configurações', opcional: false },
   { codigo: 'servicos', nome: 'Serviços', opcional: true },
   { codigo: 'materiais', nome: 'Materiais', opcional: true },
-  { codigo: 'controle_tempo', nome: 'Controle de Tempo', opcional: true },
+  { codigo: 'controle_tempo', nome: 'Controle de tempo', opcional: true },
   { codigo: 'locais', nome: 'Locais', opcional: true },
 ]
 
@@ -99,7 +99,7 @@ export const recursos = [
 ]
 
 export const niveis = {
-  nenhum: { label: 'Nenhum', color: 'default' },
-  leitura: { label: 'Leitura', color: 'blue' },
-  escrita: { label: 'Escrita', color: 'green' },
+  nenhum: { label: 'Nenhum', tom: 'neutro' },
+  leitura: { label: 'Leitura', tom: 'tinta' },
+  escrita: { label: 'Escrita', tom: 'sucesso' },
 }

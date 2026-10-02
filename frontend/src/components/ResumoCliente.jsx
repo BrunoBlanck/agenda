@@ -1,14 +1,10 @@
-import { Flex, Typography, theme } from 'antd'
 import { HistoryOutlined, RightOutlined } from '@ant-design/icons'
-import dayjs from 'dayjs'
 import { inicioDe, useHistoricoCliente } from '../data/useHistoricoCliente.js'
-
-const plural = (n, um, varios) => `${n} ${n === 1 ? um : varios}`
+import { dataBR, plural } from '../utils/formatos.js'
 
 // Resumo do cliente logo abaixo do campo Cliente do agendamento. Clicar abre o histórico completo.
-// Fica fora do <Form> desabilitado, então continua clicável em agendamentos só de leitura.
+// É um botão comum (fora dos campos do formulário), então continua clicável em agendamentos só de leitura.
 export default function ResumoCliente({ clienteId, agendamentoId, onAbrir }) {
-  const { token } = theme.useToken()
   const { visiveis, concluidos, faltas, ultimo, proximo } = useHistoricoCliente(clienteId)
   const outros = visiveis.filter((a) => a.id !== agendamentoId)
 
@@ -16,54 +12,28 @@ export default function ResumoCliente({ clienteId, agendamentoId, onAbrir }) {
 
   if (outros.length === 0) {
     return (
-      <Typography.Text type="secondary" style={{ display: 'block', margin: '-16px 0 16px', fontSize: 13 }}>
-        <HistoryOutlined /> Primeiro agendamento deste cliente.
-      </Typography.Text>
+      <p className="resumo-cliente-primeiro">
+        <HistoryOutlined aria-hidden="true" /> Primeiro agendamento deste cliente.
+      </p>
     )
   }
 
-  const detalhes = [
-    plural(concluidos, 'atendimento', 'atendimentos'),
-    ultimo && `último em ${dayjs(ultimo.data).format('DD/MM/YYYY')}`,
-  ].filter(Boolean)
-
   return (
-    <Flex
-      role="button"
-      tabIndex={0}
-      onClick={onAbrir}
-      onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && onAbrir()}
-      align="center"
-      gap={12}
-      style={{
-        margin: '-12px 0 20px',
-        padding: '8px 12px',
-        borderRadius: token.borderRadius,
-        background: token.colorFillQuaternary,
-        border: `1px solid ${token.colorBorderSecondary}`,
-        cursor: 'pointer',
-      }}
-    >
-      <HistoryOutlined style={{ color: token.colorPrimary, fontSize: 16 }} />
-      <Flex vertical style={{ flex: 1, minWidth: 0, lineHeight: 1.4 }}>
-        <Typography.Text style={{ fontSize: 13 }}>
-          {detalhes.join(' · ')}
-          {faltas > 0 && (
-            <Typography.Text type="warning" style={{ fontSize: 13 }}>
-              {' · '}
-              {plural(faltas, 'falta', 'faltas')}
-            </Typography.Text>
-          )}
-        </Typography.Text>
+    <button type="button" className="resumo-cliente" onClick={onAbrir}>
+      <HistoryOutlined className="resumo-cliente-icone" aria-hidden="true" />
+      <span className="resumo-cliente-textos">
+        <span>
+          {plural(concluidos, 'atendimento', 'atendimentos')}
+          {ultimo && `, o último em ${dataBR(ultimo.data)}`}
+          {faltas > 0 && <span className="resumo-cliente-faltas">, {plural(faltas, 'falta', 'faltas')}</span>}
+        </span>
         {proximo && proximo.id !== agendamentoId && (
-          <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-            Próximo: {inicioDe(proximo).format('DD/MM [às] HH:mm')}
-          </Typography.Text>
+          <span className="texto-apoio">Próximo: {inicioDe(proximo).format('DD/MM [às] HH:mm')}</span>
         )}
-      </Flex>
-      <Typography.Text style={{ color: token.colorPrimary, fontSize: 13, whiteSpace: 'nowrap' }}>
-        Ver histórico <RightOutlined style={{ fontSize: 10 }} />
-      </Typography.Text>
-    </Flex>
+      </span>
+      <span className="resumo-cliente-link">
+        Ver histórico <RightOutlined aria-hidden="true" />
+      </span>
+    </button>
   )
 }

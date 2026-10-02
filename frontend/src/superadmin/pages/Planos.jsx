@@ -1,54 +1,53 @@
-import { Alert, Flex, Form, Input, InputNumber, Switch, Tag } from 'antd'
+import { Form, Input, InputNumber, Switch } from 'antd'
+import { CreditCardOutlined } from '@ant-design/icons'
 import CadastroTabela from '../../components/CadastroTabela.jsx'
+import { EtiquetaSituacao } from '../../components/Etiquetas.jsx'
 import { useData } from '../../data/DataContext.jsx'
 import { moeda } from '../../utils/formatos.js'
 
-// planos: só comercial. Os módulos de cada loja são escolhidos na própria loja.
+// Planos: só comercial. Os módulos de cada loja são escolhidos na própria loja.
 export default function Planos() {
   const { planos, lojas } = useData()
 
   const colunas = [
-    { title: 'Plano', dataIndex: 'nome' },
+    { title: 'Plano', dataIndex: 'nome', render: (n) => <strong>{n}</strong> },
     { title: 'Descrição', dataIndex: 'descricao' },
-    { title: 'Preço mensal', dataIndex: 'precoMensal', render: moeda },
+    { title: 'Preço mensal', dataIndex: 'precoMensal', align: 'right', render: moeda },
     {
       title: 'Lojas ativas',
       key: 'lojas',
-      align: 'center',
+      align: 'right',
       render: (_, p) => lojas.itens.filter((l) => l.planoId === p.id && l.status === 'ativa').length,
     },
-    { title: 'Situação', dataIndex: 'ativo', render: (a) => (a ? <Tag color="green">Ativo</Tag> : <Tag>Inativo</Tag>) },
+    { title: 'Situação', dataIndex: 'ativo', render: (a) => <EtiquetaSituacao ativo={a} /> },
   ]
 
   return (
-    <Flex vertical gap={16}>
-      <Alert
-        type="info"
-        showIcon
-        title="O plano define só o valor cobrado. Os módulos (Serviços, Materiais, Controle de Tempo, Locais) são ligados loja a loja, em Lojas › Módulos, para esconder o que a loja não usa."
-      />
-      <CadastroTabela
-        titulo="Plano"
-        lista={planos}
-        colunas={colunas}
-        permitirExcluir={false}
-        campos={
-          <>
-            <Form.Item name="nome" label="Nome" rules={[{ required: true }]}>
-              <Input maxLength={80} />
-            </Form.Item>
-            <Form.Item name="descricao" label="Descrição">
-              <Input.TextArea rows={2} />
-            </Form.Item>
-            <Form.Item name="precoMensal" label="Preço mensal" rules={[{ required: true }]}>
-              <InputNumber min={0} step={10} precision={2} decimalSeparator="," prefix="R$" style={{ width: 180 }} />
-            </Form.Item>
-            <Form.Item name="ativo" label="Ativo" valuePropName="checked" initialValue={true}>
-              <Switch />
-            </Form.Item>
-          </>
-        }
-      />
-    </Flex>
+    <CadastroTabela
+      titulo="Planos"
+      descricao="O plano define só o valor cobrado. Os módulos (Serviços, Materiais, Controle de tempo, Locais) são ligados loja a loja, na tela da loja."
+      item="plano"
+      lista={planos}
+      colunas={colunas}
+      permitirExcluir={false}
+      valoresNovo={{ ativo: true }}
+      iconeRegistro={() => <CreditCardOutlined />}
+      campos={
+        <>
+          <Form.Item name="nome" label="Nome" rules={[{ required: true, whitespace: true, message: 'Informe o nome' }]}>
+            <Input maxLength={80} />
+          </Form.Item>
+          <Form.Item name="descricao" label="Descrição">
+            <Input.TextArea rows={2} placeholder="Para quem é este plano" />
+          </Form.Item>
+          <Form.Item name="precoMensal" label="Preço mensal" rules={[{ required: true, message: 'Informe o preço' }]}>
+            <InputNumber min={0} step={10} precision={2} decimalSeparator="," prefix="R$" className="campo-valor" />
+          </Form.Item>
+          <Form.Item name="ativo" label="Disponível para novas lojas" valuePropName="checked">
+            <Switch />
+          </Form.Item>
+        </>
+      }
+    />
   )
 }
