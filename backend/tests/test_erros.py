@@ -42,7 +42,9 @@ def cliente_erros(engine_dono):
     def duplicado_no_commit(ctx: ContextoLoja = Depends(exigir('clientes', 'escrita'))):
         # Sem flush: o erro só aparece no commit, ao fim da dependência da sessão
         for _ in range(2):
-            ctx.db.add(Cliente(loja_id=ctx.loja_id, nome='A', sobrenome='B', telefone='1', cpf='111.111.111-11'))
+            ctx.db.add(
+                Cliente(loja_id=ctx.loja_id, nome='A', sobrenome='B', telefone='1', cpf='111.111.111-11')
+            )
         return {'ok': True}
 
     app = criar_app()

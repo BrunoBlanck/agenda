@@ -115,18 +115,23 @@ RECURSOS = [
 
 
 def upgrade() -> None:
+    # ON CONFLICT: um downgrade parcial mantém os itens que ainda estão em uso (ver downgrade)
     conexao = op.get_bind()
     conexao.execute(sa.text("SELECT set_config('app.origem', 'sistema', true)"))
     for codigo, nome, opcional in FUNCIONALIDADES:
         conexao.execute(
-            sa.text('INSERT INTO funcionalidades (codigo, nome, opcional) VALUES (:c, :n, :o)'),
+            sa.text(
+                'INSERT INTO funcionalidades (codigo, nome, opcional) VALUES (:c, :n, :o)'
+                ' ON CONFLICT (codigo) WHERE excluido_em IS NULL DO NOTHING'
+            ),
             {'c': codigo, 'n': nome, 'o': opcional},
         )
     for ordem, (codigo, nome, modulo, leitura, escrita) in enumerate(RECURSOS, start=1):
         conexao.execute(
             sa.text(
                 'INSERT INTO recursos (funcionalidade_id, codigo, nome, descricao, ordem)'
-                ' SELECT id, :c, :n, :d, :o FROM funcionalidades WHERE codigo = :m'
+                ' SELECT id, :c, :n, :d, :o FROM funcionalidades WHERE codigo = :m AND excluido_em IS NULL'
+                ' ON CONFLICT (codigo) WHERE excluido_em IS NULL DO NOTHING'
             ),
             {
                 'c': codigo,
@@ -139,18 +144,24 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    # Catálogo não tem exclusão lógica: some junto com a versão. O DELETE físico é liberado
-    # desligando os triggers só nesta transação (a auditoria das inserções fica).
-    op.execute(
-        """
+    """Remove os itens do catálogo que nenhuma loja usa.
+
+    Itens referenciados (perfil_acessos, loja_funcionalidades) ficam, para não apagar dados das
+    lojas; num downgrade até a base, a 0001 apaga as tabelas inteiras logo em seguida. O DELETE
+    físico é liberado desligando os triggers do usuário só nesta transação.
+    """
+    recursos = ', '.join(f"'{r[0]}'" for r in RECURSOS)
+    funcionalidades = ', '.join(f"'{f[0]}'" for f in FUNCIONALIDADES)
+    op.execute(f"""
         ALTER TABLE recursos DISABLE TRIGGER USER;
         ALTER TABLE funcionalidades DISABLE TRIGGER USER;
-        DELETE FROM recursos WHERE codigo IN ({r});
-        DELETE FROM funcionalidades WHERE codigo IN ({f});
+        DELETE FROM recursos r
+         WHERE r.codigo IN ({recursos})
+           AND NOT EXISTS (SELECT 1 FROM perfil_acessos pa WHERE pa.recurso_id = r.id);
+        DELETE FROM funcionalidades f
+         WHERE f.codigo IN ({funcionalidades})
+           AND NOT EXISTS (SELECT 1 FROM recursos r WHERE r.funcionalidade_id = f.id)
+           AND NOT EXISTS (SELECT 1 FROM loja_funcionalidades lf WHERE lf.funcionalidade_id = f.id);
         ALTER TABLE recursos ENABLE TRIGGER USER;
         ALTER TABLE funcionalidades ENABLE TRIGGER USER;
-    """.format(
-            r=', '.join(f"'{r[0]}'" for r in RECURSOS),
-            f=', '.join(f"'{f[0]}'" for f in FUNCIONALIDADES),
-        )
-    )
+    """)

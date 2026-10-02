@@ -6,7 +6,7 @@ from sqlalchemy import create_engine, inspect, select, text
 from app.auth.catalogo import MODULOS, RECURSOS
 from app.models import Base, Funcionalidade, Recurso
 from tests.conftest import URL_DONO, config_alembic, recriar_banco
-from tests.fabricas import sessao
+from tests.fabricas import criar_loja, sessao
 
 TABELAS_LOJA_SEM_ID = {
     'perfil_acessos',
@@ -28,6 +28,13 @@ def test_migracao_e_reversivel():
     config = config_alembic(url)
     engine = create_engine(url)
     try:
+        command.upgrade(config, 'head')
+        # Com dados de loja (perfis usando o catálogo), o caminho até a base também funciona
+        criar_loja(engine, 'loja-com-dados')
+        command.downgrade(config, '0001')
+        with engine.connect() as conexao:
+            # Itens do catálogo em uso ficam; os demais saem
+            assert conexao.execute(text('SELECT count(*) FROM recursos')).scalar() == 12
         command.upgrade(config, 'head')
         command.downgrade(config, 'base')
         with engine.connect() as conexao:
