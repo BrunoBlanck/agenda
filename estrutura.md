@@ -109,6 +109,7 @@ Valores iniciais (mesmos menus do front-end):
 | `servicos` | Serviços |
 | `materiais` | Materiais |
 | `controle_tempo` | Controle de Tempo |
+| `locais` | Locais (salas, cadeiras, macas, links online...). Opcional, ver 2.18 |
 
 ## 1.4 `plano_funcionalidades`
 
@@ -140,6 +141,8 @@ Cada clínica cliente da plataforma. É o "tenant" de todo o Painel da Loja.
 | cidade | varchar(80) | |
 | uf | char(2) | |
 | fuso_horario | varchar(50) | DEFAULT `'America/Sao_Paulo'` |
+| rotulo_local | varchar(40) | DEFAULT `'Sala'`. Como a loja chama seus locais na tela (Sala, Cadeira, Maca, Consultório...) |
+| rotulo_local_plural | varchar(40) | DEFAULT `'Salas'` |
 | plano_id | uuid | FK → planos |
 | status | enum `status_loja` | `ativa`, `suspensa`, `cancelada`. DEFAULT `ativa` |
 | criado_por | uuid | FK → superadmin_usuarios |
@@ -184,6 +187,7 @@ Exemplos de códigos:
 | servicos | `servicos.ver`, `servicos.editar` |
 | materiais | `materiais.ver`, `materiais.editar`, `estoque.movimentar` |
 | controle_tempo | `ponto.registrar_proprio`, `ponto.ver_todos`, `ponto.editar` |
+| locais | `locais.ver`, `locais.editar` |
 
 📌 Uma permissão só tem efeito se a funcionalidade dela estiver ativa na loja.
 
@@ -242,6 +246,11 @@ erDiagram
     agendamentos ||--o{ movimentacoes_estoque : "baixa"
 
     funcionarios ||--o{ registros_ponto : ""
+
+    lojas ||--o{ locais : ""
+    locais ||--o{ servico_locais : ""
+    servicos ||--o{ servico_locais : "pode ocorrer em"
+    locais ||--o{ agendamentos : "ocorre em"
 ```
 
 ## 2.1 `perfis`
@@ -432,6 +441,8 @@ Materiais consumidos por **um** atendimento do serviço.
 | cliente_id | uuid | NOT NULL, FK (loja_id, cliente_id) → clientes |
 | servico_id | uuid | NOT NULL, FK (loja_id, servico_id) → servicos |
 | funcionario_id | uuid | NOT NULL, FK (loja_id, funcionario_id) → funcionarios |
+| local_id | uuid | FK (loja_id, local_id) → locais. NULL quando a funcionalidade `locais` está desligada |
+| link_reuniao | varchar(500) | link específico deste atendimento online. Se vazio, usa `locais.link_padrao` |
 | inicio | timestamptz | NOT NULL |
 | fim | timestamptz | NOT NULL, CHECK (fim > inicio) |
 | preco | numeric(10,2) | cópia do preço do serviço no momento do agendamento |
@@ -458,6 +469,19 @@ ALTER TABLE agendamentos ADD CONSTRAINT agendamentos_sem_conflito
   WHERE (status NOT IN ('cancelado', 'nao_compareceu'));
 ```
 
+📌 **Sem conflito de local:** a mesma regra vale para o local. A sala 101 não pode ter duas aulas ao mesmo tempo. Agendamentos sem local (`local_id` NULL) não entram nessa verificação.
+
+```sql
+ALTER TABLE agendamentos ADD CONSTRAINT agendamentos_local_sem_conflito
+  EXCLUDE USING gist (
+    local_id WITH =,
+    tstzrange(inicio, fim) WITH &&
+  )
+  WHERE (local_id IS NOT NULL AND status NOT IN ('cancelado', 'nao_compareceu'));
+```
+
+📌 **Local do agendamento:** com a funcionalidade `locais` ativa na loja, o back-end exige `local_id`, e o local precisa ser permitido para o serviço (ver 2.19). A coluna fica nullable no banco porque a loja pode ligar ou desligar a funcionalidade a qualquer momento, e os agendamentos antigos continuam válidos.
+
 📌 **Disponibilidade:** o back-end só aceita agendamentos dentro da jornada do profissional (`funcionario_horarios`) e fora dos `bloqueios_agenda`.
 
 📌 **Visibilidade:** funcionário com `agenda.ver_propria` (perfil Profissional) só vê agendamentos onde `funcionario_id` é ele mesmo. Com `agenda.ver_todas` (Recepção, Administrador), vê todos.
@@ -479,6 +503,7 @@ agendado ──► confirmado ──► concluido
 CREATE INDEX ON agendamentos (loja_id, inicio);
 CREATE INDEX ON agendamentos (loja_id, funcionario_id, inicio);
 CREATE INDEX ON agendamentos (loja_id, cliente_id);
+CREATE INDEX ON agendamentos (loja_id, local_id, inicio);
 ```
 
 ## 2.14 `agendamento_materiais`
@@ -553,9 +578,50 @@ Histórico de alterações de cada agendamento (quem remarcou, cancelou, mudou s
 | loja_id | uuid | |
 | agendamento_id | uuid | FK (loja_id, agendamento_id) → agendamentos |
 | funcionario_id | uuid | FK → funcionarios (quem alterou) |
-| acao | varchar(40) | `criado`, `remarcado`, `status_alterado`, `profissional_alterado` |
+| acao | varchar(40) | `criado`, `remarcado`, `status_alterado`, `profissional_alterado`, `local_alterado` |
 | dados | jsonb | valores antes/depois |
 | criado_em | timestamptz | |
+
+## 2.18 `locais`
+
+Onde o atendimento acontece. É um nome genérico: em cada loja vira **sala** (escola de música), **cadeira** (barbearia), **maca** (estética), **consultório** (psicologia) ou **sala virtual** (atendimento online). O nome exibido na tela vem de `lojas.rotulo_local` / `rotulo_local_plural`.
+
+| Coluna | Tipo | Regras |
+|---|---|---|
+| id | uuid | PK |
+| loja_id | uuid | FK → lojas |
+| nome | varchar(80) | NOT NULL, UNIQUE (loja_id, nome). Ex.: `Sala 101`, `Cadeira 2`, `Zoom Dra. Ana` |
+| tipo | enum `tipo_local` | `presencial`, `online`. DEFAULT `presencial` |
+| link_padrao | varchar(500) | só para `online`: link fixo da reunião (ex.: sala pessoal do Zoom/Meet) |
+| descricao | text | ex.: "piano de cauda, isolamento acústico" |
+| ativo | boolean | DEFAULT true |
+| criado_em / atualizado_em | timestamptz | |
+
+📌 **Funcionalidade opcional:** a loja só vê o cadastro de locais e o campo "local" no agendamento se a funcionalidade `locais` estiver ativa (ver 1.6). Desligada, os agendamentos ficam sem local e as regras de local são ignoradas.
+
+📌 **Online:** um link de reunião também é um local. Se o link for fixo, fica em `link_padrao`. Se for gerado a cada atendimento, vai em `agendamentos.link_reuniao`. Como o conflito de horário é verificado por local, cada link que pode ser usado ao mesmo tempo que outro deve ser um local separado (ex.: um por profissional).
+
+📌 Local inativo não aparece para novos agendamentos, mas o histórico é mantido.
+
+## 2.19 `servico_locais`
+
+Em quais locais cada serviço pode acontecer.
+
+| Coluna | Tipo | Regras |
+|---|---|---|
+| loja_id | uuid | |
+| servico_id | uuid | PK, FK (loja_id, servico_id) → servicos |
+| local_id | uuid | PK, FK (loja_id, local_id) → locais |
+
+📌 **Serviço sem nenhum local vinculado = pode acontecer em qualquer local ativo.** Exemplos de uma escola de música:
+
+| Serviço | Vínculos | Resultado |
+|---|---|---|
+| Aula de piano | Sala 101 | Só na sala 101, onde está o piano |
+| Aula de violão | nenhum | Qualquer sala ativa, inclusive salas criadas depois |
+| Aula online | Zoom Prof. Pedro, Zoom Prof. Ana | Só nos locais online |
+
+📌 Ao escolher o serviço no agendamento, o front-end lista apenas os locais permitidos e livres naquele horário.
 
 ---
 
@@ -566,6 +632,7 @@ CREATE TYPE status_loja        AS ENUM ('ativa', 'suspensa', 'cancelada');
 CREATE TYPE status_agendamento AS ENUM ('agendado', 'confirmado', 'concluido', 'cancelado', 'nao_compareceu');
 CREATE TYPE tipo_movimentacao  AS ENUM ('entrada', 'saida_atendimento', 'ajuste', 'perda');
 CREATE TYPE origem_ponto       AS ENUM ('sistema', 'manual');
+CREATE TYPE tipo_local         AS ENUM ('presencial', 'online');
 ```
 
 > `nao_compareceu` ainda não existe no front-end; precisa ser adicionado em `statusAgendamento` (`frontend/src/data/mock.js`).
@@ -577,11 +644,12 @@ CREATE TYPE origem_ponto       AS ENUM ('sistema', 'manual');
 | Tela | Tabelas |
 |---|---|
 | Início | `agendamentos`, `clientes`, `registros_ponto`, `materiais` |
-| Agenda | `agendamentos`, `funcionarios`, `funcionario_horarios`, `bloqueios_agenda` |
-| Agendamentos | `agendamentos`, `clientes`, `servicos`, `servico_funcionarios`, `agendamento_materiais` |
+| Agenda | `agendamentos`, `funcionarios`, `funcionario_horarios`, `bloqueios_agenda`, `locais` |
+| Agendamentos | `agendamentos`, `clientes`, `servicos`, `servico_funcionarios`, `servico_locais`, `agendamento_materiais` |
 | Clientes | `clientes` |
 | Funcionários | `funcionarios`, `cargos`, `perfis` |
-| Serviços | `servicos`, `servico_funcionarios`, `servico_materiais` |
+| Serviços | `servicos`, `servico_funcionarios`, `servico_materiais`, `servico_locais` |
+| *(nova)* Locais | `locais` |
 | Materiais | `materiais`, `categorias_material`, `movimentacoes_estoque` |
 | Controle de Tempo | `registros_ponto` |
 | *(futuro)* Login da loja | `lojas` (slug), `funcionarios`, `perfis`, `perfil_permissoes`, `loja_funcionalidades` |
@@ -601,6 +669,7 @@ Diferenças entre o mock atual e o banco:
 | `servico.materiais` (array) | tabela `servico_materiais` |
 | ponto com `data` + `entrada`/`saida` em texto | `entrada` / `saida` (`timestamptz`) |
 | Sem perfis/permissões | `perfis`, `perfil_permissoes`, `permissoes` |
+| Sem locais | `locais`, `servico_locais`, `agendamentos.local_id` |
 
 ---
 
@@ -613,3 +682,5 @@ Diferenças entre o mock atual e o banco:
 - [ ] Financeiro (pagamentos dos atendimentos, comissão de profissionais).
 - [ ] Prontuário/anotações clínicas do atendimento (dados sensíveis, LGPD).
 - [ ] Um mesmo funcionário trabalhando em mais de uma loja (hoje seria um cadastro por loja).
+- [ ] **Atendimentos em grupo** (ex.: aula de teoria musical com 5 alunos na mesma sala e horário). Hoje cada local e cada profissional aceitam um agendamento por vez. Para grupos, seria preciso `capacidade` no local/serviço e uma tabela de participantes do agendamento.
+- [ ] Outros termos personalizáveis por segmento (Cliente → Paciente/Aluno, Profissional → Professor/Barbeiro). Se forem vários, trocar as colunas `rotulo_*` de `lojas` por uma tabela de rótulos por loja.
