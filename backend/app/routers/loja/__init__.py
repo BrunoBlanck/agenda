@@ -11,6 +11,7 @@ from app.routers.loja import (
     locais,
     materiais,
     perfis,
+    ponto,
     servicos,
 )
 
@@ -24,3 +25,4 @@ router.include_router(materiais.router)
 router.include_router(servicos.router)
 router.include_router(agendamentos.router)
 router.include_router(agenda.router)
+router.include_router(ponto.router)
