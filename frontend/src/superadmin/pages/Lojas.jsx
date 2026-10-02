@@ -1,11 +1,18 @@
-import { useState } from 'react'
-import { Card, Table, Input, Select, Flex, Button, Tag, Avatar, Typography, Modal, Form, Row, Col, Divider, Checkbox } from 'antd'
-import { PlusOutlined, SearchOutlined, RightOutlined } from '@ant-design/icons'
+import { useDeferredValue, useState } from 'react'
+import { App, Avatar, Button, Checkbox, Col, Form, Input, Row, Select } from 'antd'
+import { PlusOutlined, RightOutlined, SearchOutlined } from '@ant-design/icons'
 import { useNavigate } from 'react-router-dom'
 import { useData } from '../../data/DataContext.jsx'
 import { modulos } from '../../data/acesso.js'
 import { opcoesTipoLoja, statusLoja } from '../../data/plataforma.js'
 import { usePlataforma } from '../usePlataforma.js'
+import Pagina from '../../components/base/Pagina.jsx'
+import Secao from '../../components/base/Secao.jsx'
+import BarraFiltros from '../../components/base/BarraFiltros.jsx'
+import Tabela from '../../components/base/Tabela.jsx'
+import EstadoVazio from '../../components/base/EstadoVazio.jsx'
+import PainelFormulario from '../../components/base/PainelFormulario.jsx'
+import { EtiquetaLoja } from '../../components/Etiquetas.jsx'
 
 const opcionais = modulos.filter((m) => m.opcional)
 
@@ -20,22 +27,25 @@ const gerarSlug = (texto = '') =>
 export default function Lojas() {
   const { lojas, planos } = useData()
   const { nomeTipo, plano, funcionariosDe, criarLoja, ehAtual } = usePlataforma()
+  const { message } = App.useApp()
   const navigate = useNavigate()
   const [busca, setBusca] = useState('')
+  const termo = useDeferredValue(busca.trim().toLowerCase())
   const [tipo, setTipo] = useState(null)
   const [status, setStatus] = useState(null)
   const [nova, setNova] = useState(false)
   const [form] = Form.useForm()
+  const abrir = (l) => navigate(`/superadmin/lojas/${l.id}`)
 
   const dados = lojas.itens
-    .filter((l) => `${l.nomeFantasia} ${l.nome} ${l.slug} ${l.cidade}`.toLowerCase().includes(busca.toLowerCase()))
+    .filter((l) => `${l.nomeFantasia} ${l.nome} ${l.slug} ${l.cidade}`.toLowerCase().includes(termo))
     .filter((l) => !tipo || l.tipo === tipo)
     .filter((l) => !status || l.status === status)
 
-  const salvar = async () => {
-    const v = await form.validateFields()
+  const salvar = (v) => {
     const id = criarLoja(v)
     setNova(false)
+    message.success('Loja criada. O Administrador recebe o e-mail para definir a senha.')
     navigate(`/superadmin/lojas/${id}`)
   }
 
@@ -45,179 +55,172 @@ export default function Lojas() {
       key: 'loja',
       sorter: (a, b) => a.nomeFantasia.localeCompare(b.nomeFantasia),
       render: (_, l) => (
-        <Flex align="center" gap={10}>
-          <Avatar shape="square" src={l.logoUrl} style={{ background: '#4f46e5', flexShrink: 0 }}>
+        <span className="loja-nome">
+          <Avatar shape="square" size={32} src={l.logoUrl} className="marca-loja">
             {l.nomeFantasia[0]}
           </Avatar>
-          <Flex vertical>
-            <Typography.Text strong>
-              {l.nomeFantasia} {ehAtual(l) && <Tag color="purple">aberta no painel</Tag>}
-            </Typography.Text>
-            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+          <span>
+            <button type="button" className="link-tabela" onClick={() => abrir(l)}>
+              {l.nomeFantasia}
+            </button>
+            <span className="texto-apoio">
               /{l.slug}
-            </Typography.Text>
-          </Flex>
-        </Flex>
+              {ehAtual(l) && ', aberta no painel da loja'}
+            </span>
+          </span>
+        </span>
       ),
     },
     { title: 'Tipo', dataIndex: 'tipo', render: nomeTipo },
     { title: 'Plano', dataIndex: 'planoId', render: (id) => plano(id)?.nome ?? '—' },
     { title: 'Cidade', key: 'cidade', render: (_, l) => (l.cidade ? `${l.cidade}/${l.uf}` : '—') },
     {
-      title: 'Módulos opcionais',
+      title: 'Módulos ligados',
       key: 'modulos',
-      render: (_, l) => (
-        <Flex gap={4} wrap>
-          {opcionais.map((m) => (
-            <Tag key={m.codigo} color={l.modulos?.[m.codigo] ? 'cyan' : 'default'} style={{ opacity: l.modulos?.[m.codigo] ? 1 : 0.5 }}>
-              {m.nome}
-            </Tag>
-          ))}
-        </Flex>
-      ),
+      render: (_, l) => {
+        const ligados = opcionais.filter((m) => l.modulos?.[m.codigo])
+        return ligados.length ? ligados.map((m) => m.nome).join(', ') : <span className="texto-apoio">Nenhum</span>
+      },
     },
     {
       title: 'Funcionários',
       key: 'funcionarios',
-      align: 'center',
+      align: 'right',
       render: (_, l) => funcionariosDe(l).filter((f) => f.ativo).length,
     },
+    { title: 'Situação', dataIndex: 'status', render: (s) => <EtiquetaLoja status={s} /> },
     {
-      title: 'Situação',
-      dataIndex: 'status',
-      render: (s) => <Tag color={statusLoja[s]?.color}>{statusLoja[s]?.label}</Tag>,
-    },
-    {
+      title: <span className="sr-only">Abrir</span>,
       key: 'abrir',
-      width: 60,
-      render: (_, l) => <Button type="text" icon={<RightOutlined />} onClick={() => navigate(`/superadmin/lojas/${l.id}`)} />,
+      width: 48,
+      align: 'right',
+      render: (_, l) => <Button type="text" size="small" icon={<RightOutlined />} aria-label={`Abrir ${l.nomeFantasia}`} onClick={() => abrir(l)} />,
     },
   ]
 
   return (
-    <Card>
-      <Flex justify="space-between" wrap gap={12} style={{ marginBottom: 16 }}>
-        <Flex gap={8} wrap>
+    <Pagina
+      titulo="Lojas"
+      descricao="Todas as lojas da plataforma. Abra uma loja para mudar dados, módulos e funcionários."
+      acoes={
+        <Button type="primary" icon={<PlusOutlined />} onClick={() => setNova(true)}>
+          Nova loja
+        </Button>
+      }
+    >
+      <Secao rente>
+        <BarraFiltros>
           <Input
+            className="busca"
             prefix={<SearchOutlined />}
             placeholder="Buscar por nome, endereço ou cidade"
+            aria-label="Buscar loja"
             allowClear
-            style={{ width: 280 }}
+            value={busca}
             onChange={(e) => setBusca(e.target.value)}
           />
-          <Select
-            allowClear
-            placeholder="Todos os tipos"
-            style={{ width: 160 }}
-            onChange={setTipo}
-            options={opcoesTipoLoja}
-          />
+          <Select allowClear placeholder="Todos os tipos" aria-label="Tipo" value={tipo} onChange={setTipo} options={opcoesTipoLoja} />
           <Select
             allowClear
             placeholder="Todas as situações"
-            style={{ width: 170 }}
+            aria-label="Situação"
+            value={status}
             onChange={setStatus}
             options={Object.entries(statusLoja).map(([value, s]) => ({ value, label: s.label }))}
           />
-        </Flex>
-        <Button
-          type="primary"
-          icon={<PlusOutlined />}
-          onClick={() => {
-            form.resetFields()
-            setNova(true)
-          }}
-        >
-          Nova loja
-        </Button>
-      </Flex>
+        </BarraFiltros>
+        <Tabela
+          columns={colunas}
+          dataSource={dados}
+          vazio={<EstadoVazio compacto titulo="Nenhuma loja com esses filtros" />}
+        />
+      </Secao>
 
-      <Table
-        rowKey="id"
-        columns={colunas}
-        dataSource={dados}
-        scroll={{ x: true }}
-        onRow={(l) => ({ onDoubleClick: () => navigate(`/superadmin/lojas/${l.id}`), style: { cursor: 'pointer' } })}
-      />
-
-      <Modal title="Nova loja" open={nova} onOk={salvar} onCancel={() => setNova(false)} okText="Criar loja" width={640}>
-        <Form
-          form={form}
-          layout="vertical"
-          onValuesChange={(mudou) => {
-            if ('nomeFantasia' in mudou) form.setFieldsValue({ slug: gerarSlug(mudou.nomeFantasia) })
-          }}
+      <PainelFormulario
+        titulo="Nova loja"
+        open={nova}
+        form={form}
+        valoresIniciais={{ modulos: [] }}
+        textoSalvar="Criar loja"
+        largura={560}
+        onCancelar={() => setNova(false)}
+        onSalvar={salvar}
+        onValuesChange={(mudou) => {
+          if ('nomeFantasia' in mudou) form.setFieldsValue({ slug: gerarSlug(mudou.nomeFantasia) })
+        }}
+      >
+        <h3 className="grupo-formulario">Dados da loja</h3>
+        <Row gutter={16}>
+          <Col xs={24} sm={12}>
+            <Form.Item name="nomeFantasia" label="Nome da loja" rules={[{ required: true, whitespace: true, message: 'Informe o nome' }]}>
+              <Input />
+            </Form.Item>
+          </Col>
+          <Col xs={24} sm={12}>
+            <Form.Item name="nome" label="Razão social" rules={[{ required: true, whitespace: true, message: 'Informe a razão social' }]}>
+              <Input />
+            </Form.Item>
+          </Col>
+          <Col xs={24} sm={12}>
+            <Form.Item name="tipo" label="Tipo" rules={[{ required: true, message: 'Escolha o tipo' }]} extra="Define o site do consumidor.">
+              <Select options={opcoesTipoLoja} />
+            </Form.Item>
+          </Col>
+          <Col xs={24} sm={12}>
+            <Form.Item name="planoId" label="Plano" rules={[{ required: true, message: 'Escolha o plano' }]}>
+              <Select options={planos.itens.filter((p) => p.ativo).map((p) => ({ value: p.id, label: p.nome }))} />
+            </Form.Item>
+          </Col>
+          <Col xs={24} sm={12}>
+            <Form.Item
+              name="slug"
+              label="Endereço do site"
+              rules={[
+                { required: true, message: 'Informe o endereço' },
+                {
+                  validator: (_, v) =>
+                    lojas.todos.some((l) => l.slug === v) ? Promise.reject(new Error('Já está em uso por outra loja')) : Promise.resolve(),
+                },
+              ]}
+            >
+              <Input prefix="/" />
+            </Form.Item>
+          </Col>
+          <Col xs={24} sm={12}>
+            <Form.Item name="email" label="E-mail da loja" rules={[{ type: 'email', message: 'E-mail inválido' }]}>
+              <Input type="email" />
+            </Form.Item>
+          </Col>
+        </Row>
+        <Form.Item
+          name="modulos"
+          label="Módulos que a loja vai usar"
+          extra="O que ficar desmarcado não aparece no menu da loja. Dá para mudar depois, em Módulos."
         >
-          <Row gutter={16}>
-            <Col span={12}>
-              <Form.Item name="nomeFantasia" label="Nome da loja" rules={[{ required: true }]}>
-                <Input />
-              </Form.Item>
-            </Col>
-            <Col span={12}>
-              <Form.Item name="nome" label="Razão social" rules={[{ required: true }]}>
-                <Input />
-              </Form.Item>
-            </Col>
-            <Col span={12}>
-              <Form.Item name="tipo" label="Tipo" rules={[{ required: true }]} extra="Define o site do consumidor final.">
-                <Select options={opcoesTipoLoja} />
-              </Form.Item>
-            </Col>
-            <Col span={12}>
-              <Form.Item name="planoId" label="Plano" rules={[{ required: true }]}>
-                <Select options={planos.itens.filter((p) => p.ativo).map((p) => ({ value: p.id, label: p.nome }))} />
-              </Form.Item>
-            </Col>
-            <Col span={12}>
-              <Form.Item
-                name="slug"
-                label="Endereço de acesso"
-                rules={[
-                  { required: true },
-                  {
-                    validator: (_, v) =>
-                      lojas.itens.some((l) => l.slug === v) ? Promise.reject(new Error('Já está em uso')) : Promise.resolve(),
-                  },
-                ]}
-              >
-                <Input prefix="/" />
-              </Form.Item>
-            </Col>
-            <Col span={12}>
-              <Form.Item name="email" label="E-mail da loja" rules={[{ type: 'email' }]}>
-                <Input />
-              </Form.Item>
-            </Col>
-          </Row>
-          <Form.Item
-            name="modulos"
-            label="Módulos que a loja vai usar"
-            initialValue={[]}
-            extra="O que ficar desmarcado não aparece no menu da loja. Dá para mudar depois, em Módulos."
-          >
-            <Checkbox.Group options={opcionais.map((m) => ({ value: m.codigo, label: m.nome }))} />
-          </Form.Item>
-          <Divider titlePlacement="start" plain>
-            Primeiro funcionário (Administrador)
-          </Divider>
-          <Row gutter={16}>
-            <Col span={12}>
-              <Form.Item name={['admin', 'nome']} label="Nome" rules={[{ required: true }]}>
-                <Input />
-              </Form.Item>
-            </Col>
-            <Col span={12}>
-              <Form.Item name={['admin', 'email']} label="E-mail (login)" rules={[{ required: true }, { type: 'email' }]}>
-                <Input />
-              </Form.Item>
-            </Col>
-          </Row>
-          <Typography.Text type="secondary">
-            O administrador recebe um e-mail para definir a senha. Os perfis padrão são criados junto com a loja.
-          </Typography.Text>
-        </Form>
-      </Modal>
-    </Card>
+          <Checkbox.Group options={opcionais.map((m) => ({ value: m.codigo, label: m.nome }))} />
+        </Form.Item>
+        <h3 className="grupo-formulario">Primeiro funcionário (Administrador)</h3>
+        <Row gutter={16}>
+          <Col xs={24} sm={12}>
+            <Form.Item name={['admin', 'nome']} label="Nome" rules={[{ required: true, whitespace: true, message: 'Informe o nome' }]}>
+              <Input />
+            </Form.Item>
+          </Col>
+          <Col xs={24} sm={12}>
+            <Form.Item
+              name={['admin', 'email']}
+              label="E-mail (login)"
+              rules={[
+                { required: true, message: 'Informe o e-mail' },
+                { type: 'email', message: 'E-mail inválido' },
+              ]}
+            >
+              <Input type="email" />
+            </Form.Item>
+          </Col>
+        </Row>
+        <p className="texto-ajuda">O Administrador recebe um e-mail para definir a senha. Os perfis padrão são criados junto com a loja.</p>
+      </PainelFormulario>
+    </Pagina>
   )
 }

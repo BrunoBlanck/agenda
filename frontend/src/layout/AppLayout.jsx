@@ -1,36 +1,53 @@
 import { useState } from 'react'
 import { Outlet, useLocation, useNavigate } from 'react-router-dom'
-import { Layout, Menu, Avatar, Flex, Typography, Tag, Button, Result, theme } from 'antd'
-import { UserOutlined, ControlOutlined, GlobalOutlined } from '@ant-design/icons'
+import { Avatar, Button } from 'antd'
+import { ControlOutlined, GlobalOutlined, LockOutlined } from '@ant-design/icons'
 import { useData } from '../data/DataContext.jsx'
 import { useAcesso } from '../data/useAcesso.js'
-import { menuPermitido, nomeDaTela, telaDaRota } from './navegacao.jsx'
+import { menuPermitido, telaDaRota } from './navegacao.jsx'
+import Casca from './Casca.jsx'
+import Usuario from './Usuario.jsx'
 import PainelDemonstracao from './PainelDemonstracao.jsx'
+import Pagina from '../components/base/Pagina.jsx'
+import Secao from '../components/base/Secao.jsx'
+import EstadoVazio from '../components/base/EstadoVazio.jsx'
 
-const { Header, Sider, Content } = Layout
-
-function LogoLoja({ loja, collapsed }) {
-  const inicial = loja.nomeFantasia?.[0]?.toUpperCase() ?? '?'
+function MarcaLoja({ loja, recolhido }) {
   return (
-    <Flex align="center" gap={10} style={{ padding: 16, overflow: 'hidden' }}>
-      <Avatar shape="square" size={32} src={loja.logoUrl} style={{ flexShrink: 0, background: '#0f766e' }}>
-        {inicial}
+    <>
+      <Avatar shape="square" size={36} src={loja.logoUrl} className="marca-loja">
+        {loja.nomeFantasia?.[0]?.toUpperCase() ?? '?'}
       </Avatar>
-      {!collapsed && (
-        <Typography.Text strong ellipsis style={{ color: '#fff', fontSize: 16 }}>
-          {loja.nomeFantasia}
-        </Typography.Text>
+      {!recolhido && (
+        <div className="casca-marca-textos">
+          <strong>{loja.nomeFantasia}</strong>
+          <span>Painel da loja</span>
+        </div>
       )}
-    </Flex>
+    </>
+  )
+}
+
+function SemAcesso() {
+  const navigate = useNavigate()
+  return (
+    <Pagina titulo="Sem acesso">
+      <Secao>
+        <EstadoVazio
+          icone={<LockOutlined />}
+          titulo="Seu perfil não tem acesso a esta tela"
+          descricao="Ou o módulo não está ativo nesta loja. Peça ao Administrador para liberar o acesso no seu perfil."
+          acao={<Button onClick={() => navigate('/painel')}>Ir para o início</Button>}
+        />
+      </Secao>
+    </Pagina>
   )
 }
 
 export default function AppLayout() {
-  const [collapsed, setCollapsed] = useState(false)
   const [demo, setDemo] = useState(false)
   const navigate = useNavigate()
   const { pathname } = useLocation()
-  const { token } = theme.useToken()
   const { loja } = useData()
   const acesso = useAcesso()
 
@@ -38,51 +55,29 @@ export default function AppLayout() {
   const permitido = !tela || tela.permitido(acesso)
 
   return (
-    <Layout style={{ minHeight: '100vh' }}>
-      <Sider collapsible collapsed={collapsed} onCollapse={setCollapsed} breakpoint="lg">
-        <LogoLoja loja={loja.dados} collapsed={collapsed} />
-        <Menu
-          theme="dark"
-          mode="inline"
-          selectedKeys={[pathname]}
-          defaultOpenKeys={pathname.startsWith('/painel/configuracoes') ? ['/painel/configuracoes'] : []}
-          items={menuPermitido(acesso, loja.dados)}
-          onClick={({ key }) => navigate(key)}
-        />
-      </Sider>
-      <Layout>
-        <Header style={{ background: token.colorBgContainer, padding: '0 24px' }}>
-          <Flex justify="space-between" align="center" style={{ height: '100%' }}>
-            <Typography.Title level={4} style={{ margin: 0 }}>
-              {nomeDaTela(tela, loja.dados)}
-            </Typography.Title>
-            <Flex align="center" gap={8}>
-              <Button icon={<GlobalOutlined />} onClick={() => navigate('/')}>
-                Site da loja
-              </Button>
-              <Button icon={<ControlOutlined />} onClick={() => setDemo(true)}>
-                Demonstração
-              </Button>
-              <Typography.Text>{acesso.usuario?.nome}</Typography.Text>
-              <Tag color={acesso.perfil?.acessoTotal ? 'gold' : 'default'}>{acesso.perfil?.nome}</Tag>
-              <Avatar icon={<UserOutlined />} />
-            </Flex>
-          </Flex>
-        </Header>
-        <Content style={{ margin: 24 }}>
-          {permitido ? (
-            <Outlet />
-          ) : (
-            <Result
-              status="403"
-              title="Sem acesso"
-              subTitle="Seu perfil não tem acesso a esta tela, ou o módulo não está ativo nesta loja."
-              extra={<Button type="primary" onClick={() => navigate('/painel')}>Ir para o início</Button>}
-            />
-          )}
-        </Content>
-      </Layout>
+    <>
+      <Casca
+        marca={(recolhido) => <MarcaLoja loja={loja.dados} recolhido={recolhido} />}
+        itens={menuPermitido(acesso, loja.dados)}
+        selecionado={pathname}
+        abertos={pathname.startsWith('/painel/configuracoes') ? ['/painel/configuracoes'] : []}
+        onNavegar={navigate}
+        acoes={
+          <>
+            {/* O site do consumidor fica na raiz (no futuro, servido pelo back-end): link comum, não rota da SPA */}
+            <Button type="text" icon={<GlobalOutlined />} href="/" aria-label="Site da loja">
+              <span className="rotulo-largo">Site da loja</span>
+            </Button>
+            <Button type="text" icon={<ControlOutlined />} onClick={() => setDemo(true)} aria-label="Demonstração">
+              <span className="rotulo-largo">Demonstração</span>
+            </Button>
+            <Usuario nome={acesso.usuario?.nome} detalhe={acesso.perfil?.nome} />
+          </>
+        }
+      >
+        {permitido ? <Outlet /> : <SemAcesso />}
+      </Casca>
       <PainelDemonstracao open={demo} onClose={() => setDemo(false)} />
-    </Layout>
+    </>
   )
 }

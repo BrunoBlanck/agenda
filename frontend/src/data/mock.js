@@ -174,16 +174,17 @@ export const canaisCliente = {
   site: 'Site',
 }
 
+// tom: cor semântica da etiqueta (components/Etiquetas.jsx)
 export const tiposLocal = {
-  presencial: { label: 'Presencial', color: 'default' },
-  online: { label: 'Online', color: 'purple' },
+  presencial: { label: 'Presencial', tom: 'contorno' },
+  online: { label: 'Online', tom: 'tinta' },
 }
 
 export const statusAgendamento = {
-  pendente: { label: 'Aguardando aceite', color: 'gold' },
-  agendado: { label: 'Agendado', color: 'blue' },
-  confirmado: { label: 'Confirmado', color: 'green' },
-  concluido: { label: 'Concluído', color: 'default' },
-  cancelado: { label: 'Cancelado', color: 'red' },
-  nao_compareceu: { label: 'Não compareceu', color: 'orange' },
+  pendente: { label: 'Aguardando aceite', tom: 'marca' },
+  agendado: { label: 'Agendado', tom: 'tinta' },
+  confirmado: { label: 'Confirmado', tom: 'sucesso' },
+  concluido: { label: 'Concluído', tom: 'neutro' },
+  cancelado: { label: 'Cancelado', tom: 'perigo' },
+  nao_compareceu: { label: 'Não compareceu', tom: 'atencao' },
 }

@@ -1,14 +1,19 @@
 import { useState } from 'react'
-import { Avatar, Button, Drawer, Empty, Flex, Segmented, Tag, Typography, theme } from 'antd'
+import { Button, Segmented } from 'antd'
 import { EnvironmentOutlined, MailOutlined, PhoneOutlined, VideoCameraOutlined } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import { useData } from '../data/DataContext.jsx'
 import { useAcesso } from '../data/useAcesso.js'
-import { statusAgendamento } from '../data/mock.js'
+import { useNomes } from '../data/useNomes.js'
 import { inicioDe, useHistoricoCliente } from '../data/useHistoricoCliente.js'
-import { moeda, nomeCompleto } from '../utils/formatos.js'
-import { capitalizar, COR_PADRAO, fimDe } from './agenda/util.js'
+import { capitalizar, dataBR, horaCurta, moeda, nomeCompleto } from '../utils/formatos.js'
+import { fimDe } from './agenda/util.js'
 import { IconesCanais } from './CanaisCliente.jsx'
+import { EtiquetaStatus } from './Etiquetas.jsx'
+import PontoCor from './base/PontoCor.jsx'
+import EstadoVazio from './base/EstadoVazio.jsx'
+import PainelLateral from './base/PainelLateral.jsx'
+import './historico-cliente.css'
 
 const POR_PAGINA = 10
 
@@ -18,8 +23,6 @@ const FILTROS = {
   faltas: { label: 'Faltas e cancelados', aceita: (a) => ['nao_compareceu', 'cancelado'].includes(a.status) },
 }
 
-const iniciais = (c) => `${c.nome?.[0] ?? ''}${c.sobrenome?.[0] ?? ''}`.toUpperCase()
-
 const haQuanto = (data) => {
   const dias = dayjs().startOf('day').diff(dayjs(data).startOf('day'), 'day')
   if (dias <= 0) return 'hoje'
@@ -27,60 +30,9 @@ const haQuanto = (data) => {
   return `há ${dias} dias`
 }
 
-// Bloco de data (dia grande, mês abreviado) usado na lista e no próximo agendamento
-function BlocoData({ data, destaque }) {
-  const { token } = theme.useToken()
-  return (
-    <Flex
-      vertical
-      align="center"
-      justify="center"
-      style={{
-        width: 48,
-        height: 52,
-        flexShrink: 0,
-        borderRadius: token.borderRadius,
-        background: destaque ? token.colorPrimary : token.colorFillTertiary,
-        color: destaque ? '#fff' : token.colorText,
-        lineHeight: 1.1,
-      }}
-    >
-      <span style={{ fontSize: 18, fontWeight: 600 }}>{data.format('DD')}</span>
-      <span style={{ fontSize: 11, textTransform: 'uppercase', opacity: 0.8 }}>{data.format('MMM').replace('.', '')}</span>
-    </Flex>
-  )
-}
-
-function Numero({ valor, rotulo, cor }) {
-  const { token } = theme.useToken()
-  return (
-    <Flex vertical align="center" style={{ flex: 1, minWidth: 0 }}>
-      <span style={{ fontSize: 20, fontWeight: 600, color: cor ?? token.colorText, whiteSpace: 'nowrap' }}>{valor}</span>
-      <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-        {rotulo}
-      </Typography.Text>
-    </Flex>
-  )
-}
-
-// Histórico do cliente: resumo e os agendamentos dele, do mais recente para o mais antigo.
-export default function HistoricoCliente({ clienteId, open, onClose }) {
-  const { token } = theme.useToken()
-  const { clientes, servicos, funcionarios, locais } = useData()
-  const { agenda, moduloAtivo } = useAcesso()
-  const cliente = clientes.todos.find((c) => c.id === clienteId)
-  const { visiveis, parcial, concluidos, faltas, cancelados, ultimo, proximo } = useHistoricoCliente(clienteId)
-  const [filtro, setFiltro] = useState('todos')
-  const [limite, setLimite] = useState(POR_PAGINA)
-
-  const servico = (id) => servicos.todos.find((s) => s.id === id)
-  const profissional = (id) => funcionarios.todos.find((f) => f.id === id)
-  const local = (id) => locais.todos.find((l) => l.id === id)
-  const gasto = visiveis.filter((a) => a.status === 'concluido').reduce((t, a) => t + (a.preco ?? 0), 0)
-
-  const lista = visiveis.filter(FILTROS[filtro].aceita)
-  // Agrupa por mês, mantendo a ordem (mais recente primeiro)
-  const meses = lista.slice(0, limite).reduce((grupos, a) => {
+// Agrupa por mês, mantendo a ordem (mais recente primeiro)
+const porMes = (lista) =>
+  lista.reduce((grupos, a) => {
     const chave = a.data.slice(0, 7)
     const grupo = grupos.at(-1)
     if (grupo?.chave === chave) grupo.itens.push(a)
@@ -88,215 +40,165 @@ export default function HistoricoCliente({ clienteId, open, onClose }) {
     return grupos
   }, [])
 
-  // Profissional (com a cor dele na agenda) e local
-  const quemOnde = (a) => {
-    const p = profissional(a.funcionarioId)
-    const l = moduloAtivo('locais') && a.localId && local(a.localId)
-    return (
-      <Flex gap={12} wrap style={{ fontSize: 13 }}>
-        <Typography.Text type="secondary">
-          <span
-            style={{
-              display: 'inline-block',
-              width: 8,
-              height: 8,
-              borderRadius: '50%',
-              background: p?.cor ?? COR_PADRAO,
-              marginInlineEnd: 6,
-            }}
-          />
-          {p?.nome ?? '—'}
-        </Typography.Text>
-        {l && (
-          <Typography.Text type="secondary">
-            {l.tipo === 'online' ? <VideoCameraOutlined /> : <EnvironmentOutlined />} {l.nome}
-          </Typography.Text>
-        )}
-      </Flex>
-    )
-  }
+// Bloco de data (dia grande, mês abreviado) usado na lista e no próximo agendamento
+function BlocoData({ data, destaque = false }) {
+  return (
+    <span className={destaque ? 'bloco-data destaque' : 'bloco-data'} aria-hidden="true">
+      <strong>{data.format('DD')}</strong>
+      <span>{data.format('MMM').replace('.', '')}</span>
+    </span>
+  )
+}
 
-  const titulo = (a) => `${a.hora}–${fimDe(a)} · ${servico(a.servicoId)?.nome ?? 'Atendimento'}`
+// Um agendamento: serviço, horário, profissional (com a cor dele na agenda) e local
+function Atendimento({ a, comLocais }) {
+  const nomes = useNomes()
+  const local = comLocais && a.localId && nomes.local(a.localId)
+  return (
+    <div className="atendimento-textos">
+      <strong className={a.status === 'cancelado' ? 'riscado' : undefined}>{nomes.servico(a.servicoId)}</strong>
+      <span>
+        {dataBR(a.data)}, {horaCurta(a.hora)} às {horaCurta(fimDe(a))}
+      </span>
+      <span className="atendimento-quem">
+        <span>
+          <PontoCor cor={nomes.corDe(a.funcionarioId)} /> {nomes.profissional(a.funcionarioId)}
+        </span>
+        {local && (
+          <span>
+            {local.tipo === 'online' ? <VideoCameraOutlined aria-hidden="true" /> : <EnvironmentOutlined aria-hidden="true" />} {local.nome}
+          </span>
+        )}
+      </span>
+      {a.motivoCancelamento && <em>{a.motivoCancelamento}</em>}
+    </div>
+  )
+}
+
+// Histórico do cliente: resumo e os agendamentos dele, do mais recente para o mais antigo.
+export default function HistoricoCliente({ clienteId, open, onClose }) {
+  const { clientes } = useData()
+  const { agenda, moduloAtivo } = useAcesso()
+  const cliente = clientes.todos.find((c) => c.id === clienteId)
+  const { visiveis, parcial, concluidos, faltas, cancelados, ultimo, proximo } = useHistoricoCliente(clienteId)
+  const [filtro, setFiltro] = useState('todos')
+  const [limite, setLimite] = useState(POR_PAGINA)
+  // Cada abertura começa com todos os agendamentos e a primeira página
+  const [abertoAntes, setAbertoAntes] = useState(open)
+  if (open !== abertoAntes) {
+    setAbertoAntes(open)
+    if (open) {
+      setFiltro('todos')
+      setLimite(POR_PAGINA)
+    }
+  }
+  const comLocais = moduloAtivo('locais')
+
+  const gasto = visiveis.filter((a) => a.status === 'concluido').reduce((t, a) => t + (a.preco ?? 0), 0)
+  const lista = visiveis.filter(FILTROS[filtro].aceita)
 
   return (
-    <Drawer
-      title="Histórico do cliente"
+    <PainelLateral
+      titulo="Histórico do cliente"
+      nome={cliente && nomeCompleto(cliente)}
       open={open}
       onClose={onClose}
-      size={560}
-      destroyOnHidden
-      styles={{ body: { padding: 0 } }}
-      afterOpenChange={(aberto) => {
-        if (!aberto) {
-          setFiltro('todos')
-          setLimite(POR_PAGINA)
-        }
-      }}
+      largura={560}
+      rootClassName="painel-historico"
     >
       {cliente && (
-        <Flex vertical style={{ paddingBottom: 24 }}>
-          {/* Cabeçalho */}
-          <Flex gap={16} align="center" style={{ padding: '20px 24px' }}>
-            <Avatar size={56} style={{ background: token.colorPrimary, fontSize: 20, flexShrink: 0 }}>
-              {iniciais(cliente)}
-            </Avatar>
-            <Flex vertical gap={4} style={{ minWidth: 0 }}>
-              <Flex align="center" gap={10} wrap>
-                <Typography.Title level={4} style={{ margin: 0 }}>
-                  {nomeCompleto(cliente)}
-                </Typography.Title>
-                <IconesCanais canais={cliente.canais} />
-              </Flex>
-              <Flex gap={16} wrap style={{ fontSize: 13 }}>
-                <Typography.Text type="secondary">
-                  <PhoneOutlined /> {cliente.telefone}
-                </Typography.Text>
-                {cliente.email && (
-                  <Typography.Text type="secondary">
-                    <MailOutlined /> {cliente.email}
-                  </Typography.Text>
-                )}
-              </Flex>
-              <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                {ultimo
-                  ? `Último atendimento ${haQuanto(ultimo.data)} (${dayjs(ultimo.data).format('DD/MM/YYYY')})`
-                  : 'Ainda sem atendimentos concluídos'}
-              </Typography.Text>
-            </Flex>
-          </Flex>
-
-          {cliente.observacoes && (
-            <Typography.Paragraph
-              style={{ margin: '0 24px 16px', padding: '8px 12px', background: token.colorWarningBg, borderRadius: token.borderRadius }}
-            >
-              {cliente.observacoes}
-            </Typography.Paragraph>
-          )}
-
-          {/* Números */}
-          <Flex
-            style={{
-              margin: '0 24px',
-              padding: '12px 0',
-              border: `1px solid ${token.colorBorderSecondary}`,
-              borderRadius: token.borderRadiusLG,
-            }}
-          >
-            <Numero valor={concluidos} rotulo="Atendimentos" />
-            <Numero valor={faltas} rotulo="Faltas" cor={faltas ? token.colorWarning : undefined} />
-            <Numero valor={cancelados} rotulo="Cancelados" cor={cancelados ? token.colorError : undefined} />
-            <Numero valor={moeda(gasto)} rotulo="Total gasto" />
-          </Flex>
-
-          {/* Próximo agendamento */}
-          {proximo && (
-            <Flex
-              gap={14}
-              align="center"
-              style={{
-                margin: '16px 24px 0',
-                padding: 12,
-                borderRadius: token.borderRadiusLG,
-                background: token.colorPrimaryBg,
-                border: `1px solid ${token.colorPrimaryBorder}`,
-              }}
-            >
-              <BlocoData data={inicioDe(proximo)} destaque />
-              <Flex vertical gap={2} style={{ flex: 1, minWidth: 0 }}>
-                <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                  Próximo agendamento · {capitalizar(inicioDe(proximo).format('dddd'))}
-                </Typography.Text>
-                <Typography.Text strong>{titulo(proximo)}</Typography.Text>
-                {quemOnde(proximo)}
-              </Flex>
-              <Tag color={statusAgendamento[proximo.status]?.color} style={{ marginInlineEnd: 0 }}>
-                {statusAgendamento[proximo.status]?.label}
-              </Tag>
-            </Flex>
-          )}
-
-          {/* Lista */}
-          <Flex vertical gap={8} style={{ padding: '24px 24px 8px' }}>
-            <Flex justify="space-between" align="center" gap={8} wrap>
-              <Typography.Text strong>Agendamentos</Typography.Text>
-              <Segmented
-                size="small"
-                value={filtro}
-                onChange={(v) => {
-                  setFiltro(v)
-                  setLimite(POR_PAGINA)
-                }}
-                options={Object.entries(FILTROS).map(([value, f]) => ({ value, label: f.label }))}
-              />
-            </Flex>
-            {!agenda.verEquipe && parcial && (
-              <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                Mostrando só os atendimentos da sua agenda.
-              </Typography.Text>
-            )}
-          </Flex>
-
-          {lista.length === 0 && <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="Nenhum agendamento" />}
-
-          {meses.map((mes) => (
-            <div key={mes.chave}>
-              <Typography.Text
-                type="secondary"
-                style={{
-                  display: 'block',
-                  padding: '12px 24px 6px',
-                  fontSize: 11,
-                  fontWeight: 600,
-                  textTransform: 'uppercase',
-                  letterSpacing: 0.6,
-                }}
-              >
-                {dayjs(`${mes.chave}-01`).format('MMMM [de] YYYY')}
-              </Typography.Text>
-              {mes.itens.map((a) => {
-                const apagado = a.status === 'cancelado' || a.status === 'nao_compareceu'
-                return (
-                  <Flex
-                    key={a.id}
-                    gap={14}
-                    align="center"
-                    style={{ padding: '10px 24px', borderTop: `1px solid ${token.colorSplit}`, opacity: apagado ? 0.7 : 1 }}
-                  >
-                    <BlocoData data={inicioDe(a)} />
-                    <Flex vertical gap={2} style={{ flex: 1, minWidth: 0 }}>
-                      <Typography.Text strong delete={a.status === 'cancelado'}>
-                        {titulo(a)}
-                      </Typography.Text>
-                      {quemOnde(a)}
-                      {a.motivoCancelamento && (
-                        <Typography.Text type="secondary" italic style={{ fontSize: 12 }}>
-                          {a.motivoCancelamento}
-                        </Typography.Text>
-                      )}
-                    </Flex>
-                    <Flex vertical align="end" gap={4} style={{ flexShrink: 0 }}>
-                      <Tag color={statusAgendamento[a.status]?.color} style={{ marginInlineEnd: 0 }}>
-                        {statusAgendamento[a.status]?.label}
-                      </Tag>
-                      {a.preco != null && (
-                        <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                          {moeda(a.preco)}
-                        </Typography.Text>
-                      )}
-                    </Flex>
-                  </Flex>
-                )
-              })}
+        <div className="historico">
+          {/* Nome e iniciais ficam no cabeçalho do painel; aqui, como falar com o cliente */}
+          <div className="historico-cliente">
+            <div className="historico-contato">
+              <span>
+                <PhoneOutlined aria-hidden="true" /> {cliente.telefone}
+              </span>
+              {cliente.email && (
+                <span>
+                  <MailOutlined aria-hidden="true" /> {cliente.email}
+                </span>
+              )}
+              <IconesCanais canais={cliente.canais} />
             </div>
+            <span className="texto-apoio">
+              {ultimo ? `Último atendimento ${haQuanto(ultimo.data)} (${dataBR(ultimo.data)})` : 'Ainda sem atendimentos concluídos'}
+            </span>
+          </div>
+
+          {cliente.observacoes && <p className="historico-observacoes">{cliente.observacoes}</p>}
+
+          <div className="numeros-resumo historico-numeros">
+            <div>
+              <span>Atendimentos</span>
+              <strong>{concluidos}</strong>
+            </div>
+            <div>
+              <span>Faltas</span>
+              <strong className={faltas ? 'tom-atencao' : undefined}>{faltas}</strong>
+            </div>
+            <div>
+              <span>Cancelados</span>
+              <strong className={cancelados ? 'tom-perigo' : undefined}>{cancelados}</strong>
+            </div>
+            <div>
+              <span>Total gasto</span>
+              <strong>{moeda(gasto)}</strong>
+            </div>
+          </div>
+
+          {proximo && (
+            <section className="historico-proximo" aria-label="Próximo agendamento">
+              <BlocoData data={inicioDe(proximo)} destaque />
+              <div className="historico-proximo-textos">
+                <span className="texto-apoio">Próximo agendamento, {inicioDe(proximo).format('dddd')}</span>
+                <Atendimento a={proximo} comLocais={comLocais} />
+              </div>
+              <EtiquetaStatus status={proximo.status} />
+            </section>
+          )}
+
+          <div className="historico-lista-cabecalho">
+            <h4>Agendamentos</h4>
+            <Segmented
+              size="small"
+              value={filtro}
+              onChange={(v) => {
+                setFiltro(v)
+                setLimite(POR_PAGINA)
+              }}
+              options={Object.entries(FILTROS).map(([value, f]) => ({ value, label: f.label }))}
+            />
+          </div>
+          {!agenda.verEquipe && parcial && <p className="historico-aviso texto-apoio">Mostrando só os atendimentos da sua agenda.</p>}
+
+          {lista.length === 0 && <EstadoVazio compacto titulo="Nenhum agendamento neste filtro" />}
+
+          {porMes(lista.slice(0, limite)).map((mes) => (
+            <section key={mes.chave} aria-label={dayjs(`${mes.chave}-01`).format('MMMM [de] YYYY')}>
+              <h5 className="historico-mes">{capitalizar(dayjs(`${mes.chave}-01`).format('MMMM [de] YYYY'))}</h5>
+              <ul className="lista-linhas">
+                {mes.itens.map((a) => (
+                  <li key={a.id} className={['historico-item', ['cancelado', 'nao_compareceu'].includes(a.status) && 'apagado'].filter(Boolean).join(' ')}>
+                    <BlocoData data={inicioDe(a)} />
+                    <Atendimento a={a} comLocais={comLocais} />
+                    <div className="historico-item-fim">
+                      <EtiquetaStatus status={a.status} />
+                      {a.preco != null && <span className="texto-apoio">{moeda(a.preco)}</span>}
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </section>
           ))}
 
           {lista.length > limite && (
-            <Button type="link" onClick={() => setLimite((n) => n + POR_PAGINA)} style={{ alignSelf: 'center', marginTop: 8 }}>
+            <Button type="link" className="historico-mais" onClick={() => setLimite((n) => n + POR_PAGINA)}>
               Ver mais {lista.length - limite}
             </Button>
           )}
-        </Flex>
+        </div>
       )}
-    </Drawer>
+    </PainelLateral>
   )
 }

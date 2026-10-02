@@ -1,93 +1,95 @@
-import { Card, Button, Flex, Tag, Typography, Empty, Alert, Tooltip } from 'antd'
-import { PlusOutlined, ClockCircleOutlined, UserOutlined, MenuUnfoldOutlined } from '@ant-design/icons'
-import { statusAgendamento } from '../../data/mock.js'
-import { moeda } from '../../utils/formatos.js'
-import { capitalizar, ehHoje, fimDe, inativo } from './util.js'
+import { Alert, Button, Tooltip } from 'antd'
+import { MenuUnfoldOutlined, PlusOutlined } from '@ant-design/icons'
+import { capitalizar, duracaoTexto, horaCurta, moeda, plural } from '../../utils/formatos.js'
+import { useNomes } from '../../data/useNomes.js'
+import { ehHoje, fimDe, inativo } from './util.js'
 import AceiteSolicitacao from '../AceiteSolicitacao.jsx'
 import LocalInfo from '../LocalInfo.jsx'
+import EstadoVazio from '../base/EstadoVazio.jsx'
+import { EtiquetaStatus } from '../Etiquetas.jsx'
 
-// Painel lateral: todos os atendimentos do dia selecionado, em ordem de horário
-export default function DetalheDia({ dia, agendamentos, bloqueios, podeCriar, podeEditar, onNovo, onAbrir, nomeCliente, nomeServico, nomeFunc, corDe, comServicos, localDe, onFechar }) {
+// Painel lateral: os atendimentos do dia selecionado, em ordem de horário
+export default function DetalheDia({ dia, agendamentos, bloqueios, podeCriar, podeEditar, comServicos, comLocais, onNovo, onAbrir, onFechar, destaqueId }) {
+  const nomes = useNomes()
   const lista = [...agendamentos].sort((a, b) => a.hora.localeCompare(b.hora))
   const ativos = lista.filter((a) => !inativo(a))
   const minutos = ativos.reduce((t, a) => t + (a.duracao ?? 0), 0)
   const total = ativos.reduce((t, a) => t + (a.preco ?? 0), 0)
 
+  const resumo = ativos.length
+    ? `${plural(ativos.length, 'atendimento', 'atendimentos')} em ${duracaoTexto(minutos)}${total > 0 ? `, ${moeda(total)}` : ''}`
+    : 'Nenhum atendimento'
+
   return (
-    <Card
-      className="agenda-detalhe"
-      extra={
-        onFechar && (
-          <Tooltip title="Recolher painel e ampliar o calendário">
-            <Button type="text" icon={<MenuUnfoldOutlined />} onClick={onFechar} />
+    <aside className="agenda-dia" aria-label="Atendimentos do dia">
+      <div className="agenda-dia-cabecalho">
+        <div>
+          <h2>
+            {capitalizar(dia.format('dddd, D [de] MMMM'))}
+            {ehHoje(dia) && <span className="marca-texto">hoje</span>}
+          </h2>
+          <p>{resumo}</p>
+        </div>
+        {onFechar && (
+          <Tooltip title="Recolher e ampliar o calendário">
+            <Button type="text" icon={<MenuUnfoldOutlined />} aria-label="Recolher painel do dia" onClick={onFechar} />
           </Tooltip>
-        )
-      }
-      title={
-        <Flex vertical>
-          <Flex align="center" gap={8}>
-            <span>{capitalizar(dia.format('dddd, DD [de] MMMM'))}</span>
-            {ehHoje(dia) && <Tag color="green">Hoje</Tag>}
-          </Flex>
-          <Typography.Text type="secondary" style={{ fontWeight: 'normal', fontSize: 13 }}>
-            {ativos.length} {ativos.length === 1 ? 'atendimento' : 'atendimentos'} · {Math.floor(minutos / 60)}h
-            {String(minutos % 60).padStart(2, '0')} agendadas{total > 0 && ` · ${moeda(total)}`}
-          </Typography.Text>
-        </Flex>
-      }
-    >
-      {podeCriar && (
-        <Button type="primary" block icon={<PlusOutlined />} onClick={onNovo} style={{ marginBottom: 16 }}>
-          Agendar neste dia
-        </Button>
-      )}
-      {bloqueios.map((b) => (
-        <Alert
-          key={b.id}
-          type="warning"
-          showIcon
-          style={{ marginBottom: 12 }}
-          title={b.quem == null ? `Loja fechada: ${b.motivo}` : `${b.quem} indisponível: ${b.motivo}`}
-        />
-      ))}
+        )}
+      </div>
 
-      {lista.length === 0 && <Empty description="Nenhum agendamento neste dia" />}
+      <div className="agenda-dia-corpo">
+        {podeCriar && (
+          <Button block icon={<PlusOutlined />} onClick={onNovo}>
+            Agendar neste dia
+          </Button>
+        )}
 
-      <Flex vertical gap={10}>
-        {lista.map((a) => (
-          <div
-            key={a.id}
-            className={['agenda-detalhe-item', inativo(a) && 'inativo', a.status === 'pendente' && 'pendente'].filter(Boolean).join(' ')}
-            style={{ borderLeftColor: corDe(a.funcionarioId) }}
-            onClick={() => onAbrir(a)}
-          >
-            <Flex justify="space-between" align="center">
-              <Typography.Text strong>
-                <ClockCircleOutlined /> {a.hora} – {fimDe(a)}
-              </Typography.Text>
-              <Tag color={statusAgendamento[a.status]?.color} style={{ marginInlineEnd: 0 }}>
-                {statusAgendamento[a.status]?.label}
-              </Tag>
-            </Flex>
-            <div className="agenda-detalhe-cliente">{nomeCliente(a.clienteId)}</div>
-            {comServicos && <Typography.Text>{nomeServico(a.servicoId)}</Typography.Text>}
-            {localDe && (
-              <div>
-                <LocalInfo local={localDe(a.localId)} secundario />
-              </div>
-            )}
-            <Flex justify="space-between">
-              <Typography.Text type="secondary">
-                <UserOutlined /> {nomeFunc(a.funcionarioId)}
-              </Typography.Text>
-              <Typography.Text type="secondary">
-                {a.duracao} min{a.preco != null && ` · ${moeda(a.preco)}`}
-              </Typography.Text>
-            </Flex>
-            {a.status === 'pendente' && podeEditar(a) && <AceiteSolicitacao agendamento={a} />}
-          </div>
+        {bloqueios.map((b) => (
+          <Alert
+            key={b.id}
+            type="warning"
+            showIcon
+            title={b.quem == null ? `Loja fechada: ${b.motivo}` : `${b.quem} indisponível: ${b.motivo}`}
+          />
         ))}
-      </Flex>
-    </Card>
+
+        {lista.length === 0 ? (
+          <EstadoVazio compacto titulo="Dia livre" descricao={podeCriar ? 'Clique num horário da grade para agendar.' : undefined} />
+        ) : (
+          <ul className="agenda-dia-lista">
+            {lista.map((a) => (
+              <li
+                key={a.id}
+                className={['agenda-item', inativo(a) && 'inativo', a.id === destaqueId && 'em-edicao'].filter(Boolean).join(' ')}
+                style={{ '--cor-profissional': nomes.corDe(a.funcionarioId) }}
+              >
+                <div className="agenda-item-topo">
+                  <span className="agenda-item-hora">
+                    {horaCurta(a.hora)} às {horaCurta(fimDe(a))}
+                  </span>
+                  <EtiquetaStatus status={a.status} />
+                </div>
+                <button type="button" className="agenda-item-cliente" onClick={() => onAbrir(a)}>
+                  {nomes.cliente(a.clienteId)}
+                </button>
+                <div className="agenda-item-detalhes">
+                  <span>{comServicos ? nomes.servico(a.servicoId) : duracaoTexto(a.duracao)}</span>
+                  {a.preco != null && <span>{moeda(a.preco)}</span>}
+                </div>
+                <div className="agenda-item-detalhes">
+                  <span>{nomes.profissional(a.funcionarioId)}</span>
+                  {comLocais && <LocalInfo local={nomes.local(a.localId)} />}
+                </div>
+                {a.status === 'pendente' && podeEditar(a) && (
+                  <div className="agenda-item-acoes">
+                    <AceiteSolicitacao agendamento={a} />
+                  </div>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </aside>
   )
 }

@@ -1,12 +1,19 @@
-import { Row, Col, Card, Statistic, Flex, Tag, Typography, Button, Divider } from 'antd'
-import { ShopOutlined, TeamOutlined, DollarOutlined, WarningOutlined } from '@ant-design/icons'
+import { Button } from 'antd'
 import { useNavigate } from 'react-router-dom'
 import dayjs from 'dayjs'
 import { useData } from '../../data/DataContext.jsx'
 import { modulos } from '../../data/acesso.js'
-import { operacoesHistorico, statusLoja, tabelasLoja, tabelasPlataforma, tiposLoja } from '../../data/plataforma.js'
-import { moeda } from '../../utils/formatos.js'
+import { tabelasLoja, tabelasPlataforma, tiposLoja } from '../../data/plataforma.js'
+import { moeda, plural } from '../../utils/formatos.js'
 import { usePlataforma } from '../usePlataforma.js'
+import Pagina from '../../components/base/Pagina.jsx'
+import Secao from '../../components/base/Secao.jsx'
+import Tabela from '../../components/base/Tabela.jsx'
+import EstadoVazio from '../../components/base/EstadoVazio.jsx'
+import { EtiquetaLoja, EtiquetaOperacao } from '../../components/Etiquetas.jsx'
+
+const opcionais = modulos.filter((m) => m.opcional)
+const nomeTabela = (t) => tabelasLoja[t] ?? tabelasPlataforma[t] ?? t
 
 export default function VisaoGeral() {
   const { lojas, historico, superadmins } = useData()
@@ -18,102 +25,142 @@ export default function VisaoGeral() {
   const funcionariosAtivos = ativas.reduce((t, l) => t + funcionariosDe(l).filter((f) => f.ativo).length, 0)
   const receita = ativas.reduce((t, l) => t + (plano(l.planoId)?.precoMensal ?? 0), 0)
 
-  const nomeLoja = (id) => lojas.itens.find((l) => l.id === id)?.nomeFantasia
-  const nomeSuperadmin = (id) => superadmins.itens.find((s) => s.id === id)?.nome ?? '—'
+  // Módulos liberados com prazo que vence nos próximos 30 dias
+  const expirando = lojas.itens.flatMap((l) =>
+    Object.entries(l.modulosInfo ?? {})
+      .filter(([codigo, info]) => l.modulos?.[codigo] && info.expiraEm && dayjs(info.expiraEm).diff(dayjs(), 'day') <= 30)
+      .map(([codigo, info]) => ({ loja: l, codigo, expiraEm: info.expiraEm })),
+  )
+
+  const nomeLoja = (id) => lojas.todos.find((l) => l.id === id)?.nomeFantasia
+  const nomeSuperadmin = (id) => superadmins.todos.find((s) => s.id === id)?.nome ?? '—'
   // Últimas alterações feitas pelos usuários admin, em qualquer loja
   const ultimas = historico
     .filter((h) => h.superadminId)
     .sort((a, b) => b.criadoEm.localeCompare(a.criadoEm))
     .slice(0, 6)
-  const nomeTabela = (t) => tabelasLoja[t] ?? tabelasPlataforma[t] ?? t
 
-  const cards = [
-    { titulo: 'Lojas ativas', valor: ativas.length, icone: <ShopOutlined /> },
-    { titulo: 'Lojas suspensas', valor: suspensas.length, icone: <WarningOutlined /> },
-    { titulo: 'Funcionários ativos', valor: funcionariosAtivos, icone: <TeamOutlined /> },
-    { titulo: 'Receita mensal (planos)', valor: moeda(receita), icone: <DollarOutlined /> },
-  ]
+  const porTipo = Object.entries(tiposLoja).map(([codigo, t]) => {
+    const doTipo = lojas.itens.filter((l) => l.tipo === codigo)
+    const contar = (status) => doTipo.filter((l) => l.status === status).length
+    return { id: codigo, nome: t.nome, ativa: contar('ativa'), suspensa: contar('suspensa'), cancelada: contar('cancelada') }
+  })
+
+  const numero = (n) => (n ? n : <span className="texto-apoio">0</span>)
 
   return (
-    <Row gutter={[16, 16]}>
-      {cards.map((c) => (
-        <Col key={c.titulo} xs={24} sm={12} xl={6}>
-          <Card>
-            <Statistic title={c.titulo} value={c.valor} prefix={c.icone} />
-          </Card>
-        </Col>
-      ))}
+    <Pagina titulo="Visão geral" descricao="Situação das lojas da plataforma e da receita dos planos.">
+      <div className="numeros-resumo">
+        <div>
+          <span>Lojas ativas</span>
+          <strong>{ativas.length}</strong>
+        </div>
+        <div>
+          <span>Lojas suspensas</span>
+          <strong>{suspensas.length}</strong>
+        </div>
+        <div>
+          <span>Funcionários nas lojas ativas</span>
+          <strong>{funcionariosAtivos}</strong>
+        </div>
+        <div>
+          <span>Receita mensal dos planos</span>
+          <strong>{moeda(receita)}</strong>
+        </div>
+      </div>
 
-      <Col xs={24} xl={8}>
-        <Card title="Lojas por tipo" style={{ height: '100%' }}>
-          <Flex vertical gap={12}>
-            {Object.entries(tiposLoja).map(([codigo, t]) => {
-              const doTipo = lojas.itens.filter((l) => l.tipo === codigo)
-              return (
-                <Flex key={codigo} justify="space-between" align="center">
-                  <Typography.Text strong>{t.nome}</Typography.Text>
-                  <Flex gap={4}>
-                    {Object.entries(statusLoja).map(([status, s]) => {
-                      const n = doTipo.filter((l) => l.status === status).length
-                      return n > 0 && <Tag key={status} color={s.color}>{n} {s.label.toLowerCase()}{n > 1 ? 's' : ''}</Tag>
-                    })}
-                    {doTipo.length === 0 && <Typography.Text type="secondary">nenhuma</Typography.Text>}
-                  </Flex>
-                </Flex>
-              )
-            })}
-          </Flex>
-        </Card>
-      </Col>
+      <div className="grade-principal">
+        <div className="pilha">
+          <Secao titulo="Precisa de atenção">
+            {suspensas.length + expirando.length === 0 ? (
+              <EstadoVazio compacto titulo="Nada pendente" descricao="Nenhuma loja suspensa nem módulo perto de vencer." />
+            ) : (
+              <ul className="lista-linhas lista-compacta">
+                {suspensas.map((l) => (
+                  <li key={l.id}>
+                    <button type="button" className="link-tabela" onClick={() => navigate(`/superadmin/lojas/${l.id}`)}>
+                      {l.nomeFantasia}
+                    </button>
+                    <EtiquetaLoja status={l.status} />
+                  </li>
+                ))}
+                {expirando.map((e) => (
+                  <li key={`${e.loja.id}-${e.codigo}`}>
+                    <button type="button" className="link-tabela" onClick={() => navigate(`/superadmin/lojas/${e.loja.id}`)}>
+                      {e.loja.nomeFantasia}
+                    </button>
+                    <span className="texto-apoio">
+                      {modulos.find((m) => m.codigo === e.codigo)?.nome} vence em {dayjs(e.expiraEm).format('DD/MM/YYYY')}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Secao>
 
-      <Col xs={24} xl={8}>
-        <Card title="Módulos opcionais nas lojas ativas" style={{ height: '100%' }}>
-          <Flex vertical gap={12}>
-            {modulos
-              .filter((m) => m.opcional)
-              .map((m) => {
+          <Secao rente titulo="Lojas por tipo">
+            <Tabela
+              size="small"
+              pagination={false}
+              dataSource={porTipo}
+              columns={[
+                { title: 'Tipo', dataIndex: 'nome', render: (n) => <strong>{n}</strong> },
+                { title: 'Ativas', dataIndex: 'ativa', align: 'right', render: numero },
+                { title: 'Suspensas', dataIndex: 'suspensa', align: 'right', render: numero },
+                { title: 'Canceladas', dataIndex: 'cancelada', align: 'right', render: numero },
+              ]}
+            />
+          </Secao>
+
+          <Secao titulo="Módulos opcionais em uso" descricao={`Entre as ${plural(ativas.length, 'loja ativa', 'lojas ativas')}.`}>
+            <ul className="lista-linhas lista-compacta">
+              {opcionais.map((m) => {
                 const n = ativas.filter((l) => l.modulos?.[m.codigo]).length
                 return (
-                  <Flex key={m.codigo} justify="space-between">
-                    <Typography.Text strong>{m.nome}</Typography.Text>
-                    <Typography.Text type="secondary">
-                      {n} de {ativas.length} lojas
-                    </Typography.Text>
-                  </Flex>
+                  <li key={m.codigo} className="uso-modulo">
+                    <span>{m.nome}</span>
+                    <span className="uso-modulo-barra" aria-hidden="true">
+                      <span style={{ width: `${ativas.length ? (n / ativas.length) * 100 : 0}%` }} />
+                    </span>
+                    <span className="numeros">
+                      {n} de {ativas.length}
+                    </span>
+                  </li>
                 )
               })}
-          </Flex>
-        </Card>
-      </Col>
+            </ul>
+          </Secao>
+        </div>
 
-      <Col xs={24} xl={8}>
-        <Card
-          title="Últimas ações dos admins"
-          style={{ height: '100%' }}
-          extra={<Button type="link" onClick={() => navigate('/superadmin/auditoria')}>Ver tudo</Button>}
+        <Secao
+          titulo="Últimas ações dos admins"
+          acoes={
+            <Button type="link" size="small" onClick={() => navigate('/superadmin/auditoria')}>
+              Abrir auditoria
+            </Button>
+          }
         >
-          <Flex vertical>
-            {ultimas.map((a, i) => (
-              <div key={a.id}>
-                {i > 0 && <Divider style={{ margin: '10px 0' }} />}
-                <Flex justify="space-between" gap={8}>
-                  <span>
-                    <Tag color={operacoesHistorico[a.operacao]?.color}>{operacoesHistorico[a.operacao]?.label}</Tag>
-                    {nomeTabela(a.tabela)}
+          {ultimas.length ? (
+            <ul className="lista-linhas acoes-admin">
+              {ultimas.map((a) => (
+                <li key={a.id}>
+                  <div className="acoes-admin-topo">
+                    <EtiquetaOperacao operacao={a.operacao} />
+                    <span>{nomeTabela(a.tabela)}</span>
+                    <span className="texto-apoio numeros">{dayjs(a.criadoEm).format('DD/MM HH:mm')}</span>
+                  </div>
+                  <span className="texto-apoio">
+                    {nomeSuperadmin(a.superadminId)}
+                    {a.lojaId ? ` em ${nomeLoja(a.lojaId)}` : ', na plataforma'}
                   </span>
-                  <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                    {dayjs(a.criadoEm).format('DD/MM HH:mm')}
-                  </Typography.Text>
-                </Flex>
-                <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                  {nomeSuperadmin(a.superadminId)}
-                  {a.lojaId && ` · ${nomeLoja(a.lojaId)}`}
-                </Typography.Text>
-              </div>
-            ))}
-          </Flex>
-        </Card>
-      </Col>
-    </Row>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <EstadoVazio compacto titulo="Nenhuma ação registrada" />
+          )}
+        </Secao>
+      </div>
+    </Pagina>
   )
 }

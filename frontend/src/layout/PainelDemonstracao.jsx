@@ -1,5 +1,5 @@
-import { Drawer, Alert, Select, Switch, Flex, Typography, Divider, Button } from 'antd'
-import { CrownOutlined } from '@ant-design/icons'
+import { Drawer, Alert, Select, Switch, Flex, Button, Form } from 'antd'
+import { ControlOutlined } from '@ant-design/icons'
 import { useNavigate } from 'react-router-dom'
 import { useData } from '../data/DataContext.jsx'
 import { modulos } from '../data/acesso.js'
@@ -13,66 +13,59 @@ export default function PainelDemonstracao({ open, onClose }) {
   const nomePerfil = (id) => perfis.itens.find((p) => p.id === id)?.nome ?? '—'
 
   return (
-    <Drawer title="Demonstração" open={open} onClose={onClose}>
+    <Drawer
+      title="Demonstração"
+      open={open}
+      onClose={onClose}
+      footer={
+        <Button
+          block
+          icon={<ControlOutlined />}
+          onClick={() => {
+            onClose()
+            navigate('/superadmin')
+          }}
+        >
+          Abrir a prévia do SUPERADMIN
+        </Button>
+      }
+    >
       <Alert
         type="info"
         showIcon
         title="Painel provisório"
-        description="No sistema real o usuário vem do login, e os módulos e o tipo da loja são definidos no painel SUPERADMIN."
-        style={{ marginBottom: 24 }}
+        description="No sistema real o usuário vem do login, e os módulos e o tipo da loja são definidos no SUPERADMIN."
+        className="alerta-formulario"
       />
 
-      <Typography.Title level={5}>Entrar como</Typography.Title>
-      <Select
-        style={{ width: '100%' }}
-        value={sessao.usuarioId}
-        onChange={sessao.entrarComo}
-        options={funcionarios.itens
-          .filter((f) => f.ativo)
-          .map((f) => ({ value: f.id, label: `${f.nome} (${nomePerfil(f.perfilId)})` }))}
-      />
+      <Form layout="vertical">
+        <Form.Item label="Entrar como" extra="Troque para ver o painel com os acessos de outro perfil.">
+          <Select
+            value={sessao.usuarioId}
+            onChange={sessao.entrarComo}
+            options={funcionarios.itens
+              .filter((f) => f.ativo)
+              .map((f) => ({ value: f.id, label: `${f.nome} (${nomePerfil(f.perfilId)})` }))}
+          />
+        </Form.Item>
 
-      <Divider />
+        <Form.Item label="Módulos da loja" extra="Ligados ou desligados pelo superadmin, um a um.">
+          <Flex vertical gap={12} className="lista-modulos">
+            {modulos
+              .filter((m) => m.opcional)
+              .map((m) => (
+                <Flex key={m.codigo} justify="space-between" align="center" component="label">
+                  <span>{m.nome}</span>
+                  <Switch checked={!!ativos.ativos[m.codigo]} onChange={(v) => ativos.definir(m.codigo, v)} />
+                </Flex>
+              ))}
+          </Flex>
+        </Form.Item>
 
-      <Typography.Title level={5}>Módulos da loja</Typography.Title>
-      <Typography.Paragraph type="secondary">Ativados ou desativados pelo superadmin, um a um.</Typography.Paragraph>
-      <Flex vertical gap={12}>
-        {modulos
-          .filter((m) => m.opcional)
-          .map((m) => (
-            <Flex key={m.codigo} justify="space-between" align="center">
-              <span>{m.nome}</span>
-              <Switch checked={!!ativos.ativos[m.codigo]} onChange={(v) => ativos.definir(m.codigo, v)} />
-            </Flex>
-          ))}
-      </Flex>
-
-      <Divider />
-
-      <Typography.Title level={5}>Tipo da loja</Typography.Title>
-      <Typography.Paragraph type="secondary">
-        Não muda nada no painel da loja. Define qual site do consumidor final a loja usa.
-      </Typography.Paragraph>
-      <Select
-        style={{ width: '100%' }}
-        value={loja.dados.tipo}
-        onChange={(tipo) => loja.atualizar({ tipo }, null)}
-        options={opcoesTipoLoja}
-      />
-
-      <Divider />
-
-      <Button
-        block
-        type="primary"
-        icon={<CrownOutlined />}
-        onClick={() => {
-          onClose()
-          navigate('/superadmin')
-        }}
-      >
-        Abrir prévia do painel SUPERADMIN
-      </Button>
+        <Form.Item label="Tipo da loja" extra="Não muda o painel. Define qual site do consumidor a loja usa.">
+          <Select value={loja.dados.tipo} onChange={(tipo) => loja.atualizar({ tipo }, null)} options={opcoesTipoLoja} />
+        </Form.Item>
+      </Form>
     </Drawer>
   )
 }

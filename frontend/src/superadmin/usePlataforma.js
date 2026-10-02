@@ -1,6 +1,7 @@
 import { useData } from '../data/DataContext.jsx'
 import { codigosOpcionais } from '../data/acesso.js'
 import { tiposLoja } from '../data/plataforma.js'
+import { coresAgenda } from '../tema.js'
 
 const PERFIS_PADRAO = ['Administrador', 'Recepção', 'Profissional']
 
@@ -30,7 +31,7 @@ export function usePlataforma() {
       const { perfil, ...resto } = dados
       const perfilId = perfis.itens.find((p) => p.nome === perfil)?.id
       if (id) funcionarios.atualizar(id, { ...resto, perfilId }, null)
-      else funcionarios.adicionar({ cargo: 'Administrador', cor: '#0f766e', ...resto, perfilId, criadoPorSuperadmin: true }, null)
+      else funcionarios.adicionar({ cargo: 'Administrador', cor: coresAgenda[0], ...resto, perfilId, criadoPorSuperadmin: true }, null)
       return
     }
     const lista = loja.funcionarios ?? []

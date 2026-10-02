@@ -1,0 +1,217 @@
+.historico {
+  display: flex;
+  flex-direction: column;
+  padding-bottom: var(--espaco-5);
+  font-variant-numeric: tabular-nums;
+}
+
+.painel-historico .ant-drawer-body {
+  padding: 0;
+}
+
+.historico-cliente {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: var(--espaco-4) var(--espaco-5);
+}
+
+.historico-contato {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px var(--espaco-4);
+  color: var(--cor-texto);
+}
+
+.historico-observacoes {
+  margin: 0 var(--espaco-5) var(--espaco-4);
+  padding: var(--espaco-2) var(--espaco-3);
+  border-radius: var(--raio-controle);
+  background: var(--tom-atencao-fundo);
+}
+
+.historico-numeros {
+  margin: 0 var(--espaco-5);
+  /* Contagens são curtas; o total gasto pode ter 6 dígitos e ganha a coluna mais larga */
+  grid-template-columns: repeat(3, minmax(0, 0.8fr)) minmax(0, 1.4fr);
+}
+
+.historico-numeros > div {
+  padding: var(--espaco-3) var(--espaco-4);
+}
+
+.historico-numeros strong {
+  font-size: 20px;
+}
+
+.tom-atencao {
+  color: var(--tom-atencao);
+}
+
+.tom-perigo {
+  color: var(--tom-perigo);
+}
+
+.historico-proximo {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--espaco-3);
+  margin: var(--espaco-4) var(--espaco-5) 0;
+  padding: var(--espaco-3);
+  border: 1px solid var(--cor-tinta-borda);
+  border-radius: var(--raio-conteiner);
+  background: var(--cor-tinta-clara);
+}
+
+.historico-proximo-textos {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.historico-lista-cabecalho {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--espaco-2);
+  padding: var(--espaco-5) var(--espaco-5) var(--espaco-2);
+}
+
+.historico-lista-cabecalho h4 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.historico-aviso {
+  margin: 0;
+  padding: 0 var(--espaco-5);
+}
+
+.historico-mes {
+  margin: 0;
+  padding: var(--espaco-4) var(--espaco-5) var(--espaco-2);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--cor-texto-secundario);
+}
+
+.historico-item {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--espaco-3);
+  padding: 10px var(--espaco-5);
+}
+
+.historico-item.apagado .atendimento-textos {
+  opacity: 0.72;
+}
+
+.historico-item-fim {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.historico-mais {
+  align-self: center;
+  margin-top: var(--espaco-2);
+}
+
+.bloco-data {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 46px;
+  height: 50px;
+  flex-shrink: 0;
+  border-radius: var(--raio-controle);
+  line-height: 1.1;
+  color: var(--cor-texto);
+  background: var(--tom-neutro-fundo);
+}
+
+.bloco-data strong {
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.bloco-data span {
+  font-size: 12px;
+  color: var(--cor-texto-secundario);
+}
+
+.bloco-data.destaque {
+  color: var(--cor-sobre-escuro);
+  background: var(--cor-tinta);
+}
+
+.bloco-data.destaque span {
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.atendimento-textos {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+  font-size: 13px;
+  color: var(--cor-texto-secundario);
+}
+
+.atendimento-textos strong {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--cor-texto);
+}
+
+.atendimento-textos .riscado {
+  text-decoration: line-through;
+}
+
+.atendimento-quem {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px var(--espaco-3);
+}
+
+.atendimento-quem .ponto-cor {
+  width: 8px;
+  height: 8px;
+  margin-right: 2px;
+}
+
+.atendimento-textos em {
+  font-size: 12px;
+}
+
+@media (max-width: 575px) {
+  .historico-cliente,
+  .historico-lista-cabecalho,
+  .historico-item,
+  .historico-mes {
+    padding-inline: var(--espaco-4);
+  }
+
+  .historico-numeros,
+  .historico-proximo,
+  .historico-observacoes {
+    margin-inline: var(--espaco-4);
+  }
+
+  .historico-numeros {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .historico-numeros > div:nth-child(2) {
+    border-top: 0;
+  }
+}

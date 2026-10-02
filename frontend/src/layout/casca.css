@@ -1,0 +1,208 @@
+.casca {
+  min-height: 100vh;
+}
+
+.pular-para-conteudo {
+  position: absolute;
+  left: var(--espaco-2);
+  top: -48px;
+  z-index: 100;
+  padding: var(--espaco-2) var(--espaco-3);
+  border-radius: var(--raio-controle);
+  color: var(--cor-sobre-escuro);
+  background: var(--cor-tinta);
+}
+
+.pular-para-conteudo:focus {
+  top: var(--espaco-2);
+}
+
+.casca-lateral {
+  position: sticky !important;
+  top: 0;
+  height: 100vh;
+  border-right: 1px solid var(--cor-linha);
+}
+
+.casca-lateral .ant-layout-sider-children {
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.casca-lateral .ant-layout-sider-trigger {
+  border-top: 1px solid var(--cor-linha-suave);
+}
+
+.casca-escura .casca-lateral,
+.casca-escura.casca-lateral {
+  border-right-color: transparent;
+}
+
+.casca-escura .ant-layout-sider-trigger {
+  border-top-color: var(--cor-linha-escura);
+}
+
+.casca-marca {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 64px;
+  padding: var(--espaco-3) 18px;
+  overflow: hidden;
+}
+
+.casca-marca-textos {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 1.25;
+}
+
+.casca-marca-textos strong {
+  overflow: hidden;
+  font-size: 15px;
+  font-weight: 700;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.casca-marca-textos span {
+  overflow: hidden;
+  font-size: 12px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--cor-texto-terciario);
+}
+
+.casca-escura .casca-marca {
+  color: var(--cor-sobre-escuro);
+}
+
+.casca-escura .casca-marca-textos span {
+  color: var(--cor-sobre-escuro-suave);
+}
+
+/* No antd 6 a classe do Drawer fica no próprio .ant-drawer-section */
+.ant-drawer-section.casca-gaveta.casca-escura {
+  background: var(--cor-texto);
+}
+
+.casca-gaveta .ant-menu,
+.casca-lateral .ant-menu {
+  border-inline-end: 0 !important;
+}
+
+.casca-topo {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--espaco-3);
+  border-bottom: 1px solid var(--cor-linha);
+  line-height: normal;
+}
+
+.casca-topo-acoes {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--espaco-2);
+  margin-left: auto;
+  min-width: 0;
+}
+
+.casca-abrir-menu {
+  display: none !important;
+}
+
+.casca-conteudo {
+  padding: var(--espaco-5) var(--espaco-6) var(--espaco-7);
+  outline: none;
+}
+
+/* Quem está logado */
+.casca-usuario {
+  display: flex;
+  align-items: center;
+  gap: var(--espaco-2);
+  padding-left: var(--espaco-3);
+  margin-left: var(--espaco-1);
+  border-left: 1px solid var(--cor-linha);
+  min-width: 0;
+}
+
+.casca-usuario-textos {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.25;
+  min-width: 0;
+}
+
+.casca-usuario-textos strong {
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.casca-usuario-textos span {
+  font-size: 12px;
+  color: var(--cor-texto-secundario);
+  white-space: nowrap;
+}
+
+/* Marca da plataforma: quadrado de tinta com a linha marcada */
+.marca-plataforma {
+  display: block;
+  flex-shrink: 0;
+}
+
+@media (max-width: 991px) {
+  .casca-lateral {
+    display: none;
+  }
+
+  .casca-abrir-menu {
+    display: inline-flex !important;
+  }
+
+  .casca-conteudo {
+    padding: var(--espaco-4) var(--espaco-4) var(--espaco-6);
+  }
+
+  .casca-topo {
+    padding-inline: var(--espaco-3) !important;
+  }
+}
+
+/* No celular os botões do topo mostram só o ícone */
+@media (max-width: 767px) {
+  .rotulo-largo {
+    display: none;
+  }
+
+  .casca-usuario-textos {
+    display: none;
+  }
+
+  .casca-usuario {
+    padding-left: var(--espaco-2);
+  }
+}
+
+.marca-loja.ant-avatar {
+  flex-shrink: 0;
+  font-weight: 700;
+  background: var(--cor-tinta);
+}
+
+.casca-usuario-avatar.ant-avatar {
+  flex-shrink: 0;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--cor-tinta);
+  background: var(--cor-tinta-clara);
+}

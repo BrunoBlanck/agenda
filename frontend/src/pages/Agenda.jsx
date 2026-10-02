@@ -1,16 +1,21 @@
 import { useState } from 'react'
-import { Card, Row, Col, Select, Button, Flex, Typography, Segmented, Tooltip } from 'antd'
-import { LeftOutlined, RightOutlined, MenuFoldOutlined } from '@ant-design/icons'
+import { Button, Flex, Segmented, Select, Tooltip } from 'antd'
+import { LeftOutlined, MenuFoldOutlined, PlusOutlined, RightOutlined } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import { useData } from '../data/DataContext.jsx'
 import { useAcesso } from '../data/useAcesso.js'
-import AgendamentoModal from '../components/AgendamentoModal.jsx'
+import AgendamentoPainel from '../components/AgendamentoPainel.jsx'
+import { usePainel } from '../components/base/usePainel.js'
 import VisaoSemana from '../components/agenda/VisaoSemana.jsx'
 import VisaoMes from '../components/agenda/VisaoMes.jsx'
 import DetalheDia from '../components/agenda/DetalheDia.jsx'
-import { COR_PADRAO, capitalizar, diasDaSemana, diasDoMes, minutosDe } from '../components/agenda/util.js'
+import Pagina from '../components/base/Pagina.jsx'
+import Secao from '../components/base/Secao.jsx'
+import PontoCor from '../components/base/PontoCor.jsx'
+import { COR_PADRAO, diasDaSemana, diasDoMes, minutosDe } from '../components/agenda/util.js'
 import { alvoBloqueio, bloqueioAtinge, jornadaDe } from '../data/horarios.js'
-import { nomeCompleto } from '../utils/formatos.js'
+import { capitalizar } from '../utils/formatos.js'
+import '../components/agenda/agenda.css'
 
 const unidade = { semana: 'week', mes: 'month' }
 
@@ -31,14 +36,22 @@ const gravarPainel = (aberto) => {
   }
 }
 
+const tituloPeriodo = (modo, referencia) => {
+  if (modo === 'mes') return capitalizar(referencia.format('MMMM [de] YYYY'))
+  const [inicio, fim] = [diasDaSemana(referencia)[0], diasDaSemana(referencia)[6]]
+  return inicio.isSame(fim, 'month')
+    ? `${inicio.format('D')} a ${fim.format('D [de] MMMM [de] YYYY')}`
+    : `${inicio.format('D [de] MMM')} a ${fim.format('D [de] MMM [de] YYYY')}`
+}
+
 export default function Agenda() {
-  const { agendamentos, clientes, funcionarios, perfis, servicos, jornadas, bloqueios, locais } = useData()
+  const { agendamentos, funcionarios, perfis, jornadas, bloqueios } = useData()
   const { agenda, usuario, moduloAtivo } = useAcesso()
   const [modo, setModo] = useState('semana')
   const [referencia, setReferencia] = useState(dayjs()) // semana/mês exibido
   const [dia, setDia] = useState(dayjs()) // dia detalhado no painel lateral
   const [profissional, setProfissional] = useState(null)
-  const [modal, setModal] = useState({ open: false, agendamento: null, hora: null })
+  const painelAgendamento = usePainel() // agendamento aberto; {hora} = novo naquele horário
   const [painelAberto, setPainelAberto] = useState(lerPainel)
   const alternarPainel = (aberto) => {
     setPainelAberto(aberto)
@@ -46,10 +59,6 @@ export default function Agenda() {
   }
 
   const func = (id) => funcionarios.itens.find((f) => f.id === id)
-  const nomeCliente = (id) => nomeCompleto(clientes.itens.find((c) => c.id === id)) || '—'
-  const nomeFunc = (id) => func(id)?.nome ?? '—'
-  const nomeServico = (id) => servicos.itens.find((s) => s.id === id)?.nome ?? 'Atendimento'
-  const corDe = (id) => func(id)?.cor ?? COR_PADRAO
 
   // Quem só vê a própria agenda fica sempre filtrado em si mesmo
   const filtroFunc = agenda.verEquipe ? profissional : usuario?.id
@@ -59,7 +68,7 @@ export default function Agenda() {
     .filter((b) => !filtroFunc || bloqueioAtinge(b, func(filtroFunc)))
     .map((b) => ({ ...b, quem: alvoBloqueio(b, funcionarios.itens, perfis.itens) }))
 
-  // Faixa de horas da semana: cobre as jornadas e os agendamentos, com mínimo de 08:00 às 18:00
+  // Faixa de horas da semana: cobre as jornadas e os agendamentos, com mínimo de 8h às 18h
   const minutosUsados = [
     ...(filtroFunc ? jornadaDe(func(filtroFunc), jornadas.itens) : jornadas.itens).flatMap((j) => [minutosDe(j.inicio), minutosDe(j.fim)]),
     ...visiveis.flatMap((a) => [minutosDe(a.hora), minutosDe(a.hora) + (a.duracao ?? 0)]),
@@ -84,53 +93,54 @@ export default function Agenda() {
     setReferencia(dia)
   }
 
-  const semana = diasDaSemana(referencia)
-  const titulo =
-    modo === 'mes'
-      ? referencia.format('MMMM [de] YYYY')
-      : semana[0].isSame(semana[6], 'month')
-        ? `${semana[0].format('DD')} a ${semana[6].format('DD [de] MMMM [de] YYYY')}`
-        : `${semana[0].format('DD [de] MMM')} a ${semana[6].format('DD [de] MMM [de] YYYY')}`
-
-  const chaveDia = dia.format('YYYY-MM-DD')
   const novo = (data, hora = null) => {
     setDia(data)
-    setModal({ open: true, agendamento: null, hora })
+    painelAgendamento.abrir({ hora })
   }
+  const abrir = (a) => painelAgendamento.abrir(a)
+  const chaveDia = dia.format('YYYY-MM-DD')
 
   return (
-    <Row gutter={[16, 16]} align="top">
-      <Col xs={24} xl={painelAberto ? 17 : 24}>
-        <Card>
-          <Flex justify="space-between" align="center" wrap gap={12} style={{ marginBottom: 16 }}>
-            <Flex align="center" gap={8}>
+    <Pagina
+      titulo="Agenda"
+      descricao={agenda.verEquipe ? undefined : 'Mostrando só a sua agenda.'}
+      acoes={
+        agenda.criar && (
+          <Button type="primary" icon={<PlusOutlined />} onClick={() => novo(dia)}>
+            Agendar
+          </Button>
+        )
+      }
+    >
+      <div className={painelAberto ? 'agenda-layout' : 'agenda-layout sem-painel'}>
+        <Secao>
+          <div className="agenda-barra">
+            <div className="agenda-navegacao">
               <Button onClick={irParaHoje}>Hoje</Button>
-              <Button icon={<LeftOutlined />} onClick={() => navegar(-1)} />
-              <Button icon={<RightOutlined />} onClick={() => navegar(1)} />
-              <Typography.Title level={5} style={{ margin: '0 0 0 8px' }}>
-                {capitalizar(titulo)}
-              </Typography.Title>
-            </Flex>
-            <Flex align="center" gap={8} wrap>
-              {agenda.verEquipe ? (
+              <Button icon={<LeftOutlined />} aria-label={modo === 'mes' ? 'Mês anterior' : 'Semana anterior'} onClick={() => navegar(-1)} />
+              <Button icon={<RightOutlined />} aria-label={modo === 'mes' ? 'Próximo mês' : 'Próxima semana'} onClick={() => navegar(1)} />
+              <h2 className="agenda-periodo" aria-live="polite">
+                {tituloPeriodo(modo, referencia)}
+              </h2>
+            </div>
+            <div className="agenda-filtros">
+              {agenda.verEquipe && (
                 <Select
                   allowClear
                   placeholder="Todos os profissionais"
-                  style={{ minWidth: 220 }}
+                  aria-label="Profissional"
                   value={profissional}
                   onChange={setProfissional}
                   options={funcionarios.itens.map((f) => ({
                     value: f.id,
                     label: (
                       <Flex align="center" gap={8}>
-                        <span className="agenda-cor" style={{ background: f.cor ?? COR_PADRAO }} />
+                        <PontoCor cor={f.cor ?? COR_PADRAO} />
                         {f.nome}
                       </Flex>
                     ),
                   }))}
                 />
-              ) : (
-                <Typography.Text type="secondary">Mostrando apenas a sua agenda</Typography.Text>
               )}
               <Segmented
                 value={modo}
@@ -147,24 +157,21 @@ export default function Agenda() {
                   </Button>
                 </Tooltip>
               )}
-            </Flex>
-          </Flex>
+            </div>
+          </div>
 
           {modo === 'semana' ? (
             <VisaoSemana
-              dias={semana}
+              dias={diasDaSemana(referencia)}
               agendamentos={visiveis}
               bloqueios={bloqueiosVisiveis}
               horaInicio={horaInicio}
               horaFim={horaFim}
               diaSelecionado={dia}
               onSelecionarDia={setDia}
-              onAbrir={(a) => setModal({ open: true, agendamento: a, hora: null })}
+              onAbrir={abrir}
               onNovo={agenda.criar ? novo : null}
-              nomeCliente={nomeCliente}
-              nomeServico={nomeServico}
-              nomeFunc={nomeFunc}
-              corDe={corDe}
+              destaqueId={painelAgendamento.destaqueId}
             />
           ) : (
             <VisaoMes
@@ -174,39 +181,33 @@ export default function Agenda() {
               bloqueios={bloqueiosVisiveis}
               diaSelecionado={dia}
               onSelecionarDia={setDia}
-              nomeCliente={nomeCliente}
-              corDe={corDe}
             />
           )}
-        </Card>
-      </Col>
-      {painelAberto && (
-        <Col xs={24} xl={7} className="agenda-coluna-detalhe">
+        </Secao>
+
+        {painelAberto && (
           <DetalheDia
             dia={dia}
             agendamentos={visiveis.filter((a) => a.data === chaveDia)}
             bloqueios={bloqueiosVisiveis.filter((b) => dia.startOf('day').isBefore(b.fim) && dia.endOf('day').isAfter(b.inicio))}
             podeCriar={agenda.criar}
             podeEditar={agenda.editar}
-            onNovo={() => novo(dia)}
-            onAbrir={(a) => setModal({ open: true, agendamento: a, hora: null })}
-            nomeCliente={nomeCliente}
-            nomeServico={nomeServico}
-            nomeFunc={nomeFunc}
-            corDe={corDe}
             comServicos={moduloAtivo('servicos')}
-            localDe={moduloAtivo('locais') ? (id) => locais.itens.find((l) => l.id === id) : null}
+            comLocais={moduloAtivo('locais')}
+            onNovo={() => novo(dia)}
+            onAbrir={abrir}
+            destaqueId={painelAgendamento.destaqueId}
             onFechar={() => alternarPainel(false)}
           />
-        </Col>
-      )}
-      <AgendamentoModal
-        open={modal.open}
-        agendamento={modal.agendamento}
+        )}
+      </div>
+      <AgendamentoPainel
+        open={painelAgendamento.aberto}
+        agendamento={painelAgendamento.registro?.id ? painelAgendamento.registro : null}
         dataInicial={dia}
-        horaInicial={modal.hora}
-        onClose={() => setModal({ open: false, agendamento: null, hora: null })}
+        horaInicial={painelAgendamento.registro?.id ? null : painelAgendamento.registro?.hora}
+        onClose={painelAgendamento.fechar}
       />
-    </Row>
+    </Pagina>
   )
 }
