@@ -7,6 +7,7 @@ import { opcoesTipoLoja, statusLoja, tiposLoja } from '../../data/dominio.js'
 import { useTratarErro } from '../../data/api/useTratarErro.js'
 import { entregarSenhaDaLojaNova, useAtrasado, useLojas, usePlanos } from '../usePlataforma.js'
 import { erroNoCampo } from '../erroNoCampo.js'
+import CampoEnderecoLoja from '../CampoEnderecoLoja.jsx'
 import Pagina from '../../components/base/Pagina.jsx'
 import Secao from '../../components/base/Secao.jsx'
 import BarraFiltros from '../../components/base/BarraFiltros.jsx'
@@ -221,20 +222,7 @@ export default function Lojas() {
             </Form.Item>
           </Col>
           <Col xs={24} sm={12}>
-            <Form.Item
-              name="slug"
-              label="Endereço do site"
-              rules={[
-                { required: true, message: 'Informe o endereço' },
-                {
-                  pattern: /^[a-z0-9]+(?:-[a-z0-9]+)*$/,
-                  message: 'Use letras minúsculas, números e hífens (ex.: clinica-sorriso)',
-                },
-                { min: 2, max: 60, message: 'Use de 2 a 60 caracteres' },
-              ]}
-            >
-              <Input prefix="/" maxLength={60} />
-            </Form.Item>
+            <CampoEnderecoLoja />
           </Col>
           <Col xs={24} sm={12}>
             <Form.Item name="email" label="E-mail da loja" rules={[{ type: 'email', message: 'E-mail inválido' }]}>

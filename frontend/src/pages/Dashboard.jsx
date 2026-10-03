@@ -15,6 +15,7 @@ import { EtiquetaStatus } from '../components/Etiquetas.jsx'
 import AceiteSolicitacao from '../components/AceiteSolicitacao.jsx'
 import AgendamentoPainel from '../components/AgendamentoPainel.jsx'
 import { usePainel } from '../components/base/usePainel.js'
+import { usePainelPath } from '../layout/caminhos.js'
 
 // "desde 9h" para quem entrou hoje; com a data para entrada aberta desde outro dia (esqueceu de sair).
 // entradaEm (dayjs, hora da loja) dá a data exata da entrada
@@ -51,6 +52,7 @@ export default function Dashboard() {
   const { pode, agenda, moduloAtivo, usuario } = useAcesso()
   const { resumo: dados, carregando, erro, recarregar } = useInicio()
   const navigate = useNavigate()
+  const caminho = usePainelPath()
   const painel = usePainel()
   const agora = agoraNaLoja()
   const hoje = dados?.data ?? agora
@@ -148,7 +150,7 @@ export default function Dashboard() {
       acoes={
         verAgenda && (
           <>
-            <Button icon={<CalendarOutlined />} onClick={() => navigate('/painel/agenda')}>
+            <Button icon={<CalendarOutlined />} onClick={() => navigate(caminho('/agenda'))}>
               Abrir agenda
             </Button>
             {agenda.criar && (
@@ -226,7 +228,7 @@ export default function Dashboard() {
               <Secao
                 titulo="Estoque a repor"
                 acoes={
-                  <Button type="link" size="small" onClick={() => navigate('/painel/materiais')}>
+                  <Button type="link" size="small" onClick={() => navigate(caminho('/materiais'))}>
                     Ver materiais
                   </Button>
                 }
@@ -258,7 +260,7 @@ export default function Dashboard() {
               <Secao
                 titulo="Clientes"
                 acoes={
-                  <Button type="link" size="small" onClick={() => navigate('/painel/clientes')}>
+                  <Button type="link" size="small" onClick={() => navigate(caminho('/clientes'))}>
                     Ver clientes
                   </Button>
                 }

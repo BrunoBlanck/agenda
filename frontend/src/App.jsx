@@ -1,10 +1,11 @@
 import { lazy, Suspense } from 'react'
 import { Routes, Route, Navigate } from 'react-router-dom'
 import CarregandoPagina from './components/base/CarregandoPagina.jsx'
+import { usePainelPath } from './layout/caminhos.js'
 
 // Cada área (e cada tela) em um pedaço próprio: quem usa o painel da loja não baixa o SUPERADMIN, e vice-versa
-const SiteLoja = lazy(() => import('./site/SiteLoja.jsx'))
 const AreaLoja = lazy(() => import('./layout/AreaLoja.jsx'))
+const NaoEncontrada = lazy(() => import('./layout/NaoEncontrada.jsx'))
 const AppLayout = lazy(() => import('./layout/AppLayout.jsx'))
 const Login = lazy(() => import('./pages/Login.jsx'))
 const Dashboard = lazy(() => import('./pages/Dashboard.jsx'))
@@ -28,6 +29,19 @@ const Planos = lazy(() => import('./superadmin/pages/Planos.jsx'))
 const Usuarios = lazy(() => import('./superadmin/pages/Usuarios.jsx'))
 const Auditoria = lazy(() => import('./superadmin/pages/Auditoria.jsx'))
 
+// Redirecionamento dentro do painel da loja da URL (/:slug/painel + resto)
+function IrNoPainel({ resto }) {
+  const caminho = usePainelPath()
+  return <Navigate to={caminho(resto)} replace />
+}
+
+function NaoEncontradaNoPainel() {
+  const caminho = usePainelPath()
+  return <NaoEncontrada inicio={caminho()} />
+}
+
+// Mapa de URLs (GER-29): /:slug/painel = painel da loja, /superadmin = plataforma. O resto (/, /:slug do site,
+// /api) é do back-end; se chegar aqui, é "Página não encontrada", sem redirecionar.
 export default function App() {
   return (
     // As telas têm o próprio carregamento dentro do layout; este só cobre a primeira carga da área
@@ -39,10 +53,7 @@ export default function App() {
       }
     >
       <Routes>
-        <Route index element={<Navigate to="/painel" replace />} />
-        {/* Protótipo do site do consumidor final (será renderizado pelo back-end) */}
-        <Route path="site/:slug" element={<SiteLoja />} />
-        <Route path="painel" element={<AreaLoja />}>
+        <Route path=":slug/painel" element={<AreaLoja />}>
           <Route path="login" element={<Login />} />
           <Route element={<AppLayout />}>
           <Route index element={<Dashboard />} />
@@ -56,8 +67,9 @@ export default function App() {
           <Route path="controle-tempo" element={<ControleTempo />} />
           <Route path="configuracoes/loja" element={<ConfigLoja />} />
           {/* Horários e bloqueios agora ficam dentro dos perfis */}
-          <Route path="configuracoes/agendamentos" element={<Navigate to="/painel/configuracoes/perfis" replace />} />
+          <Route path="configuracoes/agendamentos" element={<IrNoPainel resto="/configuracoes/perfis" />} />
           <Route path="configuracoes/perfis" element={<PerfisAcesso />} />
+          <Route path="*" element={<NaoEncontradaNoPainel />} />
           </Route>
         </Route>
         <Route path="superadmin" element={<AreaSuperadmin />}>
@@ -69,9 +81,10 @@ export default function App() {
           <Route path="planos" element={<Planos />} />
           <Route path="usuarios" element={<Usuarios />} />
           <Route path="auditoria" element={<Auditoria />} />
+          <Route path="*" element={<NaoEncontrada inicio="/superadmin" />} />
           </Route>
         </Route>
-        <Route path="*" element={<Navigate to="/painel" replace />} />
+        <Route path="*" element={<NaoEncontrada />} />
       </Routes>
     </Suspense>
   )

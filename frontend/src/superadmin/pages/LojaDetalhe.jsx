@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { Alert, App, Avatar, Button, Col, DatePicker, Form, Input, Popconfirm, Row, Select, Skeleton, Switch, Tabs, Tooltip } from 'antd'
-import { DeleteOutlined, DisconnectOutlined, EditOutlined, KeyOutlined, LockOutlined, PlusOutlined, SearchOutlined } from '@ant-design/icons'
+import { DeleteOutlined, DesktopOutlined, DisconnectOutlined, EditOutlined, GlobalOutlined, KeyOutlined, LockOutlined, PlusOutlined, SearchOutlined } from '@ant-design/icons'
 import { opcoesTipoLoja, tiposLoja } from '../../data/dominio.js'
 import { agoraNaLoja, lerDataHora } from '../../data/api/conversao.js'
 import { useTratarErro } from '../../data/api/useTratarErro.js'
@@ -20,6 +20,8 @@ import { usePainel } from '../../components/base/usePainel.js'
 import { EtiquetaLoja, EtiquetaSituacao } from '../../components/Etiquetas.jsx'
 import { useFuncionariosLoja, useLoja, useModulosLoja, usePerfisLoja, usePlanos, useSenhaDaLojaNova } from '../usePlataforma.js'
 import { erroNoCampo } from '../erroNoCampo.js'
+import CampoEnderecoLoja from '../CampoEnderecoLoja.jsx'
+import { caminhoPainel, caminhoSite } from '../../layout/caminhos.js'
 import HistoricoAlteracoes from '../HistoricoAlteracoes.jsx'
 import SenhaProvisoria from '../SenhaProvisoria.jsx'
 
@@ -98,17 +100,7 @@ function DadosGerais({ loja, salvar, enviarLogo, removerLogo, aoNaoEncontrado })
             </Form.Item>
           </Col>
           <Col xs={24} sm={12} lg={8}>
-            <Form.Item
-              name="slug"
-              label="Endereço do site"
-              rules={[
-                { required: true, message: 'Informe o endereço' },
-                { pattern: /^[a-z0-9]+(?:-[a-z0-9]+)*$/, message: 'Use letras minúsculas, números e hífens (ex.: clinica-sorriso)' },
-                { min: 2, max: 60, message: 'Use de 2 a 60 caracteres' },
-              ]}
-            >
-              <Input prefix="/" maxLength={60} />
-            </Form.Item>
+            <CampoEnderecoLoja />
           </Col>
           <Col xs={24} sm={12} lg={8}>
             <Form.Item name="fusoHorario" label="Fuso horário" rules={[{ required: true, message: 'Escolha o fuso' }]}>
@@ -591,7 +583,12 @@ function Detalhe({ id }) {
           <EtiquetaLoja status={loja.status} />
         </span>
       }
-      descricao={`${tiposLoja[loja.tipo]?.nome ?? loja.tipo ?? '—'}, plano ${loja.planoNome ?? '—'}. Site em /${loja.slug}.${criadaEm ? ` Cliente desde ${criadaEm}.` : ''}`}
+      descricao={
+        <>
+          {`${tiposLoja[loja.tipo]?.nome ?? loja.tipo ?? '—'}, plano ${loja.planoNome ?? '—'}.${criadaEm ? ` Cliente desde ${criadaEm}.` : ''}`}
+          {loja.slug && <EnderecosLoja slug={loja.slug} />}
+        </>
+      }
       acoes={<AcoesSituacao loja={loja} mudarStatus={mudarStatus} excluir={excluir} />}
     >
       <title>{`${loja.nomeFantasia} | Agenda`}</title>
@@ -631,6 +628,20 @@ function Detalhe({ id }) {
         />
       </Secao>
     </Pagina>
+  )
+}
+
+// Site (página do back-end) e painel da loja abrem em outra aba: links de página inteira, fora da SPA do SUPERADMIN
+function EnderecosLoja({ slug }) {
+  return (
+    <span className="loja-enderecos">
+      <a href={caminhoSite(slug)} target="_blank" rel="noopener">
+        <GlobalOutlined aria-hidden="true" /> Abrir site <span className="texto-apoio endereco">{caminhoSite(slug)}</span>
+      </a>
+      <a href={caminhoPainel(slug)} target="_blank" rel="noopener">
+        <DesktopOutlined aria-hidden="true" /> Abrir painel <span className="texto-apoio endereco">{caminhoPainel(slug)}</span>
+      </a>
+    </span>
   )
 }
 

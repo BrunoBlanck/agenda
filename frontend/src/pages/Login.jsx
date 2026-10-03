@@ -1,57 +1,48 @@
-import { Form, Input } from 'antd'
-import { Navigate, useLocation, useSearchParams } from 'react-router-dom'
+import { Avatar } from 'antd'
+import { Navigate, useLocation } from 'react-router-dom'
 import TelaLogin from '../layout/TelaLogin.jsx'
+import { usePainelPath, useSlugLoja } from '../layout/caminhos.js'
 import { useSessaoLoja } from '../data/sessao/sessoes.js'
+import { useLojaPublica } from '../data/useLojaPublica.js'
 
-// A última loja usada fica lembrada neste navegador (não é dado sensível: é o endereço público da loja)
-const CHAVE_LOJA = 'agenda.ultimaLoja'
-const lerUltimaLoja = () => {
-  try {
-    return window.localStorage.getItem(CHAVE_LOJA) ?? ''
-  } catch {
-    return ''
-  }
-}
-const gravarUltimaLoja = (slug) => {
-  try {
-    window.localStorage.setItem(CHAVE_LOJA, slug)
-  } catch {
-    // storage bloqueado: só não lembra
-  }
+// Logo da loja ao lado do nome; sem logo (ou enquanto carrega), a inicial sobre a tinta
+function MarcaLoja({ nome, logoUrl }) {
+  return (
+    <Avatar shape="square" size={40} src={logoUrl || undefined} className="login-marca-loja" aria-hidden="true">
+      {nome[0]?.toUpperCase() ?? '?'}
+    </Avatar>
+  )
 }
 
-// Login do funcionário: loja (pelo endereço), e-mail e senha
+// Login do funcionário: a loja vem do endereço (/:slug/painel/login), a pessoa só digita e-mail e senha (ACE-02)
 export default function Login() {
   const sessao = useSessaoLoja()
+  const slug = useSlugLoja()
+  const caminho = usePainelPath()
   const { state } = useLocation()
-  const [params] = useSearchParams()
+  // Erro ou 404 no endpoint público não trava o login: loja suspensa também some do site,
+  // e quem diz o motivo certo é a resposta do próprio login
+  const { loja, carregando } = useLojaPublica(slug)
 
-  if (sessao.estado === 'logado') return <Navigate to={state?.de ?? '/painel'} replace />
-
-  const entrar = async (valores) => {
-    await sessao.entrar(valores)
-    gravarUltimaLoja(valores.slug.trim().toLowerCase())
+  if (sessao.estado === 'logado') {
+    const de = typeof state?.de === 'string' && state.de.startsWith(caminho()) ? state.de : caminho()
+    return <Navigate to={de} replace />
   }
+
+  const nome = loja?.nome || slug
 
   return (
     <TelaLogin
       area="Painel da loja"
-      titulo="Entrar"
-      descricao="Use o e-mail e a senha que o administrador da sua loja cadastrou."
-      motivo={sessao.motivo}
-      valoresIniciais={{ slug: params.get('loja') ?? lerUltimaLoja() }}
-      aoEntrar={entrar}
-      campos={
-        <Form.Item
-          name="slug"
-          label="Endereço da loja"
-          extra="Como aparece no endereço do site da loja, ex.: clinica-sorriso"
-          normalize={(v) => v?.toLowerCase().replace(/\s+/g, '-')}
-          rules={[{ required: true, whitespace: true, message: 'Informe o endereço da loja' }]}
-        >
-          <Input autoComplete="organization" autoCapitalize="none" spellCheck={false} />
-        </Form.Item>
+      marca={<MarcaLoja nome={nome} logoUrl={loja?.logoUrl} />}
+      titulo={
+        <span className={carregando ? 'login-titulo-provisorio' : undefined} aria-busy={carregando || undefined}>
+          {nome}
+        </span>
       }
+      descricao="Entre com o e-mail e a senha que o administrador da loja cadastrou para você."
+      motivo={sessao.motivo}
+      aoEntrar={({ email, senha }) => sessao.entrar({ email, senha })}
       rodape="Esqueceu a senha? Peça ao administrador da loja para redefinir."
     />
   )

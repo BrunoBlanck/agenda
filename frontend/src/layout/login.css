@@ -20,8 +20,13 @@
 
 .login-cabecalho {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: var(--espaco-3);
+}
+
+/* Nome da loja pode ser longo: quebra dentro da folha, sem empurrar a marca */
+.login-cabecalho-textos {
+  min-width: 0;
 }
 
 .login-area {
@@ -36,6 +41,29 @@
   font-weight: 600;
   line-height: 1.3;
   color: var(--cor-texto);
+  overflow-wrap: anywhere;
+}
+
+/* Enquanto os dados públicos chegam, o título mostra o endereço (slug) em tom secundário */
+.login-titulo-provisorio {
+  color: var(--cor-texto-secundario);
+}
+
+/* Logo da loja no painel: imagem inteira sobre a folha; sem logo, a inicial sobre a tinta */
+.login-marca-loja.ant-avatar {
+  flex-shrink: 0;
+  font-size: 18px;
+  font-weight: 700;
+  background: var(--cor-tinta);
+}
+
+.login-marca-loja.ant-avatar-image {
+  background: var(--cor-superficie);
+  border: 1px solid var(--cor-linha);
+}
+
+.login-marca-loja.ant-avatar-image img {
+  object-fit: contain;
 }
 
 .login-descricao {

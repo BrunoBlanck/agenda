@@ -68,7 +68,7 @@ const nomesCampos = {
   habilitado: 'Ligado',
   motivo: 'Motivo',
   tipo: 'Tipo',
-  slug: 'Endereço do site',
+  slug: 'Endereço da loja',
   fuso_horario: 'Fuso horário',
   cor_agenda: 'Cor na agenda',
   ultimo_login_em: 'Último acesso',

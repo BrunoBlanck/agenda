@@ -15,15 +15,18 @@ export const converterEuLoja = (dados) => {
   }
 }
 
+// A loja do login é a da URL (/:slug/painel, já em minúsculas): a tela só manda e-mail e senha (ACE-02)
 const loja = criarSessao('loja', {
-  entrarApi: async ({ slug, email, senha }) =>
-    (await api.loja.post('/auth/login', { slug: slug.trim().toLowerCase(), email: email.trim(), senha })).token,
+  entrarApi: async ({ email, senha }, slug) =>
+    (await api.loja.post('/auth/login', { slug, email: (email ?? '').trim(), senha })).token,
   euApi: async (sinal) => converterEuLoja(await api.loja.get('/eu', { sinal })),
   aoCarregar: (eu) => definirFusoLoja(eu.loja?.fusoHorario),
+  slugDoEu: (eu) => eu.loja?.slug ?? null,
 })
 
 const superadmin = criarSessao('superadmin', {
-  entrarApi: async ({ email, senha }) => (await api.superadmin.post('/auth/login', { email: email.trim(), senha })).token,
+  entrarApi: async ({ email, senha }) =>
+    (await api.superadmin.post('/auth/login', { email: (email ?? '').trim(), senha })).token,
   euApi: async (sinal) => paraCamel(await api.superadmin.get('/eu', { sinal })),
 })
 

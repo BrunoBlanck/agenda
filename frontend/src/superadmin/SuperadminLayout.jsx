@@ -16,9 +16,11 @@ const itensMenu = [
   { key: '/superadmin/auditoria', icon: <AuditOutlined />, label: 'Auditoria' },
 ]
 
-// /superadmin/lojas/3 deixa "Lojas" selecionado
+// /superadmin/lojas/3 deixa "Lojas" selecionado; endereço que não existe não marca nenhum item
 const itemDaRota = (pathname) =>
-  [...itensMenu].sort((a, b) => b.key.length - a.key.length).find((i) => pathname.startsWith(i.key))?.key ?? '/superadmin'
+  pathname === '/superadmin'
+    ? '/superadmin'
+    : itensMenu.find((i) => i.key !== '/superadmin' && (pathname === i.key || pathname.startsWith(`${i.key}/`)))?.key ?? ''
 
 // Área da Plataforma: mesma estrutura do painel da loja, com a barra lateral escura para não confundir as duas
 export default function SuperadminLayout() {
