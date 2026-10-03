@@ -1,16 +1,17 @@
 import { Checkbox, Flex, Tooltip } from 'antd'
 import { ShopOutlined, WhatsAppOutlined, GlobalOutlined } from '@ant-design/icons'
-import { canaisCliente } from '../data/mock.js'
+import { canaisCliente } from '../data/dominio.js'
 
 const icones = { loja: <ShopOutlined />, whatsapp: <WhatsAppOutlined />, site: <GlobalOutlined /> }
 
 // Ícones dos canais em que o cliente está conectado; os não usados ficam apagados
-export function IconesCanais({ canais = [] }) {
-  const conectados = Object.entries(canaisCliente).filter(([codigo]) => canais.includes(codigo))
+export function IconesCanais({ canais }) {
+  const lista = Array.isArray(canais) ? canais : []
+  const conectados = Object.entries(canaisCliente).filter(([codigo]) => lista.includes(codigo))
   return (
     <span className="canais" role="img" aria-label={`Canais: ${conectados.map(([, nome]) => nome).join(', ') || 'nenhum'}`}>
       {Object.entries(canaisCliente).map(([codigo, nome]) => {
-        const ativo = canais.includes(codigo)
+        const ativo = lista.includes(codigo)
         return (
           <Tooltip key={codigo} title={ativo ? nome : `${nome}: não conectado`}>
             <span className={ativo ? `canal-${codigo}` : undefined}>{icones[codigo]}</span>

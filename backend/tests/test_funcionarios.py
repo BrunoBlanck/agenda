@@ -76,7 +76,17 @@ def test_cadastro_exige_senha_e_email_unico(cliente, lojas):
 
 def test_so_administrador_atribui_ou_altera_administrador(cliente, lojas, engine_dono):
     a, _ = lojas
-    gestor = usuario_com(engine_dono, a.loja, {'funcionarios': 'escrita'})
+    # Gestor com escrita em Funcionários e pelo menos os níveis do perfil Profissional (ACE-19)
+    gestor = usuario_com(
+        engine_dono,
+        a.loja,
+        {
+            'funcionarios': 'escrita',
+            'agenda_propria': 'escrita',
+            'clientes': 'leitura',
+            'ponto_proprio': 'escrita',
+        },
+    )
     admin_id = str(a.perfis['Administrador'].id)
 
     novo_admin = cliente.post(URL, json=_dados(a, perfil_id=admin_id), headers=gestor)
@@ -114,12 +124,14 @@ def test_ultimo_administrador_ativo_nao_e_desativado(cliente, lojas):
     inativar = cliente.put(f'{URL}/{a.admin.id}', json={**dados_admin, 'ativo': False}, headers=a.h_admin)
     assert inativar.status_code == 409
     assert inativar.json()['detail'] == 'A loja precisa de pelo menos um Administrador ativo.'
+    # Trocar o próprio perfil é recusado antes (ACE-19); o rebaixamento do último Administrador pelo
+    # suporte está em test_superadmin_lojas
     rebaixar = cliente.put(
         f'{URL}/{a.admin.id}',
         json={**dados_admin, 'perfil_id': str(a.perfis['Recepção'].id)},
         headers=a.h_admin,
     )
-    assert rebaixar.status_code == 409
+    assert rebaixar.status_code == 403
     # Com outro Administrador ativo, pode
     cliente.put(
         f'{URL}/{a.prof.id}', json=_dados(a, email='prof@loja-a.com', perfil_id=admin_id), headers=a.h_admin

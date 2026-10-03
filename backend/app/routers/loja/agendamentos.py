@@ -4,16 +4,16 @@ Recursos: agenda_propria (só os próprios) e agenda_equipe (todos). As regras f
 app/services/agendamentos.py.
 """
 
-from datetime import date, datetime, timedelta
+from datetime import timedelta
 from decimal import Decimal
-from typing import Annotated
+from typing import Annotated, Literal
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy import func, select
 
 from app.auth.dependencias import ContextoLoja, exigir
-from app.models import Agendamento, Cargo, Cliente, Funcionario, Local, Servico
+from app.models import Agendamento, Cargo, Cliente, Funcionario, Local, Material, Servico
 from app.models.enums import NivelAcesso, StatusAgendamento
 from app.schemas.agendamentos import (
     AgendamentoEntrada,
@@ -22,16 +22,21 @@ from app.schemas.agendamentos import (
     ClienteApoio,
     Disponibilidade,
     FiltroHistorico,
+    FiltrosAgenda,
     HistoricoCliente,
     LocalApoio,
+    LocalFiltro,
     MateriaisEntrada,
+    MaterialApoio,
     ProfissionalApoio,
+    ProfissionalFiltro,
     RecusaEntrada,
     StatusEntrada,
 )
 from app.schemas.clientes import ClienteSaida
-from app.schemas.comum import Erro, Pagina, Paginacao, paginacao
+from app.schemas.comum import Data, DataHora, Erro, Pagina, Paginacao, paginacao
 from app.services import agendamentos as regras
+from app.services.clientes import filtro_busca_apoio
 from app.services.comum import (
     buscar,
     com_autor,
@@ -72,8 +77,12 @@ def listar(
     cliente_id: UUID | None = None,
     servico_id: UUID | None = None,
     status_: Annotated[list[StatusAgendamento] | None, Query(alias='status')] = None,
-    inicio: Annotated[date | None, Query(description='Primeiro dia (no fuso da loja)')] = None,
-    fim: Annotated[date | None, Query(description='Último dia, inclusive')] = None,
+    inicio: Annotated[Data | None, Query(description='Primeiro dia (no fuso da loja)')] = None,
+    fim: Annotated[Data | None, Query(description='Último dia, inclusive')] = None,
+    ordem: Annotated[
+        Literal['asc', 'desc'],
+        Query(description='Pelo início: asc = mais antigos primeiro (padrão); desc = mais recentes primeiro'),
+    ] = 'asc',
 ) -> Pagina[AgendamentoSaida]:
     zona = fuso(ctx.loja.fuso_horario)
     consulta = select(Agendamento).where(Agendamento.loja_id == ctx.loja_id)
@@ -96,7 +105,10 @@ def listar(
         consulta = consulta.where(Agendamento.inicio >= intervalo_de_dias(inicio, inicio, zona)[0])
     if fim:
         consulta = consulta.where(Agendamento.inicio < intervalo_de_dias(fim, fim, zona)[1])
-    consulta = consulta.order_by(Agendamento.inicio, Agendamento.id)
+    if ordem == 'desc':
+        consulta = consulta.order_by(Agendamento.inicio.desc(), Agendamento.id.desc())
+    else:
+        consulta = consulta.order_by(Agendamento.inicio, Agendamento.id)
     itens, total = paginar(ctx.db, consulta, pag)
     return Pagina(
         itens=regras.descrever(ctx, itens), total=total, pagina=pag.pagina, por_pagina=pag.por_pagina
@@ -121,7 +133,7 @@ def criar(dados: AgendamentoEntrada, ctx: EscreverAgenda) -> AgendamentoSaida:
     summary='Editar (remarcar, trocar profissional/serviço/local) e, se informado, mudar o status',
 )
 def editar(agendamento_id: UUID, dados: AgendamentoEntrada, ctx: EscreverAgenda) -> AgendamentoSaida:
-    ag = regras.buscar_visivel(ctx, agendamento_id)
+    ag = regras.buscar_visivel(ctx, agendamento_id, travar=True)
     return _detalhe(ctx, regras.salvar(ctx, dados, ag))
 
 
@@ -131,7 +143,7 @@ def editar(agendamento_id: UUID, dados: AgendamentoEntrada, ctx: EscreverAgenda)
     summary='Excluir agendamento (concluído não é excluído)',
 )
 def remover(agendamento_id: UUID, ctx: EscreverAgenda) -> None:
-    ag = regras.buscar_visivel(ctx, agendamento_id)
+    ag = regras.buscar_visivel(ctx, agendamento_id, travar=True)
     regras.exigir_edicao(ctx, ag)
     if ag.status == S.concluido:
         raise conflito('Agendamento concluído não pode ser excluído (os materiais já saíram do estoque).')
@@ -145,14 +157,14 @@ def remover(agendamento_id: UUID, ctx: EscreverAgenda) -> None:
     '/agendamentos/{agendamento_id}/status', summary='Mudar o status (confirmar, concluir, cancelar...)'
 )
 def mudar_status(agendamento_id: UUID, dados: StatusEntrada, ctx: EscreverAgenda) -> AgendamentoSaida:
-    ag = regras.buscar_visivel(ctx, agendamento_id)
+    ag = regras.buscar_visivel(ctx, agendamento_id, travar=True)
     regras.exigir_edicao(ctx, ag)
     regras.mudar_status(ctx, ag, dados.status, dados.motivo_cancelamento)
     return _detalhe(ctx, ag)
 
 
 def _pendente(ctx: ContextoLoja, agendamento_id: UUID) -> Agendamento:
-    ag = regras.buscar_visivel(ctx, agendamento_id)
+    ag = regras.buscar_visivel(ctx, agendamento_id, travar=True)
     regras.exigir_edicao(ctx, ag)
     if ag.status != S.pendente:
         raise conflito('Esta solicitação já foi respondida.')
@@ -183,7 +195,7 @@ def recusar(
     summary='Ajustar os materiais usados no atendimento (antes de concluir)',
 )
 def ajustar_materiais(agendamento_id: UUID, dados: MateriaisEntrada, ctx: EscreverAgenda) -> AgendamentoSaida:
-    ag = regras.buscar_visivel(ctx, agendamento_id)
+    ag = regras.buscar_visivel(ctx, agendamento_id, travar=True)
     regras.exigir_edicao(ctx, ag)
     regras.ajustar_materiais(ctx, ag, {m.material_id: {'quantidade': m.quantidade} for m in dados.materiais})
     return _detalhe(ctx, ag)
@@ -192,20 +204,54 @@ def ajustar_materiais(agendamento_id: UUID, dados: MateriaisEntrada, ctx: Escrev
 # --- Listas de apoio do formulário ---------------------------------------------------------------
 
 
-@router.get('/apoio/agendamento', summary='Clientes, serviços, profissionais e locais para o formulário')
+BUSCA_MINIMA = 2
+
+
+@router.get('/apoio/clientes', summary='Busca de clientes ativos para o formulário de agendamento (paginada)')
+def apoio_clientes(
+    ctx: EscreverAgenda,
+    pag: Annotated[Paginacao, Depends(paginacao)],
+    busca: Annotated[
+        str,
+        Query(
+            max_length=100,
+            description=(
+                f'Nome ou telefone (com ou sem máscara). Mínimo de {BUSCA_MINIMA} caracteres. '
+                'Não busca por CPF nem e-mail'
+            ),
+        ),
+    ],
+) -> Pagina[ClienteApoio]:
+    """Liberada para quem pode criar agendamentos, mesmo sem leitura em Clientes (ACE-21).
+
+    Busca só por nome e telefone e devolve só id, nome, sobrenome e telefone (sem CPF nem e-mail).
+    """
+    termo = busca.strip()
+    if len(termo) < BUSCA_MINIMA:
+        raise invalido(f'Digite pelo menos {BUSCA_MINIMA} caracteres para buscar.')
+    consulta = (
+        select(Cliente)
+        .where(Cliente.loja_id == ctx.loja_id, Cliente.ativo, filtro_busca_apoio(termo))
+        .order_by(Cliente.nome, Cliente.sobrenome, Cliente.id)
+    )
+    itens, total = paginar(ctx.db, consulta, pag)
+    return Pagina(
+        itens=[ClienteApoio.model_validate(c) for c in itens],
+        total=total,
+        pagina=pag.pagina,
+        por_pagina=pag.por_pagina,
+    )
+
+
+@router.get('/apoio/agendamento', summary='Serviços, profissionais e locais para o formulário')
 def apoio(ctx: EscreverAgenda) -> ApoioAgendamento:
-    """Liberado para quem pode criar agendamentos, mesmo sem leitura em Clientes ou Serviços (2.2).
+    """Liberado para quem pode criar agendamentos, mesmo sem leitura em Serviços (2.2).
 
     Quem só tem escrita em Minha agenda recebe só ele mesmo como profissional e só os serviços
-    que realiza.
+    que realiza. Os clientes vêm de GET /apoio/clientes (busca paginada).
     """
     db = ctx.db
     para_outros = ctx.pode('agenda_equipe', NivelAcesso.escrita)
-    clientes = db.scalars(
-        select(Cliente)
-        .where(Cliente.loja_id == ctx.loja_id, Cliente.ativo)
-        .order_by(Cliente.nome, Cliente.sobrenome)
-    ).all()
     consulta_prof = (
         select(Funcionario, Cargo.nome)
         .outerjoin(Cargo, (Cargo.id == Funcionario.cargo_id) & (Cargo.loja_id == Funcionario.loja_id))
@@ -247,12 +293,56 @@ def apoio(ctx: EscreverAgenda) -> ApoioAgendamento:
                 .order_by(func.lower(Local.nome))
             )
         ]
+    materiais = None
+    if ctx.acesso.modulo_ativo('materiais'):
+        materiais = [
+            MaterialApoio.model_validate(m)
+            for m in db.scalars(
+                select(Material)
+                .where(Material.loja_id == ctx.loja_id, Material.ativo)
+                .order_by(func.lower(Material.nome), Material.id)
+            )
+        ]
     return ApoioAgendamento(
-        clientes=[ClienteApoio.model_validate(c) for c in clientes],
         servicos=servicos,
         profissionais=profissionais,
         locais=locais,
+        materiais=materiais,
     )
+
+
+@router.get(
+    '/apoio/filtros-agenda',
+    summary='Profissionais e locais para os filtros da agenda e da lista de agendamentos',
+)
+def filtros_agenda(ctx: VerAgenda) -> FiltrosAgenda:
+    """Liberado com leitura na agenda (os filtros da tela não exigem escrita).
+
+    Quem só tem Minha agenda recebe só ele mesmo. Inclui profissionais e locais inativos, para
+    filtrar agendamentos antigos; os ativos vêm primeiro.
+    """
+    db = ctx.db
+    so_propria = not ctx.pode('agenda_equipe')
+    consulta_prof = select(Funcionario).where(Funcionario.loja_id == ctx.loja_id)
+    if so_propria:
+        consulta_prof = consulta_prof.where(Funcionario.id == ctx.funcionario.id)
+    profissionais = [
+        ProfissionalFiltro.model_validate(f)
+        for f in db.scalars(
+            consulta_prof.order_by(Funcionario.ativo.desc(), func.lower(Funcionario.nome), Funcionario.id)
+        )
+    ]
+    locais = None
+    if ctx.acesso.modulo_ativo('locais'):
+        locais = [
+            LocalFiltro.model_validate(loc)
+            for loc in db.scalars(
+                select(Local)
+                .where(Local.loja_id == ctx.loja_id)
+                .order_by(Local.ativo.desc(), func.lower(Local.nome), Local.id)
+            )
+        ]
+    return FiltrosAgenda(so_propria=so_propria, profissionais=profissionais, locais=locais)
 
 
 @router.get(
@@ -261,7 +351,7 @@ def apoio(ctx: EscreverAgenda) -> ApoioAgendamento:
 def disponibilidade(
     ctx: EscreverAgenda,
     funcionario_id: UUID,
-    inicio: Annotated[datetime, Query(description='Sem fuso, vale o horário da loja')],
+    inicio: Annotated[DataHora, Query(description='Sem fuso, vale o horário da loja')],
     duracao_minutos: Annotated[int, Query(gt=0, le=24 * 60)],
     agendamento_id: Annotated[UUID | None, Query(description='Ignora este agendamento (edição)')] = None,
 ) -> Disponibilidade:

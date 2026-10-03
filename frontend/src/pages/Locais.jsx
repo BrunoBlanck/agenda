@@ -1,27 +1,38 @@
-import { App, Button, Form, Input, Select, Switch } from 'antd'
+import { useState } from 'react'
+import { App, Button, Form, Input, Select, Skeleton, Switch } from 'antd'
 import { EnvironmentOutlined, LinkOutlined, VideoCameraOutlined } from '@ant-design/icons'
 import CadastroTabela from '../components/CadastroTabela.jsx'
 import Secao from '../components/base/Secao.jsx'
 import Tabela from '../components/base/Tabela.jsx'
 import Etiqueta from '../components/base/Etiqueta.jsx'
+import EstadoVazio from '../components/base/EstadoVazio.jsx'
 import { EtiquetaSituacao, EtiquetaStatus, EtiquetaTipoLocal } from '../components/Etiquetas.jsx'
-import { useData } from '../data/DataContext.jsx'
 import { useAcesso } from '../data/useAcesso.js'
-import { useNomes } from '../data/useNomes.js'
-import { tiposLocal } from '../data/mock.js'
+import { useAgendamentosDoLocal, useLocais, useRotulosLocal } from '../data/useLocais.js'
+import { MAPA_ERROS_ROTULOS } from '../data/api/locais.js'
+import { useTratarErro } from '../data/api/useTratarErro.js'
+import { tiposLocal } from '../data/dominio.js'
 import { rotulosLocal } from '../data/locais.js'
-import { inativo } from '../components/agenda/util.js'
 import { dataBR, horaCurta, plural } from '../utils/formatos.js'
-import dayjs from 'dayjs'
 
 // Como a loja chama os locais (estrutura.md, 2.21). Muda o menu e os textos do painel.
-function RotuloLocais({ loja, somenteLeitura }) {
+function RotuloLocais({ somenteLeitura }) {
   const [form] = Form.useForm()
   const { message } = App.useApp()
+  const tratarErro = useTratarErro()
+  const { rotulos, carregando, erro, recarregar, salvar } = useRotulosLocal()
+  const [salvando, setSalvando] = useState(false)
 
-  const salvar = (v) => {
-    loja.atualizar({ rotuloLocal: v.singular.trim(), rotuloLocalPlural: v.plural.trim() })
-    message.success('Nome dos locais salvo.')
+  const enviar = async (v) => {
+    setSalvando(true)
+    try {
+      await salvar(v)
+      message.success('Nome dos locais salvo.')
+    } catch (e) {
+      tratarErro(e, { form, mapa: MAPA_ERROS_ROTULOS })
+    } finally {
+      setSalvando(false)
+    }
   }
 
   return (
@@ -29,48 +40,93 @@ function RotuloLocais({ loja, somenteLeitura }) {
       titulo="Como a loja chama os locais"
       descricao="Muda o nome no menu e nos formulários. Ex.: Sala (escola), Cadeira (barbearia), Maca (estética), Consultório (clínica)."
     >
-      <Form form={form} layout="inline" initialValues={rotulosLocal(loja.dados)} disabled={somenteLeitura} onFinish={salvar} colon={false} className="form-em-linha">
-        <Form.Item name="singular" label="Um" rules={[{ required: true, whitespace: true, message: 'Informe o singular' }]}>
-          <Input placeholder="Sala" maxLength={40} />
-        </Form.Item>
-        <Form.Item name="plural" label="Vários" rules={[{ required: true, whitespace: true, message: 'Informe o plural' }]}>
-          <Input placeholder="Salas" maxLength={40} />
-        </Form.Item>
-        {!somenteLeitura && <Button htmlType="submit">Salvar nome</Button>}
-      </Form>
+      {carregando ? (
+        <Skeleton.Input active block aria-label="Carregando" />
+      ) : erro && !rotulos ? (
+        <EstadoVazio
+          compacto
+          titulo="Não foi possível carregar o nome dos locais"
+          descricao={erro.mensagem}
+          acao={<Button onClick={recarregar}>Tentar de novo</Button>}
+        />
+      ) : (
+        <Form
+          // Recria o formulário quando os valores salvos mudam (depois de salvar ou recarregar)
+          key={rotulos?.atualizadoEm ?? 'rotulos'}
+          form={form}
+          layout="inline"
+          initialValues={{ singular: rotulos?.singular, plural: rotulos?.plural }}
+          disabled={somenteLeitura || salvando}
+          onFinish={enviar}
+          colon={false}
+          className="form-em-linha"
+        >
+          <Form.Item name="singular" label="Um" rules={[{ required: true, whitespace: true, message: 'Informe o singular' }]}>
+            <Input placeholder="Sala" maxLength={40} />
+          </Form.Item>
+          <Form.Item name="plural" label="Vários" rules={[{ required: true, whitespace: true, message: 'Informe o plural' }]}>
+            <Input placeholder="Salas" maxLength={40} />
+          </Form.Item>
+          {!somenteLeitura && (
+            <Button htmlType="submit" loading={salvando}>
+              Salvar nome
+            </Button>
+          )}
+        </Form>
+      )}
     </Secao>
   )
 }
 
-export default function Locais() {
-  const { locais, servicos, loja, agendamentos } = useData()
-  const { pode, moduloAtivo } = useAcesso()
-  const nomes = useNomes()
-  const somenteLeitura = !pode('locais', 'escrita')
-  const { singular, plural: nomePlural } = rotulosLocal(loja.dados)
-
-  // Serviços que citam o local explicitamente; os sem vínculo aceitam qualquer local
-  const servicosDoLocal = (id) => servicos.itens.filter((s) => s.localIds?.includes(id))
-
-  // Agendamentos do local: próximos primeiro (do mais cedo ao mais tarde), depois os passados
-  const hoje = dayjs().format('YYYY-MM-DD')
-  const agendamentosDoLocal = (id) => {
-    const lista = agendamentos.itens.filter((a) => a.localId === id)
-    const chave = (a) => `${a.data} ${a.hora}`
-    const futuros = lista.filter((a) => a.data >= hoje).sort((a, b) => chave(a).localeCompare(chave(b)))
-    const passados = lista.filter((a) => a.data < hoje).sort((a, b) => chave(b).localeCompare(chave(a)))
-    return [...futuros, ...passados]
-  }
-  const proximos = (id) => agendamentosDoLocal(id).filter((a) => a.data >= hoje && !inativo(a)).length
-
-  const colunasAgendamentos = [
+// Agendamentos de hoje em diante no local (linha expandida); só os que o usuário pode ver na agenda
+function AgendamentosDoLocal({ localId, comServicos }) {
+  const ag = useAgendamentosDoLocal(localId)
+  const colunas = [
     { title: 'Data', dataIndex: 'data', render: dataBR },
     { title: 'Horário', dataIndex: 'hora', render: horaCurta },
-    { title: 'Cliente', dataIndex: 'clienteId', render: nomes.cliente },
-    { title: 'Profissional', dataIndex: 'funcionarioId', render: nomes.profissional },
-    moduloAtivo('servicos') && { title: 'Serviço', dataIndex: 'servicoId', render: nomes.servico },
+    { title: 'Cliente', dataIndex: 'clienteNome' },
+    { title: 'Profissional', dataIndex: 'funcionarioNome' },
+    comServicos && { title: 'Serviço', dataIndex: 'servicoNome' },
     { title: 'Situação', dataIndex: 'status', render: (s) => <EtiquetaStatus status={s} /> },
   ].filter(Boolean)
+
+  return (
+    <Tabela
+      size="small"
+      columns={colunas}
+      dataSource={ag.itens}
+      loading={ag.carregando}
+      pagination={{
+        current: ag.pagina,
+        pageSize: ag.porPagina,
+        total: ag.total,
+        onChange: ag.mudarPagina,
+        showSizeChanger: false,
+        hideOnSinglePage: true,
+      }}
+      vazio={
+        ag.erro ? (
+          <EstadoVazio
+            compacto
+            titulo="Não foi possível carregar os agendamentos"
+            descricao={ag.erro.mensagem}
+            acao={<Button onClick={ag.recarregar}>Tentar de novo</Button>}
+          />
+        ) : (
+          'Nenhum agendamento de hoje em diante'
+        )
+      }
+    />
+  )
+}
+
+export default function Locais() {
+  const { pode, moduloAtivo, loja } = useAcesso()
+  const locais = useLocais()
+  const somenteLeitura = !pode('locais', 'escrita')
+  const comServicos = moduloAtivo('servicos')
+  const verAgendamentos = pode('agenda_equipe') || pode('agenda_propria')
+  const { singular, plural: nomePlural } = rotulosLocal(loja)
 
   const colunas = [
     { title: 'Nome', dataIndex: 'nome', sorter: (a, b) => a.nome.localeCompare(b.nome), render: (n) => <strong>{n}</strong> },
@@ -93,22 +149,16 @@ export default function Locais() {
           l.descricao || <span className="texto-apoio">—</span>
         ),
     },
-    moduloAtivo('servicos') && {
+    comServicos && {
       title: 'Serviços vinculados',
-      key: 'servicos',
-      render: (_, l) => {
-        const lista = servicosDoLocal(l.id)
-        return lista.length ? lista.map((s) => s.nome).join(', ') : <span className="texto-apoio">Só os sem vínculo</span>
-      },
+      dataIndex: 'servicos',
+      render: (lista = []) => (lista.length ? lista.map((s) => s.nome).join(', ') : <span className="texto-apoio">Só os sem vínculo</span>),
     },
     {
       title: 'Próximos',
-      key: 'agendamentos',
+      dataIndex: 'proximosAgendamentos',
       align: 'right',
-      render: (_, l) => {
-        const n = proximos(l.id)
-        return n ? <Etiqueta tom="tinta">{plural(n, 'agendamento', 'agendamentos')}</Etiqueta> : <span className="texto-apoio">Nenhum</span>
-      },
+      render: (n) => (n ? <Etiqueta tom="tinta">{plural(n, 'agendamento', 'agendamentos')}</Etiqueta> : <span className="texto-apoio">Nenhum</span>),
     },
     { title: 'Situação', dataIndex: 'ativo', render: (ativo) => <EtiquetaSituacao ativo={ativo} /> },
   ].filter(Boolean)
@@ -116,7 +166,11 @@ export default function Locais() {
   return (
     <CadastroTabela
       titulo={nomePlural}
-      descricao={`Onde o atendimento acontece: salas, cadeiras, macas ou links online. Abra a linha para ver os agendamentos de cada ${singular.toLowerCase()}.`}
+      descricao={
+        verAgendamentos
+          ? `Onde o atendimento acontece: salas, cadeiras, macas ou links online. Abra a linha para ver os próximos agendamentos de cada ${singular.toLowerCase()}.`
+          : 'Onde o atendimento acontece: salas, cadeiras, macas ou links online.'
+      }
       item={singular.toLowerCase()}
       textoNovo={`Adicionar ${singular.toLowerCase()}`}
       textoSalvo="Salvo."
@@ -125,22 +179,11 @@ export default function Locais() {
       somenteLeitura={somenteLeitura}
       permitirExcluir={false}
       larguraTabela={960}
-      antes={<RotuloLocais loja={loja} somenteLeitura={somenteLeitura} />}
-      expandable={{
-        expandedRowRender: (l) => (
-          <Tabela
-            size="small"
-            columns={colunasAgendamentos}
-            dataSource={agendamentosDoLocal(l.id)}
-            pagination={{ pageSize: 5, hideOnSinglePage: true }}
-            vazio="Nenhum agendamento aqui"
-          />
-        ),
-      }}
-      validar={(v, item) =>
-        locais.itens.some((l) => l.id !== item?.id && l.nome.trim().toLowerCase() === v.nome.trim().toLowerCase())
-          ? `Já existe um local chamado "${v.nome}". Use outro nome.`
-          : null
+      antes={<RotuloLocais somenteLeitura={somenteLeitura} />}
+      expandable={
+        verAgendamentos
+          ? { expandedRowRender: (l) => <AgendamentosDoLocal localId={l.id} comServicos={comServicos} /> }
+          : undefined
       }
       valoresNovo={{ tipo: 'presencial', ativo: true }}
       iconeRegistro={(l) => (l.tipo === 'online' ? <VideoCameraOutlined /> : <EnvironmentOutlined />)}
@@ -161,11 +204,11 @@ export default function Locais() {
                   extra="Opcional. Se o link mudar a cada atendimento, informe no próprio agendamento."
                   rules={[{ type: 'url', message: 'Informe um link completo, começando com https://' }]}
                 >
-                  <Input placeholder="https://meet.google.com/" />
+                  <Input placeholder="https://meet.google.com/" maxLength={500} />
                 </Form.Item>
               ) : (
                 <Form.Item name="descricao" label="Descrição">
-                  <Input.TextArea rows={2} placeholder="Ex.: piano de cauda, isolamento acústico" />
+                  <Input.TextArea rows={2} maxLength={2000} placeholder="Ex.: piano de cauda, isolamento acústico" />
                 </Form.Item>
               )
             }

@@ -8,13 +8,13 @@ import {
   MinusCircleOutlined,
   PauseCircleOutlined,
   PlusCircleOutlined,
+  RollbackOutlined,
   StopOutlined,
   UserDeleteOutlined,
 } from '@ant-design/icons'
 import Etiqueta from './base/Etiqueta.jsx'
-import { statusAgendamento, tiposLocal } from '../data/mock.js'
 import { niveis } from '../data/acesso.js'
-import { operacoesHistorico, statusLoja } from '../data/plataforma.js'
+import { operacoesHistorico, statusAgendamento, statusLoja, tiposLocal } from '../data/dominio.js'
 
 // Etiquetas do domínio: o mesmo status tem sempre o mesmo texto, tom e ícone em todo o sistema
 
@@ -27,9 +27,12 @@ const iconesStatus = {
   nao_compareceu: <UserDeleteOutlined />,
 }
 
+// Valor que a tela não conhece (enum novo na API): rótulo neutro com o próprio código, sem quebrar
+const desconhecido = (valor) => ({ label: String(valor ?? '—').replace(/_/g, ' '), tom: 'neutro' })
+
 export function EtiquetaStatus({ status }) {
-  const s = statusAgendamento[status]
-  if (!s) return null
+  if (!status) return null
+  const s = statusAgendamento[status] ?? desconhecido(status)
   return (
     <Etiqueta tom={s.tom} icone={iconesStatus[status]}>
       {s.label}
@@ -50,8 +53,8 @@ export function EtiquetaSituacao({ ativo, ativoTexto = 'Ativo', inativoTexto = '
 const iconesLoja = { ativa: <CheckCircleOutlined />, suspensa: <PauseCircleOutlined />, cancelada: <StopOutlined /> }
 
 export function EtiquetaLoja({ status }) {
-  const s = statusLoja[status]
-  if (!s) return null
+  if (!status) return null
+  const s = statusLoja[status] ?? desconhecido(status)
   return (
     <Etiqueta tom={s.tom} icone={iconesLoja[status]}>
       {s.label}
@@ -59,11 +62,16 @@ export function EtiquetaLoja({ status }) {
   )
 }
 
-const iconesOperacao = { inserir: <PlusCircleOutlined />, alterar: <EditOutlined />, excluir: <CloseCircleOutlined /> }
+const iconesOperacao = {
+  inserir: <PlusCircleOutlined />,
+  alterar: <EditOutlined />,
+  excluir: <CloseCircleOutlined />,
+  restaurar: <RollbackOutlined />,
+}
 
 export function EtiquetaOperacao({ operacao }) {
-  const o = operacoesHistorico[operacao]
-  if (!o) return null
+  if (!operacao) return null
+  const o = operacoesHistorico[operacao] ?? desconhecido(operacao)
   return (
     <Etiqueta tom={o.tom} icone={iconesOperacao[operacao]}>
       {o.label}

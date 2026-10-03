@@ -6,15 +6,18 @@ from typing import Annotated, Any, Literal
 from uuid import UUID
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError, available_timezones
 
-from pydantic import BaseModel, BeforeValidator, EmailStr, Field, field_validator
+from pydantic import BaseModel, BeforeValidator, EmailStr, Field, PlainSerializer, field_validator
 
 from app.auth.catalogo import MODULOS
 from app.models.enums import OperacaoAuditoria, OrigemAuditoria, StatusLoja, TipoLoja
 from app.schemas.comum import (
+    LISTA_MAX,
+    DataHora,
     DecimalSaida,
     Dinheiro,
     Entrada,
     Esquema,
+    TelefoneOpcional,
     regra,
     texto,
     texto_opcional,
@@ -23,6 +26,20 @@ from app.schemas.configuracoes import DadosLojaEntrada
 from app.schemas.funcionarios import Senha
 
 SLUG = re.compile(r'^[a-z0-9]+(?:-[a-z0-9]+)*$')
+
+# Fuso das telas da plataforma (planos, usuários admin, ações recentes) e da auditoria da "plataforma".
+# O que é de uma loja sai no fuso dela (GER-15); o front mostra o horário como veio.
+FUSO_PLATAFORMA = 'America/Sao_Paulo'
+ZONA_PLATAFORMA = ZoneInfo(FUSO_PLATAFORMA)
+
+
+def _na_plataforma(momento: datetime) -> datetime:
+    return momento.astimezone(ZONA_PLATAFORMA) if momento.tzinfo is not None else momento
+
+
+MomentoPlataforma = Annotated[
+    datetime, PlainSerializer(_na_plataforma, return_type=datetime, when_used='json')
+]
 
 
 def _slug(valor: Any) -> Any:
@@ -34,7 +51,11 @@ def _slug(valor: Any) -> Any:
     return slug
 
 
+MSG_FUSO = 'Fuso horário inválido (ex.: America/Sao_Paulo).'
+
+
 def _fuso(valor: Any) -> Any:
+    """Fuso conhecido pelo Python. A rota confere também com o Postgres (pg_timezone_names)."""
     if not isinstance(valor, str):
         return valor
     try:
@@ -42,7 +63,7 @@ def _fuso(valor: Any) -> Any:
             raise ZoneInfoNotFoundError(valor)
         ZoneInfo(valor)
     except (ZoneInfoNotFoundError, ValueError):
-        raise regra('Fuso horário inválido (ex.: America/Sao_Paulo).') from None
+        raise regra(MSG_FUSO) from None
     return valor
 
 
@@ -81,6 +102,7 @@ class AdminInicial(Entrada):
 class LojaCriacao(LojaEntrada):
     modulos: list[str] = Field(
         default_factory=list,
+        max_length=LISTA_MAX,
         description='Códigos dos módulos opcionais que a loja vai usar (servicos, materiais, ...)',
     )
     admin: AdminInicial
@@ -167,7 +189,7 @@ class ModuloEntrada(Entrada):
 
     habilitado: bool | None = None
     observacao: texto_opcional(500) = None
-    expira_em: datetime | None = Field(
+    expira_em: DataHora | None = Field(
         default=None, description='Sem fuso = horário da loja. Nulo = sem prazo'
     )
 
@@ -179,7 +201,7 @@ class FuncionarioSuporteEdicao(Entrada):
     nome: texto(150)
     email: EmailStr
     perfil_id: UUID
-    telefone: texto_opcional(20) = None
+    telefone: TelefoneOpcional = None
     ativo: bool = True
 
 
@@ -241,8 +263,8 @@ class PlanoSaida(Esquema):
     preco_mensal: DecimalSaida
     ativo: bool
     lojas_ativas: int = 0
-    criado_em: datetime
-    atualizado_em: datetime
+    criado_em: MomentoPlataforma
+    atualizado_em: MomentoPlataforma
 
 
 # --- Usuários admin ------------------------------------------------------------------------------
@@ -262,9 +284,9 @@ class SuperadminSaida(Esquema):
     nome: str
     email: str
     ativo: bool
-    ultimo_login_em: datetime | None
-    criado_em: datetime
-    atualizado_em: datetime
+    ultimo_login_em: MomentoPlataforma | None
+    criado_em: MomentoPlataforma
+    atualizado_em: MomentoPlataforma
     voce: bool = Field(default=False, description='É o usuário logado')
 
 
@@ -314,7 +336,7 @@ class TabelasAuditoria(BaseModel):
 
 class AcaoRecente(BaseModel):
     id: int
-    criado_em: datetime
+    criado_em: MomentoPlataforma
     tabela: str
     tabela_nome: str
     operacao: OperacaoAuditoria
@@ -330,6 +352,15 @@ class ModuloEmUso(BaseModel):
     lojas: int = Field(description='Lojas ativas que usam o módulo')
 
 
+class ModuloExpirando(BaseModel):
+    loja_id: UUID
+    loja_nome: str
+    codigo: str
+    nome: str
+    expira_em: datetime = Field(description='No fuso da loja')
+    vencido: bool = Field(description='O prazo já passou (o módulo está ligado, mas sem efeito)')
+
+
 class VisaoGeral(BaseModel):
     lojas_ativas: int
     lojas_suspensas: int
@@ -338,4 +369,8 @@ class VisaoGeral(BaseModel):
     receita_mensal: DecimalSaida = Field(description='Soma do preço dos planos das lojas ativas')
     lojas_por_tipo: dict[TipoLoja, dict[StatusLoja, int]]
     modulos_em_uso: list[ModuloEmUso]
+    modulos_expirando: list[ModuloExpirando] = Field(
+        default_factory=list,
+        description='Módulos ligados em lojas ativas com prazo vencido ou que vence nos próximos 30 dias',
+    )
     ultimas_acoes: list[AcaoRecente]

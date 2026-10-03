@@ -1,11 +1,12 @@
 """Configurações › Dados da loja (/api/loja/configuracoes/loja). Recurso: config_loja.
 
 Grava direto em lojas (estrutura.md, 2.18). O trigger preenche atualizado_por_funcionario.
+A logo é um arquivo (app/services/arquivos.py): enviada por PUT .../logo (multipart, campo ``arquivo``).
 """
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, File, UploadFile, status
 from sqlalchemy import select
 
 from app.auth.catalogo import MODULOS
@@ -13,6 +14,7 @@ from app.auth.dependencias import ContextoLoja, exigir
 from app.models import Plano
 from app.schemas.comum import Erro
 from app.schemas.configuracoes import DadosLoja, DadosLojaEntrada
+from app.services.arquivos import remover_logo, trocar_logo
 from app.services.plataforma import ultima_alteracao_loja
 
 router = APIRouter(
@@ -28,7 +30,7 @@ Escrita = Annotated[ContextoLoja, Depends(exigir('config_loja', 'escrita'))]
 def _dados(ctx: ContextoLoja) -> DadosLoja:
     db, loja = ctx.db, ctx.loja
     plano = db.scalar(select(Plano.nome).where(Plano.id == loja.plano_id)) if loja.plano_id else None
-    autor, nome = ultima_alteracao_loja(db, loja.id)
+    ultima = ultima_alteracao_loja(db, loja.id)
     return DadosLoja(
         **{campo: getattr(loja, campo) for campo in DadosLojaEntrada.model_fields},
         logo_url=loja.logo_url,
@@ -38,9 +40,11 @@ def _dados(ctx: ContextoLoja) -> DadosLoja:
         status=loja.status,
         fuso_horario=loja.fuso_horario,
         modulos={codigo: ctx.acesso.modulo_ativo(codigo) for codigo, opcional in MODULOS.items() if opcional},
+        criado_em=loja.criado_em,
         atualizado_em=loja.atualizado_em,
-        atualizado_por=autor,
-        atualizado_por_nome=nome,
+        # Só o funcionário aparece como autor; superadmin e sistema ficam nulos (GER-13)
+        atualizado_por=ultima.funcionario_id,
+        atualizado_por_nome=ultima.nome if ultima.funcionario_id else None,
     )
 
 
@@ -58,11 +62,18 @@ def editar(dados: DadosLojaEntrada, ctx: Escrita) -> DadosLoja:
     return _dados(ctx)
 
 
-@router.delete(
+@router.put(
     '/logo',
-    status_code=status.HTTP_204_NO_CONTENT,
-    summary='Remover a logo (o envio de arquivo chega junto com o storage)',
+    responses={413: {'model': Erro}, 422: {'model': Erro}},
+    summary='Enviar a logo (multipart, campo "arquivo": PNG, JPEG ou WebP, até 2 MB)',
 )
-def remover_logo(ctx: Escrita) -> None:
-    ctx.loja.logo_url = None
-    ctx.db.flush()
+def enviar_logo(
+    arquivo: Annotated[UploadFile, File(description='PNG, JPEG ou WebP')], ctx: Escrita
+) -> DadosLoja:
+    trocar_logo(ctx.db, ctx.loja_id, arquivo.file)
+    return _dados(ctx)
+
+
+@router.delete('/logo', status_code=status.HTTP_204_NO_CONTENT, summary='Remover a logo (apaga o arquivo)')
+def excluir_logo(ctx: Escrita) -> None:
+    remover_logo(ctx.db, ctx.loja_id)

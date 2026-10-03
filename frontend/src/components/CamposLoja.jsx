@@ -30,15 +30,15 @@ export function CamposEmpresa() {
       </Col>
       <Col xs={24} md={8}>
         <Form.Item name="email" label="E-mail" validateTrigger="onBlur" rules={[{ type: 'email', message: 'E-mail inválido. Confira o @ e o domínio' }]}>
-          <Input type="email" />
+          <Input type="email" maxLength={254} />
         </Form.Item>
       </Col>
     </Row>
   )
 }
 
-// Endereço com preenchimento pelo CEP
-export function CamposEndereco() {
+// Endereço com preenchimento pelo CEP. somenteLeitura: sem a dica do CEP (o campo não pode ser editado)
+export function CamposEndereco({ somenteLeitura = false } = {}) {
   const form = Form.useFormInstance()
   const { message } = App.useApp()
 
@@ -55,33 +55,33 @@ export function CamposEndereco() {
   return (
     <Row gutter={16}>
       <Col xs={24} sm={8} md={6}>
-        <Form.Item name="cep" label="CEP" normalize={mascaraCep} extra="Preenche o endereço">
+        <Form.Item name="cep" label="CEP" normalize={mascaraCep} extra={somenteLeitura ? undefined : 'Preenche o endereço'}>
           <Input inputMode="numeric" onBlur={preencher} />
         </Form.Item>
       </Col>
       <Col xs={24} sm={16} md={13}>
         <Form.Item name="logradouro" label="Logradouro">
-          <Input />
+          <Input maxLength={150} />
         </Form.Item>
       </Col>
       <Col xs={8} md={5}>
         <Form.Item name="numero" label="Número">
-          <Input />
+          <Input maxLength={10} />
         </Form.Item>
       </Col>
       <Col xs={16} md={8}>
         <Form.Item name="complemento" label="Complemento">
-          <Input />
+          <Input maxLength={80} />
         </Form.Item>
       </Col>
       <Col xs={24} md={6}>
         <Form.Item name="bairro" label="Bairro">
-          <Input />
+          <Input maxLength={80} />
         </Form.Item>
       </Col>
       <Col xs={16} md={7}>
         <Form.Item name="cidade" label="Cidade">
-          <Input />
+          <Input maxLength={80} />
         </Form.Item>
       </Col>
       <Col xs={8} md={3}>

@@ -8,13 +8,16 @@ nas tabelas da loja, ``atualizado_por`` fica NULL e a auditoria guarda o ``super
 from datetime import UTC, datetime
 from typing import Annotated
 from uuid import UUID
+from zoneinfo import ZoneInfo
 
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, File, Query, UploadFile, status
 from sqlalchemy import func, or_, select
+from sqlalchemy.orm import Session
 
 from app.auth.catalogo import MODULOS
 from app.auth.dependencias import ContextoSuperadmin, ContextoSuperadminDep
 from app.auth.senhas import gerar_hash, gerar_senha_provisoria
+from app.db import fuso_conhecido_pelo_banco
 from app.models import (
     Funcionalidade,
     Funcionario,
@@ -27,6 +30,7 @@ from app.models import (
 from app.models.enums import StatusLoja, TipoLoja
 from app.schemas.comum import Erro, Pagina, Paginacao, paginacao
 from app.schemas.superadmin import (
+    MSG_FUSO,
     FuncionarioSuporte,
     FuncionarioSuporteCriacao,
     FuncionarioSuporteCriado,
@@ -45,7 +49,18 @@ from app.schemas.superadmin import (
     SenhaRedefinida,
     StatusEntrada,
 )
-from app.services.comum import buscar, conflito, excluir, fuso, invalido, nao_encontrado, no_fuso, paginar
+from app.services.arquivos import remover_logo, trocar_logo
+from app.services.comum import (
+    buscar,
+    conflito,
+    erro_de_campo,
+    excluir,
+    fuso,
+    invalido,
+    nao_encontrado,
+    no_fuso,
+    paginar,
+)
 from app.services.funcionarios import MSG_ULTIMO_ADMIN, deixa_loja_sem_admin
 from app.services.lojas import provisionar_loja
 from app.services.plataforma import (
@@ -67,6 +82,11 @@ MSG_FUNC_404 = 'Funcionário não encontrado.'
 # --- Saída ---------------------------------------------------------------------------------------
 
 
+def _no_fuso[D: datetime | None](momento: D, zona: ZoneInfo) -> D:
+    """Momentos gravados em UTC saem no fuso da loja (GER-15), como no painel da loja."""
+    return momento.astimezone(zona) if momento is not None and momento.tzinfo is not None else momento
+
+
 def _resumos[S: LojaResumo](db, lojas: list[Loja], modelo: type[S]) -> list[S]:
     planos = nomes_planos(db, (loja.plano_id for loja in lojas))
     modulos = modulos_opcionais_por_loja(db, (loja.id for loja in lojas))
@@ -74,6 +94,7 @@ def _resumos[S: LojaResumo](db, lojas: list[Loja], modelo: type[S]) -> list[S]:
     saida = []
     for loja in lojas:
         item = modelo.model_validate(loja)
+        item.criado_em = _no_fuso(item.criado_em, fuso(loja.fuso_horario))
         item.plano_nome = planos.get(loja.plano_id) if loja.plano_id else None
         item.modulos = modulos.get(loja.id, {})
         item.funcionarios_ativos = funcionarios.get(loja.id, 0)
@@ -87,7 +108,9 @@ def _detalhe(db, loja: Loja) -> LojaDetalhe:
     if configuracao is not None:
         item.rotulo_local = configuracao.rotulo_local
         item.rotulo_local_plural = configuracao.rotulo_local_plural
-    item.atualizado_por, item.atualizado_por_nome = ultima_alteracao_loja(db, loja.id)
+    item.atualizado_em = _no_fuso(item.atualizado_em, fuso(loja.fuso_horario))
+    ultima = ultima_alteracao_loja(db, loja.id)
+    item.atualizado_por, item.atualizado_por_nome = ultima.autor, ultima.nome
     return item
 
 
@@ -97,6 +120,12 @@ def _validar_plano(db, plano_id: UUID, atual: UUID | None = None) -> None:
         raise invalido(MSG_PLANO_404)
     if not plano.ativo and plano_id != atual:
         raise invalido('Este plano está inativo e não pode ser escolhido.')
+
+
+def _validar_fuso(db: Session, fuso_horario: str) -> None:
+    """O fuso vira o TimeZone das transações da loja (app.db): precisa existir também no Postgres."""
+    if not fuso_conhecido_pelo_banco(db, fuso_horario):
+        raise erro_de_campo('fuso_horario', MSG_FUSO)
 
 
 def _aplicar(loja: Loja, dados: LojaEntrada) -> None:
@@ -153,6 +182,7 @@ def opcoes(ctx: ContextoSuperadminDep) -> list[LojaOpcao]:
 def criar(dados: LojaCriacao, ctx: ContextoSuperadminDep) -> LojaCriada:
     db = ctx.db
     _validar_plano(db, dados.plano_id)
+    _validar_fuso(db, dados.fuso_horario)
     loja = Loja(**{campo: getattr(dados, campo) for campo in LojaEntrada.model_fields})
     db.add(loja)
     db.flush()
@@ -190,6 +220,7 @@ def obter(loja_id: UUID, ctx: ContextoSuperadminDep) -> LojaDetalhe:
 def editar(loja_id: UUID, dados: LojaEdicao, ctx: ContextoSuperadminDep) -> LojaDetalhe:
     loja = buscar_loja(ctx.db, loja_id)
     _validar_plano(ctx.db, dados.plano_id, loja.plano_id)
+    _validar_fuso(ctx.db, dados.fuso_horario)
     _aplicar(loja, dados)
     if dados.status is not None and loja.status != dados.status:
         loja.status = dados.status
@@ -204,6 +235,28 @@ def mudar_status(loja_id: UUID, dados: StatusEntrada, ctx: ContextoSuperadminDep
         loja.status = dados.status
         ctx.db.flush()
     return _detalhe(ctx.db, loja)
+
+
+@router.put(
+    '/{loja_id}/logo',
+    responses={413: {'model': Erro}},
+    summary='Enviar a logo da loja (multipart, campo "arquivo": PNG, JPEG ou WebP, até 2 MB)',
+)
+def enviar_logo(
+    loja_id: UUID,
+    arquivo: Annotated[UploadFile, File(description='PNG, JPEG ou WebP')],
+    ctx: ContextoSuperadminDep,
+) -> LojaDetalhe:
+    return _detalhe(ctx.db, trocar_logo(ctx.db, loja_id, arquivo.file))
+
+
+@router.delete(
+    '/{loja_id}/logo',
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary='Remover a logo da loja (apaga o arquivo)',
+)
+def excluir_logo(loja_id: UUID, ctx: ContextoSuperadminDep) -> None:
+    remover_logo(ctx.db, loja_id)
 
 
 @router.delete(
@@ -252,7 +305,7 @@ def _modulos(ctx: ContextoSuperadmin, loja: Loja) -> list[ModuloLoja]:
                 ativo=ativo,
                 observacao=lf.observacao if lf else None,
                 expira_em=lf.expira_em.astimezone(zona) if lf and lf.expira_em else None,
-                atualizado_em=lf.atualizado_em if lf else None,
+                atualizado_em=_no_fuso(lf.atualizado_em, zona) if lf else None,
                 atualizado_por_nome=autores.get(lf.atualizado_por) if lf and lf.atualizado_por else None,
             )
         )
@@ -315,9 +368,18 @@ def _funcionarios(
             .execution_options(incluir_excluidos=True)
         )
     }
+    zona = fuso(
+        ctx.db.scalar(
+            select(Loja.fuso_horario).where(Loja.id == loja_id).execution_options(incluir_excluidos=True)
+        )
+        or 'America/Sao_Paulo'
+    )
     saida = []
     for f in funcionarios:
         item = FuncionarioSuporte.model_validate(f)
+        item.criado_em = _no_fuso(item.criado_em, zona)
+        item.atualizado_em = _no_fuso(item.atualizado_em, zona)
+        item.ultimo_login_em = _no_fuso(item.ultimo_login_em, zona)
         perfil = perfis.get(f.perfil_id)
         item.perfil_nome = perfil.nome if perfil else None
         item.perfil_acesso_total = bool(perfil and perfil.acesso_total)

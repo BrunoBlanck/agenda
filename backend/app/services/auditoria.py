@@ -5,6 +5,7 @@ nomes de quem fez resolvidos e o que mudou (campo: antes → depois).
 """
 
 import json
+import re
 from collections.abc import Sequence
 from datetime import date, datetime, timedelta
 from typing import Any
@@ -16,12 +17,11 @@ from sqlalchemy.orm import Session
 
 from app.models import Auditoria, Cliente, Funcionalidade, Loja
 from app.models.enums import OperacaoAuditoria, OrigemAuditoria
-from app.schemas.superadmin import AuditoriaItem, Mudanca, Periodo, Quem
+from app.schemas.superadmin import FUSO_PLATAFORMA, AuditoriaItem, Mudanca, Periodo, Quem
 from app.services.comum import intervalo_de_dias, invalido, nomes_funcionarios
 from app.services.plataforma import nomes_superadmins
 
 PLATAFORMA = 'plataforma'
-FUSO_PLATAFORMA = 'America/Sao_Paulo'
 
 # Tabelas que podem ser consultadas (frontend/src/data/plataforma.js: tabelasLoja e tabelasPlataforma)
 TABELAS_LOJA: dict[str, str] = {
@@ -215,9 +215,30 @@ def descrever_quem(
 # --- O que mudou e rótulo do registro ------------------------------------------------------------
 
 
-def mudancas(registro: Auditoria) -> list[Mudanca]:
+# timestamptz gravado pelo trigger (to_jsonb): "2026-10-03T00:22:41.592358+00:00"
+_MOMENTO = re.compile(r'^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?([+-]\d{2}:\d{2}|Z)$')
+
+
+def _no_fuso(valor: Any, zona: ZoneInfo) -> Any:
+    """Data/hora com fuso (UTC no banco) passa para o fuso da loja, como o resto da API (GER-15)."""
+    if not isinstance(valor, str) or not _MOMENTO.match(valor):
+        return valor
+    try:
+        return datetime.fromisoformat(valor).astimezone(zona).isoformat(timespec='seconds')
+    except ValueError:
+        return valor
+
+
+def _linha_no_fuso(linha: dict[str, Any] | None, zona: ZoneInfo) -> dict[str, Any] | None:
+    if linha is None:
+        return None
+    return {campo: _no_fuso(valor, zona) for campo, valor in linha.items()}
+
+
+def mudancas(registro: Auditoria, zona: ZoneInfo | None = None) -> list[Mudanca]:
     if registro.operacao != OperacaoAuditoria.alterar:
         return []
+    zona = zona or ZoneInfo(FUSO_PLATAFORMA)
     antes, depois = registro.antes or {}, registro.depois or {}
     saida = []
     for campo in registro.campos_alterados or []:
@@ -226,7 +247,8 @@ def mudancas(registro: Auditoria) -> list[Mudanca]:
         if campo == 'senha_hash':
             saida.append(Mudanca(campo='senha', antes=SENHA_OCULTA, depois='redefinida'))
             continue
-        saida.append(Mudanca(campo=campo, antes=antes.get(campo), depois=depois.get(campo)))
+        valor_antes, valor_depois = _no_fuso(antes.get(campo), zona), _no_fuso(depois.get(campo), zona)
+        saida.append(Mudanca(campo=campo, antes=valor_antes, depois=valor_depois))
     return saida
 
 
@@ -308,9 +330,9 @@ def descrever(
             operacao=r.operacao,
             origem=r.origem,
             quem=quem[_chave_quem(r.funcionario_id, r.superadmin_id, r.origem)],
-            mudancas=mudancas(r),
-            antes=r.antes,
-            depois=r.depois,
+            mudancas=mudancas(r, zona),
+            antes=_linha_no_fuso(r.antes, zona),
+            depois=_linha_no_fuso(r.depois, zona),
         )
         for r, rotulo in zip(registros, textos, strict=True)
     ]

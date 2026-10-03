@@ -1,8 +1,10 @@
 """Funcionários e cargos (/api/loja/funcionarios, /api/loja/cargos). Recurso: funcionarios.
 
-Regras (estrutura.md, 2.2 e 2.4):
+Regras (estrutura.md, 2.2 e 2.4; ACE-19 e ACE-20):
 - só um Administrador atribui o perfil Administrador ou altera outro Administrador;
-- a loja não fica sem nenhum Administrador ativo;
+- ninguém atribui um perfil com nível acima do seu, troca o próprio perfil ou troca a senha de quem
+  tem nível acima do seu;
+- a loja não fica sem nenhum Administrador ativo (com trava contra alterações simultâneas);
 - funcionário não é excluído: é inativado (o histórico continua).
 """
 
@@ -17,6 +19,7 @@ from app.auth.senhas import gerar_hash
 from app.models import Cargo, Funcionario, Perfil
 from app.schemas.comum import Erro
 from app.schemas.funcionarios import CargoEntrada, CargoSaida, FuncionarioEntrada, FuncionarioSaida
+from app.services.acesso import acima_do_teto, niveis_do_perfil
 from app.services.comum import buscar, com_autor, conflito, excluir, invalido, proibido
 from app.services.funcionarios import MSG_ULTIMO_ADMIN, deixa_loja_sem_admin
 
@@ -59,6 +62,30 @@ def _saida(ctx: ContextoLoja, funcionarios: list[Funcionario]) -> list[Funcionar
     return com_autor(db, ctx.loja_id, saida)
 
 
+def _sem_escalada(
+    ctx: ContextoLoja,
+    dados: FuncionarioEntrada,
+    perfil: Perfil,
+    atual: Funcionario | None,
+    perfil_atual: Perfil | None,
+) -> None:
+    """ACE-19 para quem não é Administrador: nada de conceder (ou tomar) acesso acima do próprio."""
+    if ctx.perfil.acesso_total:
+        return
+    teto = niveis_do_perfil(ctx.db, ctx.loja_id, ctx.perfil)
+    troca_perfil = atual is None or perfil.id != atual.perfil_id
+    if troca_perfil and acima_do_teto(niveis_do_perfil(ctx.db, ctx.loja_id, perfil), teto):
+        raise proibido('Você não pode atribuir um perfil com acesso maior que o seu.')
+    colega = atual is not None and atual.id != ctx.funcionario.id
+    if (
+        colega
+        and dados.senha
+        and perfil_atual is not None
+        and acima_do_teto(niveis_do_perfil(ctx.db, ctx.loja_id, perfil_atual), teto)
+    ):
+        raise proibido('Você não pode trocar a senha de quem tem acesso maior que o seu.')
+
+
 def _validar(ctx: ContextoLoja, dados: FuncionarioEntrada, atual: Funcionario | None) -> None:
     perfil = ctx.db.scalar(select(Perfil).where(Perfil.id == dados.perfil_id, Perfil.loja_id == ctx.loja_id))
     if perfil is None:
@@ -69,7 +96,10 @@ def _validar(ctx: ContextoLoja, dados: FuncionarioEntrada, atual: Funcionario | 
             raise invalido(MSG_CARGO_404)
     sou_admin = ctx.perfil.acesso_total
     era_admin = False
+    perfil_atual = None
     if atual is not None:
+        if atual.id == ctx.funcionario.id and perfil.id != atual.perfil_id:
+            raise proibido('Você não pode trocar o seu próprio perfil de acesso.')
         perfil_atual = ctx.db.scalar(
             select(Perfil).where(Perfil.id == atual.perfil_id, Perfil.loja_id == ctx.loja_id)
         )
@@ -78,6 +108,7 @@ def _validar(ctx: ContextoLoja, dados: FuncionarioEntrada, atual: Funcionario | 
             raise proibido('Só um Administrador pode alterar outro Administrador.')
     if perfil.acesso_total and not sou_admin:
         raise proibido('Só um Administrador pode atribuir o perfil Administrador.')
+    _sem_escalada(ctx, dados, perfil, atual, perfil_atual)
     continua_admin = perfil.acesso_total and dados.ativo
     if atual is not None and deixa_loja_sem_admin(ctx.db, ctx.loja_id, atual, era_admin, continua_admin):
         raise conflito(MSG_ULTIMO_ADMIN)

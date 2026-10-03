@@ -1,6 +1,7 @@
 """SUPERADMIN: planos, usuários admin, visão geral e a regra de token em todas as rotas."""
 
 import re
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from sqlalchemy import text
@@ -233,8 +234,46 @@ def test_visao_geral(cliente, engine_dono, sa):
     )
 
 
+def test_visao_geral_modulos_expirando_e_fuso(cliente, engine_dono, sa):
+    """Módulos ligados com prazo vencido ou a vencer em 30 dias; horários no fuso (sem "Z" de UTC)."""
+    _, h = sa
+    a = criar_loja_teste(engine_dono, 'loja-a')
+    b = criar_loja_teste(engine_dono, 'loja-b')
+    suspensa, _ = criar_loja(engine_dono, 'suspensa', status=StatusLoja.suspensa)
+    agora = datetime.now(UTC)
+    mudar_modulo(engine_dono, a.loja.id, 'materiais', expira_em=agora + timedelta(days=10))
+    mudar_modulo(engine_dono, a.loja.id, 'locais', expira_em=agora - timedelta(days=2))
+    mudar_modulo(engine_dono, a.loja.id, 'servicos', expira_em=agora + timedelta(days=90))  # longe
+    mudar_modulo(engine_dono, b.loja.id, 'materiais', expira_em=agora + timedelta(days=5), habilitado=False)
+    mudar_modulo(engine_dono, suspensa.id, 'materiais', expira_em=agora + timedelta(days=5))
+    with engine_dono.begin() as conexao:
+        conexao.execute(
+            text("UPDATE lojas SET fuso_horario = 'America/Manaus' WHERE id = :l"), {'l': a.loja.id}
+        )
+    cliente.patch(f'/api/superadmin/lojas/{b.loja.id}/modulos/locais', json={'observacao': 'x'}, headers=h)
+
+    visao = cliente.get('/api/superadmin/visao-geral', headers=h).json()
+    expirando = [(m['loja_nome'], m['codigo'], m['vencido']) for m in visao['modulos_expirando']]
+    assert expirando == [('Loja loja-a', 'locais', True), ('Loja loja-a', 'materiais', False)]
+    assert all(m['expira_em'].endswith('-04:00') for m in visao['modulos_expirando'])
+    assert visao['ultimas_acoes'][0]['criado_em'].endswith('-03:00')
+
+    # Datas das outras rotas: fuso da loja (lojas, funcionários, módulos) ou da plataforma
+    loja = cliente.get(f'/api/superadmin/lojas/{a.loja.id}', headers=h).json()
+    assert loja['criado_em'].endswith('-04:00')
+    assert loja['atualizado_em'].endswith('-04:00')
+    funcionarios = cliente.get(f'/api/superadmin/lojas/{a.loja.id}/funcionarios', headers=h).json()
+    assert all(f['criado_em'].endswith('-04:00') for f in funcionarios)
+    modulos = cliente.get(f'/api/superadmin/lojas/{b.loja.id}/modulos', headers=h).json()
+    assert next(m for m in modulos if m['codigo'] == 'locais')['atualizado_em'].endswith('-03:00')
+    usuarios = cliente.get('/api/superadmin/usuarios', headers=h).json()
+    assert all(u['criado_em'].endswith('-03:00') for u in usuarios)
+
+
 def test_visao_geral_sem_dados(cliente, sa):
     _, h = sa
+    # Entrar só atualiza o último acesso: não conta como ação do admin
+    login_superadmin(cliente, 'admin@plataforma.com')
     visao = cliente.get('/api/superadmin/visao-geral', headers=h).json()
     assert visao['lojas_ativas'] == 0
     assert visao['receita_mensal'] == 0

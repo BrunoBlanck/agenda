@@ -1,7 +1,9 @@
 """Controle de Tempo (/api/loja/ponto). Recursos: ponto_proprio e ponto_equipe (módulo controle_tempo).
 
-- Entrada e saída usam a hora do servidor, nunca a do navegador.
-- Só um registro em aberto por funcionário (índice único no banco).
+- Entrada e saída usam a hora do servidor, nunca a do navegador. O pedido diz a ação (entrada ou
+  saída): se não bater com a situação atual (ex.: dois cliques), responde 409.
+- Só um registro em aberto por funcionário (índice único no banco) e nenhum período sobreposto do
+  mesmo funcionário (EXCLUDE no banco, conferido antes para a mensagem sair clara).
 - Correções e lançamentos manuais: escrita em Ponto da equipe, com justificativa (origem manual).
 - Horas trabalhadas = saída - entrada, calculadas na consulta; a data usa o fuso da loja.
 """
@@ -13,14 +15,15 @@ from uuid import UUID
 from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, Query, status
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from app.auth.dependencias import ContextoLoja, exigir
 from app.models import Funcionario, RegistroPonto
 from app.models.enums import NivelAcesso, OrigemPonto
-from app.schemas.comum import Erro
+from app.schemas.comum import Data, Erro
 from app.schemas.ponto import (
     CorrecaoEntrada,
+    FuncionarioPonto,
     PontoManualEntrada,
     PontoPeriodo,
     RegistrarEntrada,
@@ -31,6 +34,7 @@ from app.schemas.ponto import (
 from app.services.comum import (
     buscar,
     com_autor,
+    conflito,
     fuso,
     hoje,
     intervalo_de_dias,
@@ -48,8 +52,13 @@ PONTO = ('ponto_proprio', 'ponto_equipe')
 Leitura = Annotated[ContextoLoja, Depends(exigir(PONTO))]
 Escrita = Annotated[ContextoLoja, Depends(exigir(PONTO, 'escrita'))]
 Correcao = Annotated[ContextoLoja, Depends(exigir('ponto_equipe', 'escrita'))]
+Equipe = Annotated[ContextoLoja, Depends(exigir('ponto_equipe'))]
 MAX_DIAS = 62
 MSG_404 = 'Registro de ponto não encontrado.'
+MSG_SOBREPOSTO = 'Este funcionário já tem um registro de ponto nesse período.'
+MSG_JA_ABERTO = 'Este funcionário já tem um registro de ponto em aberto.'
+MSG_JA_EM_SERVICO = 'A entrada já foi registrada. Para encerrar, registre a saída.'
+MSG_SEM_ENTRADA = 'Não há entrada em aberto. Registre a entrada primeiro.'
 
 
 def _minutos(r: RegistroPonto) -> int | None:
@@ -73,6 +82,45 @@ def _saida(ctx: ContextoLoja, registros: list[RegistroPonto], zona: ZoneInfo) ->
     return com_autor(ctx.db, ctx.loja_id, saida)
 
 
+def _travar_funcionario(ctx: ContextoLoja, funcionario_id: UUID) -> None:
+    """Serializa as alterações de ponto do mesmo funcionário (advisory lock até o fim da transação).
+
+    Dois cliques simultâneos em "registrar" ou dois lançamentos ao mesmo tempo: o segundo espera o
+    primeiro e já vê o que ele gravou.
+    """
+    ctx.db.execute(select(func.pg_advisory_xact_lock(func.hashtextextended(f'ponto:{funcionario_id}', 0))))
+
+
+def _conferir_sobreposicao(
+    ctx: ContextoLoja,
+    funcionario_id: UUID,
+    entrada: datetime,
+    saida: datetime | None,
+    exceto: UUID | None = None,
+) -> None:
+    """409 se o período [entrada, saída) encosta em outro registro do funcionário (aberto = sem fim)."""
+    if saida is None:
+        aberto = select(RegistroPonto.id).where(
+            RegistroPonto.loja_id == ctx.loja_id,
+            RegistroPonto.funcionario_id == funcionario_id,
+            RegistroPonto.saida.is_(None),
+            *([RegistroPonto.id != exceto] if exceto is not None else []),
+        )
+        if ctx.db.scalar(aberto.limit(1)) is not None:
+            raise conflito(MSG_JA_ABERTO)
+    condicoes = [
+        RegistroPonto.loja_id == ctx.loja_id,
+        RegistroPonto.funcionario_id == funcionario_id,
+        (RegistroPonto.saida.is_(None)) | (RegistroPonto.saida > entrada),
+    ]
+    if saida is not None:
+        condicoes.append(RegistroPonto.entrada < saida)
+    if exceto is not None:
+        condicoes.append(RegistroPonto.id != exceto)
+    if ctx.db.scalar(select(RegistroPonto.id).where(*condicoes).limit(1)) is not None:
+        raise conflito(MSG_SOBREPOSTO)
+
+
 def _horarios(ctx: ContextoLoja, dados: CorrecaoEntrada) -> tuple[datetime, datetime | None]:
     zona = fuso(ctx.loja.fuso_horario)
     entrada = no_fuso(dados.entrada, zona)
@@ -88,8 +136,8 @@ def _horarios(ctx: ContextoLoja, dados: CorrecaoEntrada) -> tuple[datetime, date
 @router.get('', summary='Registros de ponto do período e o total por dia')
 def listar(
     ctx: Leitura,
-    inicio: Annotated[date | None, Query(description='Padrão: hoje (no fuso da loja)')] = None,
-    fim: Annotated[date | None, Query(description='Último dia, inclusive (padrão: o início)')] = None,
+    inicio: Annotated[Data | None, Query(description='Padrão: hoje (no fuso da loja)')] = None,
+    fim: Annotated[Data | None, Query(description='Último dia, inclusive (padrão: o início)')] = None,
     funcionario_id: Annotated[UUID | None, Query(description='Só deste funcionário')] = None,
 ) -> PontoPeriodo:
     zona = fuso(ctx.loja.fuso_horario)
@@ -127,6 +175,19 @@ def listar(
     )
 
 
+@router.get('/funcionarios', summary='Funcionários para o ponto da equipe (escolher, lançar e filtrar)')
+def funcionarios(ctx: Equipe) -> list[FuncionarioPonto]:
+    """Lista de apoio de Ponto da equipe: não exige acesso a Funcionários. Inclui os inativos (filtro)."""
+    return [
+        FuncionarioPonto.model_validate(f)
+        for f in ctx.db.scalars(
+            select(Funcionario)
+            .where(Funcionario.loja_id == ctx.loja_id)
+            .order_by(func.lower(Funcionario.nome), Funcionario.id)
+        )
+    ]
+
+
 @router.get('/aberto', summary='Registro em aberto (em serviço) do funcionário, se houver')
 def aberto(ctx: Leitura, funcionario_id: UUID | None = None) -> RegistroSaida | None:
     alvo = funcionario_id or ctx.funcionario.id
@@ -143,8 +204,8 @@ def aberto(ctx: Leitura, funcionario_id: UUID | None = None) -> RegistroSaida | 
 
 
 @router.post('/registrar', summary='Registrar entrada ou saída agora (hora do servidor)')
-def registrar(ctx: Escrita, dados: RegistrarEntrada | None = None) -> RegistroFeito:
-    alvo = (dados.funcionario_id if dados else None) or ctx.funcionario.id
+def registrar(dados: RegistrarEntrada, ctx: Escrita) -> RegistroFeito:
+    alvo = dados.funcionario_id or ctx.funcionario.id
     if alvo == ctx.funcionario.id:
         if not ctx.pode('ponto_proprio', NivelAcesso.escrita) and not ctx.pode(
             'ponto_equipe', NivelAcesso.escrita
@@ -155,25 +216,31 @@ def registrar(ctx: Escrita, dados: RegistrarEntrada | None = None) -> RegistroFe
     funcionario = buscar(ctx.db, Funcionario, ctx.loja_id, alvo, 'Funcionário não encontrado.')
     if not funcionario.ativo:
         raise invalido('Funcionário inativo não registra ponto.')
+    _travar_funcionario(ctx, funcionario.id)
     agora = datetime.now(fuso(ctx.loja.fuso_horario)).replace(microsecond=0)
     registro = ctx.db.scalar(
-        select(RegistroPonto).where(
+        select(RegistroPonto)
+        .where(
             RegistroPonto.loja_id == ctx.loja_id,
             RegistroPonto.funcionario_id == funcionario.id,
             RegistroPonto.saida.is_(None),
         )
+        .execution_options(populate_existing=True)
     )
-    if registro is not None:
+    if dados.acao == 'saida':
+        if registro is None:
+            raise conflito(MSG_SEM_ENTRADA)
         registro.saida = max(agora, registro.entrada + timedelta(seconds=1))
-        acao = 'saida'
     else:
+        if registro is not None:
+            raise conflito(MSG_JA_EM_SERVICO)
+        _conferir_sobreposicao(ctx, funcionario.id, agora, None)
         registro = RegistroPonto(
             loja_id=ctx.loja_id, funcionario_id=funcionario.id, entrada=agora, origem=OrigemPonto.sistema
         )
         ctx.db.add(registro)
-        acao = 'entrada'
     ctx.db.flush()
-    return RegistroFeito(acao=acao, registro=_saida(ctx, [registro], fuso(ctx.loja.fuso_horario))[0])
+    return RegistroFeito(acao=dados.acao, registro=_saida(ctx, [registro], fuso(ctx.loja.fuso_horario))[0])
 
 
 @router.post('', status_code=status.HTTP_201_CREATED, summary='Lançamento manual (com justificativa)')
@@ -182,6 +249,8 @@ def lancar(dados: PontoManualEntrada, ctx: Correcao) -> RegistroSaida:
         ctx.db, Funcionario, ctx.loja_id, dados.funcionario_id, 'Funcionário não encontrado.'
     )
     entrada, saida = _horarios(ctx, dados)
+    _travar_funcionario(ctx, funcionario.id)
+    _conferir_sobreposicao(ctx, funcionario.id, entrada, saida)
     registro = RegistroPonto(
         loja_id=ctx.loja_id,
         funcionario_id=funcionario.id,
@@ -203,7 +272,10 @@ def corrigir(registro_id: UUID, dados: CorrecaoEntrada, ctx: Correcao) -> Regist
     )
     if registro is None:
         raise nao_encontrado(MSG_404)
-    registro.entrada, registro.saida = _horarios(ctx, dados)
+    entrada, saida = _horarios(ctx, dados)
+    _travar_funcionario(ctx, registro.funcionario_id)
+    _conferir_sobreposicao(ctx, registro.funcionario_id, entrada, saida, exceto=registro.id)
+    registro.entrada, registro.saida = entrada, saida
     registro.origem = OrigemPonto.manual
     registro.justificativa = dados.justificativa
     registro.editado_por = ctx.funcionario.id

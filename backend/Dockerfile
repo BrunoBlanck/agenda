@@ -18,7 +18,9 @@ COPY app ./app
 COPY migrations ./migrations
 COPY scripts ./scripts
 
-RUN useradd --system --uid 10001 agenda
+RUN useradd --system --uid 10001 agenda     && mkdir -p /app/arquivos && chown agenda /app/arquivos
+# Logos enviadas pelas lojas (ARQUIVOS_DIR): monte um volume persistente aqui
+VOLUME ["/app/arquivos"]
 USER agenda
 
 EXPOSE 8000

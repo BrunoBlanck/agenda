@@ -1,6 +1,7 @@
 """Consultas da Plataforma (SUPERADMIN): lojas, módulos, planos e quem alterou (estrutura.md, seção 1)."""
 
 from collections.abc import Iterable
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Literal
 from uuid import UUID
@@ -47,7 +48,14 @@ def nomes_superadmins(db: Session, ids: Iterable[UUID | None]) -> dict[UUID, str
     )
 
 
-def ultima_alteracao_loja(db: Session, loja_id: UUID) -> tuple[Autor, str | None]:
+@dataclass(frozen=True)
+class UltimaAlteracaoLoja:
+    autor: Autor
+    funcionario_id: UUID | None = None  # só quando o autor é um funcionário da loja
+    nome: str | None = None
+
+
+def ultima_alteracao_loja(db: Session, loja_id: UUID) -> UltimaAlteracaoLoja:
     """Quem fez a última alteração em ``lojas``: a auditoria diz se foi a loja ou o superadmin.
 
     (``lojas`` guarda as duas colunas ``atualizado_por_*`` sem dizer qual foi a última.)
@@ -64,10 +72,11 @@ def ultima_alteracao_loja(db: Session, loja_id: UUID) -> tuple[Autor, str | None
             .where(Funcionario.id == ultima.funcionario_id, Funcionario.loja_id == loja_id)
             .execution_options(incluir_excluidos=True)
         )
-        return 'funcionario', nome
+        return UltimaAlteracaoLoja('funcionario', ultima.funcionario_id, nome)
     if ultima is not None and ultima.superadmin_id:
-        return 'superadmin', nomes_superadmins(db, [ultima.superadmin_id]).get(ultima.superadmin_id)
-    return None, None
+        nome = nomes_superadmins(db, [ultima.superadmin_id]).get(ultima.superadmin_id)
+        return UltimaAlteracaoLoja('superadmin', None, nome)
+    return UltimaAlteracaoLoja(None)
 
 
 def modulos_opcionais_por_loja(

@@ -1,13 +1,12 @@
 """Configurações › Dados da loja (estrutura.md, 2.18)."""
 
 import re
-from datetime import datetime
 from typing import Annotated, Any
 
-from pydantic import BaseModel, BeforeValidator, Field, field_validator
+from pydantic import BeforeValidator, Field, field_validator
 
 from app.models.enums import StatusLoja, TipoLoja
-from app.schemas.comum import EmailOpcional, Entrada, regra, texto, texto_opcional
+from app.schemas.comum import Controle, EmailOpcional, Entrada, regra, texto, texto_opcional
 
 
 def cnpj_valido(digitos: str) -> bool:
@@ -72,7 +71,13 @@ class DadosLojaEntrada(Entrada):
         return uf.upper()
 
 
-class DadosLoja(BaseModel):
+class DadosLoja(Controle):
+    """Dados da loja com a última alteração (Controle).
+
+    atualizado_por / atualizado_por_nome: o funcionário da loja que fez a última alteração; nulos
+    quando foi o superadmin ou o sistema (GER-13), como nas demais rotas da loja.
+    """
+
     nome_fantasia: str | None
     nome: str
     cnpj: str | None
@@ -85,7 +90,9 @@ class DadosLoja(BaseModel):
     bairro: str | None
     cidade: str | None
     uf: str | None
-    logo_url: str | None
+    logo_url: str | None = Field(
+        description='URL da logo (/api/arquivos/logos/...), na mesma origem da API. Nulo = sem logo'
+    )
     # Definidos pela plataforma (só leitura aqui)
     tipo: TipoLoja
     slug: str
@@ -93,7 +100,3 @@ class DadosLoja(BaseModel):
     status: StatusLoja
     fuso_horario: str
     modulos: dict[str, bool] = Field(description='Módulos opcionais: ativo ou não')
-    # Última alteração (UltimaAlteracao)
-    atualizado_em: datetime
-    atualizado_por: str | None = Field(description='funcionario, superadmin ou nulo (rotina)')
-    atualizado_por_nome: str | None

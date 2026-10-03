@@ -1,11 +1,12 @@
-import { useDeferredValue, useState } from 'react'
+import { useState } from 'react'
 import { App, Avatar, Button, Checkbox, Col, Form, Input, Row, Select } from 'antd'
-import { PlusOutlined, RightOutlined, SearchOutlined } from '@ant-design/icons'
-import { useNavigate } from 'react-router-dom'
-import { useData } from '../../data/DataContext.jsx'
+import { DisconnectOutlined, PlusOutlined, RightOutlined, SearchOutlined } from '@ant-design/icons'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { modulos } from '../../data/acesso.js'
-import { opcoesTipoLoja, statusLoja } from '../../data/plataforma.js'
-import { usePlataforma } from '../usePlataforma.js'
+import { opcoesTipoLoja, statusLoja, tiposLoja } from '../../data/dominio.js'
+import { useTratarErro } from '../../data/api/useTratarErro.js'
+import { entregarSenhaDaLojaNova, useAtrasado, useLojas, usePlanos } from '../usePlataforma.js'
+import { erroNoCampo } from '../erroNoCampo.js'
 import Pagina from '../../components/base/Pagina.jsx'
 import Secao from '../../components/base/Secao.jsx'
 import BarraFiltros from '../../components/base/BarraFiltros.jsx'
@@ -15,6 +16,12 @@ import PainelFormulario from '../../components/base/PainelFormulario.jsx'
 import { EtiquetaLoja } from '../../components/Etiquetas.jsx'
 
 const opcionais = modulos.filter((m) => m.opcional)
+const nomeModulo = (codigo) => opcionais.find((m) => m.codigo === codigo)?.nome ?? codigo.replace(/_/g, ' ')
+const opcoesStatus = Object.entries(statusLoja).map(([value, s]) => ({ value, label: s.label }))
+const valido = (valor, mapa) => (valor && valor in mapa ? valor : null)
+
+// 409 da criação que tem campo certo no formulário (o resto vira mensagem)
+const CONFLITOS = [{ trecho: 'endereço de acesso', campo: 'slug' }]
 
 const gerarSlug = (texto = '') =>
   texto
@@ -25,69 +32,82 @@ const gerarSlug = (texto = '') =>
     .replace(/^-|-$/g, '')
 
 export default function Lojas() {
-  const { lojas, planos } = useData()
-  const { nomeTipo, plano, funcionariosDe, criarLoja, ehAtual } = usePlataforma()
-  const { message } = App.useApp()
   const navigate = useNavigate()
+  const [params] = useSearchParams()
+  const tratarErro = useTratarErro()
+  const { message } = App.useApp()
   const [busca, setBusca] = useState('')
-  const termo = useDeferredValue(busca.trim().toLowerCase())
-  const [tipo, setTipo] = useState(null)
-  const [status, setStatus] = useState(null)
+  const termo = useAtrasado(busca.trim())
+  const [tipo, setTipo] = useState(() => valido(params.get('tipo'), tiposLoja))
+  const [status, setStatus] = useState(() => valido(params.get('status'), statusLoja))
+  const [pagina, setPagina] = useState(1)
+  const lojas = useLojas({ busca: termo, tipo, status, pagina })
+  const planos = usePlanos()
   const [nova, setNova] = useState(false)
+  const [salvando, setSalvando] = useState(false)
   const [form] = Form.useForm()
   const abrir = (l) => navigate(`/superadmin/lojas/${l.id}`)
 
-  const dados = lojas.itens
-    .filter((l) => `${l.nomeFantasia} ${l.nome} ${l.slug} ${l.cidade}`.toLowerCase().includes(termo))
-    .filter((l) => !tipo || l.tipo === tipo)
-    .filter((l) => !status || l.status === status)
+  // Filtro novo volta para a primeira página
+  const filtrar = (mudar) => (valor) => {
+    mudar(valor ?? null)
+    setPagina(1)
+  }
+  const [termoAnterior, setTermoAnterior] = useState(termo)
+  if (termo !== termoAnterior) {
+    setTermoAnterior(termo)
+    setPagina(1)
+  }
 
-  const salvar = (v) => {
-    const id = criarLoja(v)
-    setNova(false)
-    message.success('Loja criada. O Administrador recebe o e-mail para definir a senha.')
-    navigate(`/superadmin/lojas/${id}`)
+  const salvar = async (v) => {
+    setSalvando(true)
+    try {
+      const { loja, admin, senhaProvisoria } = await lojas.criar(v)
+      setNova(false)
+      message.success('Loja criada.')
+      // A senha provisória vai para o detalhe da loja, que mostra uma única vez. Vai pela memória da aba, nunca
+      // pelo state da navegação (ficaria em history.state e voltaria no F5 e no voltar/avançar)
+      entregarSenhaDaLojaNova(loja.id, { nome: admin?.nome, email: admin?.email, senha: senhaProvisoria })
+      navigate(`/superadmin/lojas/${loja.id}`)
+    } catch (e) {
+      if (!erroNoCampo(e, form, CONFLITOS)) tratarErro(e, { form, mapa: { plano_id: 'planoId' } })
+    } finally {
+      setSalvando(false)
+    }
   }
 
   const colunas = [
     {
       title: 'Loja',
       key: 'loja',
-      sorter: (a, b) => a.nomeFantasia.localeCompare(b.nomeFantasia),
       render: (_, l) => (
         <span className="loja-nome">
-          <Avatar shape="square" size={32} src={l.logoUrl} className="marca-loja">
-            {l.nomeFantasia[0]}
+          <Avatar shape="square" size={32} src={l.logoUrl || undefined} className="marca-loja">
+            {l.nomeFantasia?.[0] ?? '?'}
           </Avatar>
           <span>
             <button type="button" className="link-tabela" onClick={() => abrir(l)}>
               {l.nomeFantasia}
             </button>
-            <span className="texto-apoio">
-              /{l.slug}
-              {ehAtual(l) && ', aberta no painel da loja'}
-            </span>
+            <span className="texto-apoio">/{l.slug}</span>
           </span>
         </span>
       ),
     },
-    { title: 'Tipo', dataIndex: 'tipo', render: nomeTipo },
-    { title: 'Plano', dataIndex: 'planoId', render: (id) => plano(id)?.nome ?? '—' },
-    { title: 'Cidade', key: 'cidade', render: (_, l) => (l.cidade ? `${l.cidade}/${l.uf}` : '—') },
+    { title: 'Tipo', dataIndex: 'tipo', render: (t) => tiposLoja[t]?.nome ?? t ?? '—' },
+    { title: 'Plano', dataIndex: 'planoNome', render: (n) => n ?? '—' },
+    { title: 'Cidade', key: 'cidade', render: (_, l) => (l.cidade ? [l.cidade, l.uf].filter(Boolean).join('/') : '—') },
     {
       title: 'Módulos ligados',
       key: 'modulos',
       render: (_, l) => {
-        const ligados = opcionais.filter((m) => l.modulos?.[m.codigo])
-        return ligados.length ? ligados.map((m) => m.nome).join(', ') : <span className="texto-apoio">Nenhum</span>
+        const ligados = Object.entries(l.modulos ?? {})
+          .filter(([, ativo]) => ativo)
+          .map(([codigo]) => nomeModulo(codigo))
+        return ligados.length ? ligados.join(', ') : <span className="texto-apoio">Nenhum</span>
       },
     },
-    {
-      title: 'Funcionários',
-      key: 'funcionarios',
-      align: 'right',
-      render: (_, l) => funcionariosDe(l).filter((f) => f.ativo).length,
-    },
+    { title: 'Funcionários', dataIndex: 'funcionariosAtivos', align: 'right' },
     { title: 'Situação', dataIndex: 'status', render: (s) => <EtiquetaLoja status={s} /> },
     {
       title: <span className="sr-only">Abrir</span>,
@@ -97,6 +117,20 @@ export default function Lojas() {
       render: (_, l) => <Button type="text" size="small" icon={<RightOutlined />} aria-label={`Abrir ${l.nomeFantasia}`} onClick={() => abrir(l)} />,
     },
   ]
+
+  const comFiltro = !!(termo || tipo || status)
+  const vazio = lojas.erro ? (
+    <EstadoVazio
+      icone={<DisconnectOutlined />}
+      titulo="Não foi possível carregar as lojas"
+      descricao={lojas.erro.mensagem}
+      acao={<Button onClick={lojas.recarregar}>Tentar de novo</Button>}
+    />
+  ) : comFiltro ? (
+    <EstadoVazio compacto titulo="Nenhuma loja com esses filtros" />
+  ) : (
+    <EstadoVazio titulo="Nenhuma loja cadastrada" acao={<Button onClick={() => setNova(true)}>Nova loja</Button>} />
+  )
 
   return (
     <Pagina
@@ -116,23 +150,33 @@ export default function Lojas() {
             placeholder="Buscar por nome, endereço ou cidade"
             aria-label="Buscar loja"
             allowClear
+            maxLength={100}
             value={busca}
             onChange={(e) => setBusca(e.target.value)}
           />
-          <Select allowClear placeholder="Todos os tipos" aria-label="Tipo" value={tipo} onChange={setTipo} options={opcoesTipoLoja} />
+          <Select allowClear placeholder="Todos os tipos" aria-label="Tipo" value={tipo} onChange={filtrar(setTipo)} options={opcoesTipoLoja} />
           <Select
             allowClear
             placeholder="Todas as situações"
             aria-label="Situação"
             value={status}
-            onChange={setStatus}
-            options={Object.entries(statusLoja).map(([value, s]) => ({ value, label: s.label }))}
+            onChange={filtrar(setStatus)}
+            options={opcoesStatus}
           />
         </BarraFiltros>
         <Tabela
           columns={colunas}
-          dataSource={dados}
-          vazio={<EstadoVazio compacto titulo="Nenhuma loja com esses filtros" />}
+          dataSource={lojas.erro ? [] : lojas.itens}
+          loading={lojas.carregando || lojas.atualizando}
+          pagination={{
+            current: lojas.pagina,
+            pageSize: lojas.porPagina,
+            total: lojas.total,
+            onChange: setPagina,
+            showSizeChanger: false,
+            hideOnSinglePage: true,
+          }}
+          vazio={vazio}
         />
       </Secao>
 
@@ -142,6 +186,7 @@ export default function Lojas() {
         form={form}
         valoresIniciais={{ modulos: [] }}
         textoSalvar="Criar loja"
+        salvando={salvando}
         largura={560}
         onCancelar={() => setNova(false)}
         onSalvar={salvar}
@@ -153,12 +198,12 @@ export default function Lojas() {
         <Row gutter={16}>
           <Col xs={24} sm={12}>
             <Form.Item name="nomeFantasia" label="Nome da loja" rules={[{ required: true, whitespace: true, message: 'Informe o nome' }]}>
-              <Input />
+              <Input maxLength={150} />
             </Form.Item>
           </Col>
           <Col xs={24} sm={12}>
             <Form.Item name="nome" label="Razão social" rules={[{ required: true, whitespace: true, message: 'Informe a razão social' }]}>
-              <Input />
+              <Input maxLength={150} />
             </Form.Item>
           </Col>
           <Col xs={24} sm={12}>
@@ -168,7 +213,11 @@ export default function Lojas() {
           </Col>
           <Col xs={24} sm={12}>
             <Form.Item name="planoId" label="Plano" rules={[{ required: true, message: 'Escolha o plano' }]}>
-              <Select options={planos.itens.filter((p) => p.ativo).map((p) => ({ value: p.id, label: p.nome }))} />
+              <Select
+                loading={planos.carregando}
+                notFoundContent={planos.erro ? 'Não foi possível carregar os planos' : 'Nenhum plano ativo'}
+                options={planos.itens.filter((p) => p.ativo).map((p) => ({ value: p.id, label: p.nome }))}
+              />
             </Form.Item>
           </Col>
           <Col xs={24} sm={12}>
@@ -178,12 +227,13 @@ export default function Lojas() {
               rules={[
                 { required: true, message: 'Informe o endereço' },
                 {
-                  validator: (_, v) =>
-                    lojas.todos.some((l) => l.slug === v) ? Promise.reject(new Error('Já está em uso por outra loja')) : Promise.resolve(),
+                  pattern: /^[a-z0-9]+(?:-[a-z0-9]+)*$/,
+                  message: 'Use letras minúsculas, números e hífens (ex.: clinica-sorriso)',
                 },
+                { min: 2, max: 60, message: 'Use de 2 a 60 caracteres' },
               ]}
             >
-              <Input prefix="/" />
+              <Input prefix="/" maxLength={60} />
             </Form.Item>
           </Col>
           <Col xs={24} sm={12}>
@@ -203,7 +253,7 @@ export default function Lojas() {
         <Row gutter={16}>
           <Col xs={24} sm={12}>
             <Form.Item name={['admin', 'nome']} label="Nome" rules={[{ required: true, whitespace: true, message: 'Informe o nome' }]}>
-              <Input />
+              <Input maxLength={150} />
             </Form.Item>
           </Col>
           <Col xs={24} sm={12}>
@@ -218,8 +268,18 @@ export default function Lojas() {
               <Input type="email" />
             </Form.Item>
           </Col>
+          <Col xs={24} sm={12}>
+            <Form.Item
+              name={['admin', 'senha']}
+              label="Senha"
+              rules={[{ min: 8, message: 'Use pelo menos 8 caracteres' }]}
+              extra="Em branco, o sistema gera uma senha provisória."
+            >
+              <Input.Password autoComplete="new-password" maxLength={200} />
+            </Form.Item>
+          </Col>
         </Row>
-        <p className="texto-ajuda">O Administrador recebe um e-mail para definir a senha. Os perfis padrão são criados junto com a loja.</p>
+        <p className="texto-ajuda">Os perfis padrão são criados junto com a loja. A senha provisória aparece uma única vez, depois de criar.</p>
       </PainelFormulario>
     </Pagina>
   )

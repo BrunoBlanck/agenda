@@ -7,13 +7,15 @@ from uuid import UUID
 from pydantic import BaseModel, Field, model_validator
 
 from app.models.enums import NivelAcesso
-from app.schemas.comum import Controle, Entrada, Esquema, regra, texto, texto_opcional
+from app.schemas.comum import LISTA_MAX, Controle, DataHora, Entrada, Esquema, regra, texto, texto_opcional
 
 
 class RecursoSaida(BaseModel):
     codigo: str
     nome: str
-    descricao: str | None
+    descricao: str | None = Field(description='"Leitura: ... Escrita: ..." (mantido por compatibilidade)')
+    leitura: str = Field(description='O que o nível leitura permite')
+    escrita: str = Field(description='O que o nível escrita permite')
     modulo: str
     modulo_ativo: bool
     ordem: int | None
@@ -53,7 +55,7 @@ class PerfilEdicao(Entrada):
 
 class AcessosEntrada(Entrada):
     acessos: dict[str, NivelAcesso] = Field(
-        description='Código do recurso -> nível. Os não citados não mudam.'
+        max_length=LISTA_MAX, description='Código do recurso -> nível. Os não citados não mudam.'
     )
 
 
@@ -86,8 +88,8 @@ class HorarioSaida(Controle):
 class BloqueioEntrada(Entrada):
     perfil_id: UUID | None = Field(default=None, description='Bloqueio de todo o perfil')
     funcionario_id: UUID | None = Field(default=None, description='Bloqueio só deste funcionário')
-    inicio: datetime = Field(description='Sem fuso, vale o horário da loja')
-    fim: datetime
+    inicio: DataHora = Field(description='Sem fuso, vale o horário da loja')
+    fim: DataHora
     motivo: texto_opcional(150) = None
 
     @model_validator(mode='after')

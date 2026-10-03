@@ -16,14 +16,16 @@ from uuid import UUID
 from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, Path, Query, Request, status
-from sqlalchemy import func, select
+from sqlalchemy import ColumnElement, func, select
 from sqlalchemy.orm import Session
 
 from app.auth.dependencias import DbDep, ip_da_requisicao
+from app.config import get_settings
 from app.db import definir_contexto
+from app.limites import limite_site, limite_site_pedido
 from app.models import Agendamento, AgendamentoMaterial, Cliente, Local, Loja, LojaConfiguracao, Servico
 from app.models.enums import CanalCliente, OrigemAgendamento, StatusAgendamento, StatusLoja
-from app.schemas.comum import Erro
+from app.schemas.comum import Data, Erro, so_digitos
 from app.schemas.site import (
     DiaLivre,
     HorarioLivre,
@@ -49,7 +51,8 @@ from app.services.horarios_livres import (
 router = APIRouter(
     prefix='/api/site/{slug}',
     tags=['Site do consumidor'],
-    responses={404: {'model': Erro}, 422: {'model': Erro}},
+    responses={404: {'model': Erro}, 422: {'model': Erro}, 429: {'model': Erro}},
+    dependencies=[Depends(limite_site)],  # requisições por IP (app/limites.py)
 )
 
 MSG_LOJA_404 = 'Loja não encontrada.'
@@ -96,29 +99,48 @@ def obter_contexto_site(
 Site = Annotated[ContextoSite, Depends(obter_contexto_site)]
 
 
-def _servico(ctx: ContextoSite, servico_id: UUID | None) -> Servico | None:
-    """Serviço escolhido (ativo). Sem o módulo Serviços, não há serviço (atendimento genérico)."""
+def _servico(ctx: ContextoSite, servico_id: UUID | None, *, travar: bool = False) -> Servico | None:
+    """Serviço escolhido (ativo). Sem o módulo Serviços, não há serviço (atendimento genérico).
+
+    travar: FOR KEY SHARE, para o pedido não passar junto com a exclusão do serviço (que usa FOR UPDATE).
+    """
     if not ctx.usa_servicos:
         return None
     if servico_id is None:
         raise invalido('Escolha o serviço.')
-    servico = ctx.db.scalar(
-        select(Servico).where(Servico.id == servico_id, Servico.loja_id == ctx.loja.id, Servico.ativo)
-    )
+    consulta = select(Servico).where(Servico.id == servico_id, Servico.loja_id == ctx.loja.id, Servico.ativo)
+    if travar:
+        consulta = consulta.with_for_update(read=True, key_share=True).execution_options(
+            populate_existing=True
+        )
+    servico = ctx.db.scalar(consulta)
     if servico is None:
         raise invalido('Serviço não encontrado.')
     return servico
 
 
+MSG_LOCAL_INVALIDO = 'Local não encontrado para este serviço.'
+
+
 def _agenda(
-    ctx: ContextoSite, servico: Servico | None, funcionario_id: UUID | None, primeiro: date, ultimo: date
+    ctx: ContextoSite,
+    servico: Servico | None,
+    funcionario_id: UUID | None,
+    primeiro: date,
+    ultimo: date,
+    local_id: UUID | None = None,
 ) -> tuple[Agenda, dict[UUID, Local]]:
+    """Agenda do período. ``local_id`` (módulo Locais) restringe os horários aos desse local."""
     candidatos = profissionais(ctx.db, ctx.loja.id, servico)
     if funcionario_id is not None:
         candidatos = [f for f in candidatos if f.id == funcionario_id]
         if not candidatos:
             raise invalido('Profissional não encontrado para este serviço.')
     locais = locais_permitidos(ctx.db, ctx.loja.id, servico) if ctx.usa_locais else None
+    if locais is not None and local_id is not None:
+        locais = [local for local in locais if local.id == local_id]
+        if not locais:
+            raise invalido(MSG_LOCAL_INVALIDO)
     agenda = Agenda(
         ctx.db,
         ctx.loja.id,
@@ -218,8 +240,11 @@ def horarios(
     ctx: Site,
     servico_id: UUID | None = None,
     funcionario_id: Annotated[UUID | None, Query(description='Vazio = qualquer profissional')] = None,
-    inicio: Annotated[date | None, Query(description='Primeiro dia (padrão: hoje)')] = None,
-    fim: Annotated[date | None, Query(description='Último dia (padrão: o primeiro)')] = None,
+    local_id: Annotated[
+        UUID | None, Query(description='Só horários com este local livre (módulo Locais; vazio = qualquer)')
+    ] = None,
+    inicio: Annotated[Data | None, Query(description='Primeiro dia (padrão: hoje)')] = None,
+    fim: Annotated[Data | None, Query(description='Último dia (padrão: o primeiro)')] = None,
 ) -> list[DiaLivre]:
     primeiro = inicio or hoje(ctx.zona)
     ultimo = fim or primeiro
@@ -229,7 +254,7 @@ def horarios(
         raise invalido(f'Consulte no máximo {DIAS_MAXIMOS} dias por vez.')
     servico = _servico(ctx, servico_id)
     duracao = servico.duracao_minutos if servico else DURACAO_SEM_SERVICO
-    agenda, mapa_locais = _agenda(ctx, servico, funcionario_id, primeiro, ultimo)
+    agenda, mapa_locais = _agenda(ctx, servico, funcionario_id, primeiro, ultimo, local_id)
     agora = datetime.now(UTC)
     dias = [primeiro + timedelta(days=i) for i in range((ultimo - primeiro).days + 1)]
     return [
@@ -246,19 +271,51 @@ def horarios(
 # --- Pedido de agendamento -----------------------------------------------------------------------
 
 
-def _cliente(ctx: ContextoSite, dados: SolicitacaoEntrada) -> Cliente:
+MSG_MUITOS_PENDENTES = (
+    'Já há pedidos deste telefone aguardando a confirmação da loja. '
+    'Aguarde a resposta antes de pedir outro horário.'
+)
+
+
+def _telefone_da_loja(ctx: ContextoSite, digitos: str) -> ColumnElement[bool]:
+    return (Cliente.loja_id == ctx.loja.id) & (
+        func.regexp_replace(Cliente.telefone, r'\D', '', 'g') == digitos
+    )
+
+
+def _limitar_pendentes(ctx: ContextoSite, digitos: str) -> None:
+    """No máximo N pedidos "Aguardando aceite" futuros por telefone na loja.
+
+    Trava o telefone na transação (advisory lock): dois pedidos simultâneos do mesmo número são
+    serializados, então a contagem não é burlada e o cliente novo não é cadastrado duas vezes.
+    """
+    ctx.db.execute(
+        select(func.pg_advisory_xact_lock(func.hashtextextended(f'site-telefone:{ctx.loja.id}:{digitos}', 0)))
+    )
+    pendentes = ctx.db.scalar(
+        select(func.count())
+        .select_from(Agendamento)
+        .join(Cliente, (Cliente.id == Agendamento.cliente_id) & (Cliente.loja_id == Agendamento.loja_id))
+        .where(
+            _telefone_da_loja(ctx, digitos),
+            Agendamento.loja_id == ctx.loja.id,
+            Agendamento.status == StatusAgendamento.pendente,
+            Agendamento.fim > func.now(),
+        )
+    )
+    if (pendentes or 0) >= get_settings().site_pendentes_por_telefone:
+        raise conflito(MSG_MUITOS_PENDENTES)
+
+
+def _cliente(ctx: ContextoSite, dados: SolicitacaoEntrada, digitos: str) -> Cliente:
     """Cliente pelo telefone: se já existe na loja, ganha o canal "site"; senão, é cadastrado.
 
     O cadastro existente não é alterado (nome e e-mail ficam como a loja registrou) e nada dele é
     devolvido, para o site não revelar dados de quem já é cliente.
     """
-    digitos = re.sub(r'\D', '', dados.telefone)
     existente = ctx.db.scalar(
         select(Cliente)
-        .where(
-            Cliente.loja_id == ctx.loja.id,
-            func.regexp_replace(Cliente.telefone, r'\D', '', 'g') == digitos,
-        )
+        .where(_telefone_da_loja(ctx, digitos))
         .order_by(Cliente.criado_em, Cliente.id)
         .limit(1)
     )
@@ -282,11 +339,12 @@ def _cliente(ctx: ContextoSite, dados: SolicitacaoEntrada) -> Cliente:
     '/agendamentos',
     status_code=status.HTTP_201_CREATED,
     responses={409: {'model': Erro}},
+    dependencies=[Depends(limite_site_pedido)],  # pedidos por IP nesta loja
     summary='Pedir um agendamento (entra como "Aguardando aceite" no painel da loja)',
 )
 def solicitar(dados: SolicitacaoEntrada, ctx: Site) -> SolicitacaoSaida:
     db = ctx.db
-    servico = _servico(ctx, dados.servico_id)
+    servico = _servico(ctx, dados.servico_id, travar=True)
     duracao = servico.duracao_minutos if servico else DURACAO_SEM_SERVICO
     inicio = no_fuso(dados.inicio, ctx.zona)
     dia = inicio.astimezone(ctx.zona).date()
@@ -301,12 +359,14 @@ def solicitar(dados: SolicitacaoEntrada, ctx: Site) -> SolicitacaoSaida:
     local_id = livre.local_id
     if dados.local_id is not None and ctx.usa_locais:
         if dados.local_id not in mapa_locais:
-            raise invalido('Local não encontrado para este serviço.')
+            raise invalido(MSG_LOCAL_INVALIDO)
         if dados.local_id not in agenda.locais_livres(livre.inicio, livre.fim):
             raise conflito('Este local já está ocupado nesse horário. Escolha outro horário.')
         local_id = dados.local_id
 
-    cliente = _cliente(ctx, dados)
+    digitos = so_digitos(dados.telefone)
+    _limitar_pendentes(ctx, digitos)
+    cliente = _cliente(ctx, dados, digitos)
     db.flush()
     agendamento = Agendamento(
         loja_id=ctx.loja.id,

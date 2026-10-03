@@ -1,18 +1,24 @@
 """Ajudantes usados por todas as rotas da loja: busca com 404, exclusão lógica, vínculos e autores."""
 
+import logging
 from collections.abc import Iterable, Sequence
 from datetime import date, datetime, time, timedelta
+from functools import lru_cache
 from typing import Any
 from uuid import UUID
-from zoneinfo import ZoneInfo
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from fastapi import HTTPException, status
+from fastapi.exceptions import RequestValidationError
 from pydantic import BaseModel
 from sqlalchemy import Select, func, select
 from sqlalchemy.orm import Session
 
+from app.db import FUSO_PADRAO
 from app.models import Funcionario
-from app.schemas.comum import Paginacao
+from app.schemas.comum import MSG_NASCIMENTO, Paginacao, nascimento_valido
+
+log = logging.getLogger('app.services')
 
 
 def nao_encontrado(mensagem: str = 'Não encontrado.') -> HTTPException:
@@ -32,12 +38,24 @@ def proibido(mensagem: str) -> HTTPException:
     return HTTPException(status.HTTP_403_FORBIDDEN, mensagem)
 
 
-def buscar[M](db: Session, modelo: type[M], loja_id: UUID, id_: UUID, mensagem: str = 'Não encontrado.') -> M:
+def buscar[M](
+    db: Session,
+    modelo: type[M],
+    loja_id: UUID,
+    id_: UUID,
+    mensagem: str = 'Não encontrado.',
+    *,
+    travar: bool = False,
+) -> M:
     """Linha da loja (não excluída) pelo id; 404 se não existir ou for de outra loja.
 
     Recurso de outra loja responde 404 (e não 403) para não revelar que ele existe.
+    travar=True: SELECT ... FOR UPDATE até o fim da transação (regras "conferir e gravar").
     """
-    obj = db.scalar(select(modelo).where(modelo.id == id_, modelo.loja_id == loja_id))  # type: ignore[attr-defined]
+    consulta = select(modelo).where(modelo.id == id_, modelo.loja_id == loja_id)  # type: ignore[attr-defined]
+    if travar:
+        consulta = consulta.with_for_update().execution_options(populate_existing=True)
+    obj = db.scalar(consulta)
     if obj is None:
         raise nao_encontrado(mensagem)
     return obj
@@ -113,8 +131,16 @@ def com_autor[S: BaseModel](db: Session, loja_id: UUID, itens: Sequence[S]) -> l
 # ---------------------------------------------------------------------------------------------
 
 
+@lru_cache(maxsize=128)  # o aviso sai uma vez por nome, não a cada requisição
 def fuso(fuso_horario: str) -> ZoneInfo:
-    return ZoneInfo(fuso_horario)
+    """Fuso da loja. Nome desconhecido (dado antigo ou base de fusos desatualizada) não derruba a
+    requisição: vale o fuso padrão e o problema fica no log (a validação da loja já barra na entrada).
+    """
+    try:
+        return ZoneInfo(fuso_horario)
+    except (ZoneInfoNotFoundError, ValueError):
+        log.warning('Fuso horário desconhecido (%r); usando %s', fuso_horario, FUSO_PADRAO)
+        return ZoneInfo(FUSO_PADRAO)
 
 
 def no_fuso(momento: datetime, zona: ZoneInfo) -> datetime:
@@ -148,3 +174,17 @@ def paginar(db: Session, consulta: Select, pag: Paginacao) -> tuple[list[Any], i
 def hoje(zona: ZoneInfo) -> date:
     """Data de hoje no fuso da loja."""
     return datetime.now(zona).date()
+
+
+def erro_de_campo(campo: str, mensagem: str) -> RequestValidationError:
+    """422 no mesmo formato da validação do corpo: {detail, erros: [{campo, mensagem}]}.
+
+    Para regras de um campo que só a rota consegue conferir (ex.: depende do fuso da loja).
+    """
+    return RequestValidationError([{'type': 'regra', 'loc': ('body', campo), 'msg': mensagem}])
+
+
+def conferir_nascimento(data_nascimento: date | None, zona: ZoneInfo) -> None:
+    """Data de nascimento no futuro, considerando o dia de hoje no fuso da loja (GER-15): 422."""
+    if data_nascimento is not None and not nascimento_valido(data_nascimento, hoje(zona)):
+        raise erro_de_campo('data_nascimento', MSG_NASCIMENTO)

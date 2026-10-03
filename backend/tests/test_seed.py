@@ -45,3 +45,18 @@ def test_senhas_de_desenvolvimento_funcionam(engine_app, cliente):
     )
     assert eu.json()['loja']['rotulo_local_plural'] == 'Cadeiras'
     assert eu.json()['modulos']['materiais'] is False
+
+
+def test_clientes_do_seed_tem_cpf_valido_e_o_seed_corrige_os_antigos(engine_app, engine_dono):
+    from app.schemas.comum import cpf_valido, so_digitos
+
+    seed.executar(engine_app)
+    with engine_dono.begin() as conexao:
+        # Banco semeado antes da validação de CPF (dígito verificador errado)
+        conexao.execute(text("UPDATE clientes SET cpf = '123.456.789-00' WHERE nome = 'Maria'"))
+        conexao.execute(text("UPDATE clientes SET cpf = NULL WHERE nome = 'Fernanda'"))
+    seed.executar(engine_app)
+    with engine_dono.connect() as conexao:
+        cpfs = dict(conexao.execute(text('SELECT nome, cpf FROM clientes')).all())
+    assert cpfs['Maria'] == '123.456.789-09'
+    assert all(cpf and cpf_valido(so_digitos(cpf)) for cpf in cpfs.values())

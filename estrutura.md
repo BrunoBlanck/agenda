@@ -322,7 +322,9 @@ Catálogo global das **áreas do sistema que podem ter nível de acesso** (nenhu
 | funcionalidade_id | uuid | NOT NULL, FK → funcionalidades |
 | codigo | varchar(50) | NOT NULL, UNIQUE |
 | nome | varchar(100) | NOT NULL (texto exibido na tela de perfis) |
-| descricao | text | |
+| descricao | text | Texto "Leitura: ... Escrita: ..." (mantido por compatibilidade) |
+| leitura | varchar(200) | NOT NULL. O que o nível leitura permite (coluna "Leitura permite" abaixo) |
+| escrita | varchar(200) | NOT NULL. O que o nível escrita permite (coluna "Escrita permite" abaixo) |
 | ordem | smallint | ordem de exibição |
 | criado_em | timestamptz | NOT NULL DEFAULT now() |
 | atualizado_em | timestamptz | NOT NULL DEFAULT now(). Atualizado automaticamente em todo UPDATE (trigger) |
@@ -404,6 +406,8 @@ CREATE TRIGGER agendamentos_auditoria AFTER INSERT OR UPDATE ON agendamentos
 📌 **Tela Auditoria (SUPERADMIN):** sempre **uma loja por vez**. O superadmin escolhe a loja (ou "Plataforma"), a **tabela** e o **período** (hoje, últimos 7/30/90 dias, último ano ou intervalo livre) e vê: quando, quem (funcionário, superadmin ou cliente pelo site), operação, qual registro e o que mudou (campo: antes → depois). Pode filtrar por pessoa. A mesma visão aparece na aba **Histórico** do detalhe da loja.
 
 📌 **Somente inserção:** a tabela não tem `atualizado_*` nem `excluido_*`; ninguém altera nem apaga histórico (permissão de `UPDATE`/`DELETE` revogada para o usuário da aplicação).
+
+📌 **Login não é alteração:** registrar o acesso (`ultimo_login_em`) e o novo hash da mesma senha (quando o algoritmo pede) não entram na auditoria nem mudam `atualizado_em`/`atualizado_por`. A transação do login é marcada (`app.login`) e só um UPDATE que mexe **apenas** nessas duas colunas é ignorado; a troca de senha de verdade continua auditada.
 
 📌 Índice que atende a consulta da tela:
 
@@ -555,10 +559,10 @@ Funcionários da loja. **São também os usuários que fazem login no Painel da 
 | perfil_id | uuid | NOT NULL, FK (loja_id, perfil_id) → perfis |
 | cargo_id | uuid | FK (loja_id, cargo_id) → cargos |
 | nome | varchar(150) | NOT NULL |
-| cpf | varchar(14) | UNIQUE (loja_id, cpf) |
+| cpf | varchar(14) | UNIQUE (loja_id, cpf) quando preenchido. Dígito verificador conferido; gravado como `000.000.000-00` |
 | email | varchar(150) | NOT NULL, UNIQUE (loja_id, email). Usado no login |
 | senha_hash | varchar(255) | NOT NULL |
-| telefone | varchar(20) | |
+| telefone | varchar(20) | Com DDD; gravado como `(11) 98888-1111` |
 | cor_agenda | varchar(7) | cor do profissional no calendário (ex.: `#0f766e`) |
 | ativo | boolean | DEFAULT true |
 | ultimo_login_em | timestamptz | |
@@ -634,10 +638,10 @@ Períodos em que **não** se pode agendar (feriado, folga do grupo, férias, com
 | loja_id | uuid | FK → lojas |
 | nome | varchar(60) | NOT NULL. Só o primeiro nome: é como a loja chama o cliente ("Olá, Maria") |
 | sobrenome | varchar(100) | NOT NULL |
-| cpf | varchar(14) | UNIQUE (loja_id, cpf) quando preenchido |
-| telefone | varchar(20) | NOT NULL |
+| cpf | varchar(14) | UNIQUE (loja_id, cpf) quando preenchido. Dígito verificador conferido; gravado sempre como `000.000.000-00` |
+| telefone | varchar(20) | NOT NULL. Com DDD (10 ou 11 dígitos); gravado sempre como `(11) 98888-1111` |
 | email | varchar(150) | |
-| data_nascimento | date | |
+| data_nascimento | date | entre 1900-01-01 e hoje |
 | observacoes | text | alergias, preferências etc. |
 | canais | `canal_cliente[]` | NOT NULL DEFAULT `'{}'`. Por onde o cliente fala com a loja; pode ter mais de um: `loja`, `whatsapp`, `site` |
 | ativo | boolean | DEFAULT true |
@@ -896,6 +900,14 @@ CREATE UNIQUE INDEX registros_ponto_um_aberto
   ON registros_ponto (funcionario_id) WHERE saida IS NULL AND excluido_em IS NULL;
 ```
 
+📌 Registros do mesmo funcionário **não se sobrepõem** (um registro em aberto vale até o infinito):
+
+```sql
+ALTER TABLE registros_ponto ADD CONSTRAINT registros_ponto_sem_sobreposicao EXCLUDE USING gist (
+  funcionario_id WITH =, tstzrange(entrada, saida) WITH &&
+) WHERE (excluido_em IS NULL);
+```
+
 📌 Horário de entrada/saída vem do **servidor**, não do navegador. Correções só por quem tem **escrita** em *Ponto da equipe*, com justificativa.
 
 📌 Horas trabalhadas = `saida - entrada` (calculado na consulta, não armazenado). A data exibida usa o fuso da loja.
@@ -916,7 +928,7 @@ O que a loja pode editar (por enquanto):
 
 | Campo na tela | Coluna em `lojas` | Regras |
 |---|---|---|
-| Logo da loja | `logo_url` | Upload de imagem (PNG, JPG ou SVG, até 2 MB). Pode remover |
+| Logo da loja | `logo_url` | Upload de imagem (PNG, JPEG ou WebP, até 2 MB; SVG não é aceito, pode conter script). Pode remover |
 | Nome da loja | `nome_fantasia` | Obrigatório |
 | Razão social | `nome` | Obrigatório |
 | Telefone | `telefone` | |
@@ -926,7 +938,7 @@ O que a loja pode editar (por enquanto):
 
 O que **só o superadmin** altera (não aparece no menu da loja ou aparece só para leitura): `tipo`, `slug`, `plano_id`, `status`, `fuso_horario` e os módulos (`loja_funcionalidades`).
 
-📌 **Logo:** o arquivo fica num storage de arquivos (ex.: S3 ou disco do servidor), separado por loja (ex.: `lojas/{loja_id}/logo.png`). No banco fica só o caminho. Ao trocar a logo, o arquivo anterior é apagado.
+📌 **Logo:** o arquivo fica num storage de arquivos (hoje, o disco do servidor em `ARQUIVOS_DIR`), separado por loja (`logos/{loja_id}/<nome aleatório>.<png|jpg|webp>`). O tipo é conferido pelo conteúdo do arquivo, não pela extensão. No banco fica só a URL pública (`/api/arquivos/logos/{loja_id}/<nome>`). Ao trocar ou remover a logo, o arquivo anterior é apagado.
 
 📌 Cada alteração preenche `atualizado_por_funcionario` e `atualizado_em`.
 
@@ -1095,7 +1107,7 @@ Como o back-end (`backend/`, migrações `0001` e `0002`) aplica este documento,
 - **`loja_funcionalidades`:** trigger recusa módulos com `opcional = false`.
 - **Restrições extras (`CHECK`):** `slug` só com letras minúsculas, números e hífens; `cor_agenda` no formato `#rrggbb`; `motivo_cancelamento` obrigatório quando `status = cancelado`; `justificativa` obrigatória no ponto `manual`; `motivo` obrigatório em `ajuste`/`perda`; `agendamento_id` obrigatório em `saida_atendimento`; sinal da quantidade (entrada > 0; saída de atendimento e perda < 0); `link_padrao` só em local `online`; preços e estoque mínimo não negativos; `dia_semana` entre 0 e 6.
 - **`NOT NULL` explícito** em colunas com `DEFAULT` que o documento não marcava (`ativo`, `padrao`, `acesso_total`, `status`, `origem`, `fuso_horario`, `estoque_minimo`) e em `perfil_horarios.dia_semana`.
-- **`recursos.descricao`** guarda o texto "Leitura: ... Escrita: ..." da tabela da seção 1.8.
+- **`recursos.descricao`** guarda o texto "Leitura: ... Escrita: ..." da tabela da seção 1.8; desde a migração 0004 os dois textos também ficam separados em `recursos.leitura` e `recursos.escrita`.
 
 ## 6.1 Etapa 2: rotas do painel da loja
 
@@ -1108,13 +1120,13 @@ Decisões tomadas ao implementar as rotas `/api/loja/...` (detalham regras que o
 - **Jornada e bloqueios** são conferidos ao criar e quando muda o horário ou o profissional (não ao só mudar o status). O atendimento precisa caber inteiro numa faixa da jornada, no mesmo dia (fuso da loja).
 - **Módulo Serviços desligado:** agendamento sem serviço, duração obrigatória e preço manual; ao editar, o `servico_id` antigo é mantido. **Locais desligado:** `local_id` é ignorado (os antigos são mantidos). Os vínculos de serviço com locais e materiais só são lidos e gravados com os respectivos módulos ligados.
 - **Materiais do agendamento** são copiados de `servico_materiais` ao criar (com o módulo Materiais ligado) e recopiados se o serviço mudar antes de concluir; podem ser ajustados até a conclusão.
-- **Listas de apoio (2.2):** `GET /api/loja/apoio/agendamento` devolve clientes ativos (id e nome), serviços ativos com vínculos, profissionais ativos e locais ativos para quem tem escrita na agenda. Quem só tem escrita em *Minha agenda* recebe só ele mesmo e os serviços que realiza. `GET /api/loja/apoio/disponibilidade` informa jornada/bloqueio e o que está ocupado no horário.
+- **Listas de apoio (2.2):** `GET /api/loja/apoio/agendamento` devolve serviços ativos com vínculos, profissionais ativos e locais ativos para quem tem escrita na agenda; os clientes vêm de uma busca paginada, `GET /api/loja/apoio/clientes?busca=` (mínimo de 2 caracteres; nome, telefone ou CPF; só ativos; id, nome, sobrenome e telefone). Quem só tem escrita em *Minha agenda* recebe só ele mesmo e os serviços que realiza. `GET /api/loja/apoio/disponibilidade` informa jornada/bloqueio e o que está ocupado no horário.
 - **Histórico do cliente** exige leitura em *Clientes* e mostra só os agendamentos que o usuário pode ver na agenda (`parcial = true` quando há outros).
 - **Exclusões:** cliente com agendamentos, cargo com funcionários, categoria com materiais e material usado em serviço respondem 409 (inative em vez de excluir). Funcionário e local não têm rota de exclusão: são inativados. Perfil padrão não é renomeado nem excluído; perfil com funcionários (mesmo inativos) não é excluído; excluir um perfil exclui junto os níveis, a jornada e os bloqueios dele.
 - **Materiais:** o cadastro aceita `quantidade_inicial`, lançada como `entrada`; a edição não mexe no estoque. Perda é informada positiva e gravada negativa; ajuste aceita os dois sinais. `saida_atendimento` não é lançada à mão.
 - **Funcionários:** senha obrigatória no cadastro (mínimo de 8 caracteres) e opcional na edição (troca a senha).
 - **Ponto:** a hora de entrada/saída é a do servidor; correções e lançamentos manuais não podem ficar no futuro e gravam `editado_por`.
-- **Dados da loja:** CNPJ validado pelos dígitos e gravado com máscara; CEP com máscara; UF em maiúsculas. Quem fez a última alteração (loja ou superadmin) vem da `auditoria`, porque `lojas` guarda as duas colunas `atualizado_por_*` sem dizer qual foi a última. **Envio da logo** ainda não existe (depende do storage); só é possível remover.
+- **Dados da loja:** CNPJ validado pelos dígitos e gravado com máscara; CEP com máscara; UF em maiúsculas. Quem fez a última alteração (loja ou superadmin) vem da `auditoria`, porque `lojas` guarda as duas colunas `atualizado_por_*` sem dizer qual foi a última. A logo é enviada como arquivo (PNG, JPEG ou WebP, até 2 MB), pela loja ou pelo superadmin; o arquivo anterior é apagado.
 - **Locais:** a lista traz só a *contagem* de próximos agendamentos de cada local; a lista dos agendamentos fica em `/agendamentos?local_id=` (com as regras de visibilidade da agenda).
 
 ## 6.2 Etapa 3: SUPERADMIN e site do consumidor
@@ -1134,4 +1146,14 @@ Decisões tomadas ao implementar `/api/superadmin/...` e `/api/site/{slug}/...` 
 - **Site sem o módulo Serviços:** um "Atendimento" genérico de 30 min, sem preço, com os funcionários ativos que têm jornada.
 - **Site, cliente (2.7):** identificado pelo telefone (só dígitos, na mesma loja; havendo mais de um, o mais antigo). O cadastro existente só ganha o canal `site`: nome, e-mail e situação não mudam (*provisória*: um cliente inativo não é reativado) e nada dele é devolvido ao site. O telefone é gravado com máscara (`(11) 98888-1111`) e precisa ter DDD.
 - **Site, pedido:** `pendente`, `origem = site`, preço do serviço congelado, local reservado, materiais do serviço copiados (módulo Materiais), contexto `app.origem = 'site'` sem funcionário (`atualizado_por` e `criado_por` NULL). O `EXCLUDE` do banco recusa a corrida entre dois pedidos.
-- **Ainda não feito:** limite de requisições e captcha nas rotas públicas do site.
+- **Ainda não feito:** captcha nas rotas públicas do site (o limite de requisições está em 6.3).
+
+## 6.3 Etapa 4: correções da revisão (segurança e validação)
+
+- **Sem escalada (ACE-19):** quem não é Administrador não concede nível acima do seu (editando níveis, copiando perfil ou atribuindo perfil a alguém), não altera o próprio perfil (níveis e nome), não troca o próprio perfil no cadastro e não troca a senha de um colega cujo perfil tem algum nível acima do seu. A comparação usa os níveis gravados nos perfis (iguais aos efetivos nos módulos ligados; num módulo desligado, os dois lados ficam sem efeito até religar). Reenviar ou baixar um nível que o perfil já tem não é concessão.
+- **Concorrência:** mudar status/editar/excluir agendamento trava a linha (`FOR UPDATE`): baixa e estorno de estoque acontecem uma vez só. A regra do último Administrador trava os administradores ativos da loja (painel e suporte). Lançamentos de estoque travam o material; a baixa e o estorno de um atendimento travam os materiais em ordem de `material_id` (sem deadlock entre atendimentos). Deadlock ou falha de serialização (40P01/40001) responde 409 "Tente novamente". Ponto e pedidos do site por telefone usam `pg_advisory_xact_lock` por funcionário/telefone.
+- **Proteção contra abuso (decisão provisória para ABE-23):** limite por IP no login (loja e superadmin) e em todas as rotas do site; pedidos do site por IP em cada loja; bloqueio progressivo por **conta + IP** depois de N falhas seguidas de login (só aquele IP fica bloqueado para aquela conta: um terceiro que só sabe o e-mail não tranca nem renova o bloqueio do dono, que entra de outro IP; vale para e-mail inexistente também); no máximo N pedidos `pendente` futuros por telefone em cada loja (409). Respostas 429 com `Retry-After`. Limites no `.env` (`app/config.py`). Sem captcha.
+- **Schema técnico `limites`** (tabela `contadores`, migração 0003): estado dos contadores acima, compartilhado por todos os processos da API. Fica **fora** das regras das tabelas de negócio (sem colunas de controle, auditoria nem RLS: auditaria cada requisição) e não guarda dado pessoal legível (chaves HMAC). Contadores vencidos são apagados aos poucos.
+- **Validação de entrada:** datas e horários informados entre 2000 e 2100; `pagina` até 10.000; textos livres até 2.000 caracteres; listas até 200 itens; uma movimentação de estoque até 1.000.000 e saldo conferido antes de gravar (cabe em `numeric(10,2)`). CPF e telefone de clientes e funcionários no formato canônico (a migração 0003 normalizou o que dava; CPF que colidiria com outro cadastro ativo ficou como estava). Busca de clientes acha telefone e CPF com ou sem máscara.
+- **Serviços:** serviço ativo precisa de pelo menos um profissional **ativo** (SER-02). Serviço com agendamentos ativos (`pendente`, `agendado`, `confirmado`) que ainda não terminaram não é excluído (409). Um agendamento mantém o serviço que já tinha mesmo que ele tenha sido excluído depois.
+- **Ponto:** `POST /ponto/registrar` recebe `acao` (`entrada` ou `saida`) e responde 409 se não bater com a situação (ex.: clique duplo). Lançamento manual e correção não podem sobrepor outro registro do funcionário.

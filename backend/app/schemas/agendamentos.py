@@ -10,7 +10,9 @@ from pydantic import BaseModel, Field, field_validator
 from app.models.enums import OrigemAgendamento, StatusAgendamento, TipoLocal
 from app.schemas.clientes import ClienteSaida
 from app.schemas.comum import (
+    LISTA_MAX,
     Controle,
+    DataHora,
     DecimalSaida,
     Dinheiro,
     Entrada,
@@ -34,7 +36,7 @@ class AgendamentoEntrada(Entrada):
         default=None, description='Obrigatório com o módulo Locais ativo; ignorado com ele desligado'
     )
     link_reuniao: texto_opcional(500) = Field(default=None, description='Só para local online')
-    inicio: datetime = Field(description='Sem fuso, vale o horário da loja')
+    inicio: DataHora = Field(description='Sem fuso, vale o horário da loja')
     duracao_minutos: int | None = Field(
         default=None, gt=0, le=24 * 60, description='Vazio = duração do serviço (obrigatória sem serviço)'
     )
@@ -65,7 +67,7 @@ class MaterialUsado(Entrada):
 
 
 class MateriaisEntrada(Entrada):
-    materiais: list[MaterialUsado]
+    materiais: list[MaterialUsado] = Field(max_length=LISTA_MAX)
 
     @field_validator('materiais')
     @classmethod
@@ -112,9 +114,12 @@ class AgendamentoSaida(Controle):
 
 
 class ClienteApoio(Esquema):
+    """Cliente na busca do formulário de agendamento: só o necessário para escolher (sem CPF/e-mail)."""
+
     id: UUID
     nome: str
     sobrenome: str
+    telefone: str
 
 
 class ProfissionalApoio(Esquema):
@@ -132,13 +137,50 @@ class LocalApoio(Esquema):
     link_padrao: str | None
 
 
-class ApoioAgendamento(BaseModel):
-    """O que o formulário de agendamento precisa (estrutura.md, 2.2: listas de apoio)."""
+class MaterialApoio(Esquema):
+    id: UUID
+    nome: str
+    unidade: str
 
-    clientes: list[ClienteApoio]
+
+class ApoioAgendamento(BaseModel):
+    """O que o formulário de agendamento precisa (estrutura.md, 2.2: listas de apoio).
+
+    Os clientes não vêm aqui: o formulário busca em GET /apoio/clientes?busca=... (paginado).
+    """
+
     servicos: list[ServicoSaida] | None = Field(description='Nulo com o módulo Serviços desligado')
     profissionais: list[ProfissionalApoio]
     locais: list[LocalApoio] | None = Field(description='Nulo com o módulo Locais desligado')
+    materiais: list[MaterialApoio] | None = Field(
+        default=None,
+        description=(
+            'Materiais ativos, para ajustar o que foi usado no atendimento. '
+            'Nulo com o módulo Materiais desligado'
+        ),
+    )
+
+
+class ProfissionalFiltro(Esquema):
+    id: UUID
+    nome: str
+    cor_agenda: str | None
+    ativo: bool
+
+
+class LocalFiltro(Esquema):
+    id: UUID
+    nome: str
+    tipo: TipoLocal
+    ativo: bool
+
+
+class FiltrosAgenda(BaseModel):
+    """Opções dos filtros da agenda e da lista de agendamentos (leitura na agenda basta)."""
+
+    so_propria: bool = Field(description='O usuário só vê a própria agenda (a lista traz só ele)')
+    profissionais: list[ProfissionalFiltro] = Field(description='Ativos primeiro; inclui os inativos')
+    locais: list[LocalFiltro] | None = Field(description='Nulo com o módulo Locais desligado')
 
 
 class Disponibilidade(BaseModel):

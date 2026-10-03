@@ -7,7 +7,6 @@ import dayjs from 'dayjs'
 import 'dayjs/locale/pt-br'
 import './index.css'
 import App from './App.jsx'
-import { DataProvider } from './data/DataContext.jsx'
 import { tema } from './tema.js'
 
 dayjs.locale('pt-br')
@@ -17,11 +16,9 @@ createRoot(document.getElementById('root')).render(
     <ConfigProvider locale={ptBR} theme={tema}>
       {/* AntApp: message e modal via App.useApp(), já com o tema */}
       <AntApp>
-        <DataProvider>
-          <BrowserRouter>
-            <App />
-          </BrowserRouter>
-        </DataProvider>
+        <BrowserRouter>
+          <App />
+        </BrowserRouter>
       </AntApp>
     </ConfigProvider>
   </StrictMode>,

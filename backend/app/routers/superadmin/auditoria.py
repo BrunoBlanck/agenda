@@ -3,7 +3,6 @@
 A mesma consulta atende a aba Histórico do detalhe da loja.
 """
 
-from datetime import date
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query
@@ -11,7 +10,7 @@ from sqlalchemy import select
 
 from app.auth.dependencias import ContextoSuperadminDep
 from app.models import Auditoria
-from app.schemas.comum import Erro, Pagina, Paginacao, paginacao
+from app.schemas.comum import Data, Erro, Pagina, Paginacao, paginacao
 from app.schemas.superadmin import AuditoriaItem, Periodo, Quem, TabelasAuditoria
 from app.services.auditoria import (
     TABELAS_LOJA,
@@ -49,8 +48,8 @@ def listar(
     loja: LojaParam,
     tabela: TabelaParam = None,
     periodo: PeriodoParam = '30d',
-    inicio: date | None = None,
-    fim: date | None = None,
+    inicio: Data | None = None,
+    fim: Data | None = None,
     quem: Annotated[str | None, Query(max_length=60, description='f:<id>, s:<id>, site ou sistema')] = None,
 ) -> Pagina[AuditoriaItem]:
     db = ctx.db
@@ -75,8 +74,8 @@ def pessoas(
     loja: LojaParam,
     tabela: TabelaParam = None,
     periodo: PeriodoParam = '30d',
-    inicio: date | None = None,
-    fim: date | None = None,
+    inicio: Data | None = None,
+    fim: Data | None = None,
 ) -> list[Quem]:
     db = ctx.db
     loja_id = interpretar_loja(loja)

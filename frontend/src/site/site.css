@@ -229,9 +229,25 @@
 
 .site-cor-profissional {
   display: inline-block;
+  flex-shrink: 0;
   width: 10px;
   height: 10px;
   border-radius: 50%;
+  background: var(--cor-texto-terciario);
+}
+
+.site-alerta {
+  margin-bottom: var(--espaco-4);
+}
+
+.site-opcao strong,
+.site-descricao {
+  overflow-wrap: anywhere;
+}
+
+.site-filtros {
+  flex: 1 1 auto;
+  justify-content: flex-end;
 }
 
 .site-rodape {
@@ -295,6 +311,10 @@
 
 @media (max-width: 600px) {
   .site-servico-escolhido .ant-select {
+    width: 100%;
+  }
+
+  .site-filtros {
     width: 100%;
   }
 }

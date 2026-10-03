@@ -1,35 +1,26 @@
-import dayjs from 'dayjs'
-import { useData } from './DataContext.jsx'
-import { modulos as catalogoModulos, recursos } from './acesso.js'
+import { useSessaoLoja } from './sessao/sessoes.js'
 
 const peso = { nenhum: 0, leitura: 1, escrita: 2 }
 
-// Regras de acesso do usuário logado (estrutura.md, 1.7, 1.8 e 2.2).
+// Regras de acesso do usuário logado (estrutura.md, 1.7, 1.8 e 2.2), a partir de GET /api/loja/eu (INT-08).
+// O servidor já entrega o nível efetivo (módulo desligado = nenhum, inclusive para o Administrador):
+// o navegador só lê, nunca deduz permissão pelo nome do perfil. Quem decide de verdade é a API.
 export function useAcesso() {
-  const { funcionarios, perfis, modulos, sessao } = useData()
-  const usuario = funcionarios.itens.find((f) => f.id === sessao.usuarioId)
-  const perfil = perfis.itens.find((p) => p.id === usuario?.perfilId)
+  const { eu } = useSessaoLoja()
+  const usuario = eu?.funcionario ?? null
+  const perfil = eu?.perfil ?? null
+  const loja = eu?.loja ?? null
 
-  // Módulo opcional: precisa estar habilitado e não ter vencido (loja_funcionalidades.expira_em)
-  const moduloAtivo = (codigo) => {
-    const modulo = catalogoModulos.find((m) => m.codigo === codigo)
-    if (!modulo) return false
-    if (!modulo.opcional) return true
-    const expiraEm = modulos.info[codigo]?.expiraEm
-    return !!modulos.ativos[codigo] && (!expiraEm || dayjs(expiraEm).isAfter(dayjs()))
-  }
+  const moduloAtivo = (codigo) => !!eu?.modulos?.[codigo]
 
-  // Nível efetivo: módulo desativado = nenhum, inclusive para o Administrador
   const nivel = (codigoRecurso) => {
-    const recurso = recursos.find((r) => r.codigo === codigoRecurso)
-    if (!recurso || !perfil || !moduloAtivo(recurso.modulo)) return 'nenhum'
-    if (perfil.acessoTotal) return 'escrita'
-    return perfil.acessos[codigoRecurso] ?? 'nenhum'
+    const n = eu?.acessos?.[codigoRecurso]
+    return n in peso ? n : 'nenhum'
   }
 
   const pode = (codigoRecurso, minimo = 'leitura') => peso[nivel(codigoRecurso)] >= peso[minimo]
 
-  const doUsuario = (a) => a.funcionarioId === usuario?.id
+  const doUsuario = (a) => a?.funcionarioId != null && a.funcionarioId === usuario?.id
   const agenda = {
     verEquipe: pode('agenda_equipe'),
     criar: pode('agenda_equipe', 'escrita') || pode('agenda_propria', 'escrita'),
@@ -38,5 +29,5 @@ export function useAcesso() {
     editar: (a) => pode('agenda_equipe', 'escrita') || (pode('agenda_propria', 'escrita') && doUsuario(a)),
   }
 
-  return { usuario, perfil, moduloAtivo, nivel, pode, agenda }
+  return { usuario, perfil, loja, moduloAtivo, nivel, pode, agenda }
 }

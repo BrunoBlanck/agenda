@@ -1,0 +1,3 @@
+- [Armadilhas do back-end](armadilhas-backend.md) — corrida com servidor real, FOR UPDATE sem count, IP do TestClient, schema limites, heredoc truncado
+- [Armadilhas: reload e fuso da sessão](armadilhas-ambiente-e-fuso.md) — uvicorn --reload trava no Windows; TimeZone da transação = fuso da loja (casts de data, JSON da auditoria)
+- [Armadilhas do ambiente](armadilhas-ambiente.md) — sed -i quebra CRLF, pytest -q some o resumo, como testar fuso da loja

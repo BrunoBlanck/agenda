@@ -408,6 +408,30 @@ def test_lista_filtrada_e_paginada(cliente, clinica):
     assert invertido.status_code == 422
 
 
+def test_lista_em_ordem_decrescente(cliente, clinica):
+    """INT-13: ordem=desc traz os mais recentes na página 1 (padrão continua asc)."""
+    c = clinica
+    a1 = _criar(cliente, c)
+    a2 = _criar(cliente, c, inicio=f'{SEGUNDA}T10:00', funcionario_id=str(c.lt.admin.id))
+    a3 = _criar(cliente, c, inicio='2030-01-14T09:00')
+
+    def ids(h=c.lt.h_admin, **params):
+        resposta = cliente.get(URL, params=params, headers=h)
+        assert resposta.status_code == 200, resposta.json()
+        return [a['id'] for a in resposta.json()['itens']]
+
+    assert ids(ordem='asc') == ids() == [a1['id'], a2['id'], a3['id']]
+    assert ids(ordem='desc') == [a3['id'], a2['id'], a1['id']]
+    assert ids(ordem='desc', por_pagina=2) == [a3['id'], a2['id']]
+    assert ids(ordem='desc', por_pagina=2, pagina=2) == [a1['id']]
+    assert ids(ordem='desc', inicio=SEGUNDA, fim=SEGUNDA) == [a2['id'], a1['id']]
+    # Profissional (só Minha agenda) continua vendo só os próprios, em qualquer ordem
+    assert ids(c.lt.h_prof, ordem='desc') == [a3['id'], a1['id']]
+    invalida = cliente.get(URL, params={'ordem': 'aleatoria'}, headers=c.lt.h_admin)
+    assert invalida.status_code == 422
+    assert invalida.json()['erros'] == [{'campo': 'ordem', 'mensagem': 'Opção inválida.'}]
+
+
 # --- Visibilidade e permissões ------------------------------------------------------------------
 
 
@@ -470,11 +494,11 @@ def test_listas_de_apoio(cliente, clinica):
     c = clinica
     cliente.put(
         f'/api/loja/clientes/{c.joao}',
-        json={'nome': 'João', 'sobrenome': 'Pereira', 'telefone': '2', 'ativo': False},
+        json={'nome': 'João', 'sobrenome': 'Pereira', 'telefone': '(11) 98888-2222', 'ativo': False},
         headers=c.lt.h_admin,
     )
     da_recepcao = cliente.get('/api/loja/apoio/agendamento', headers=c.lt.h_recepcao).json()
-    assert [cl['nome'] for cl in da_recepcao['clientes']] == ['Maria']  # só ativos
+    assert 'clientes' not in da_recepcao  # a lista completa saiu: o formulário usa /apoio/clientes
     assert {p['nome'] for p in da_recepcao['profissionais']} == {'Admin', 'Profissional', 'Recepção'}
     assert [s['nome'] for s in da_recepcao['servicos']] == ['Avaliação', 'Limpeza']
     assert [loc['nome'] for loc in da_recepcao['locais']] == ['Online', 'Sala 1', 'Sala 2']
@@ -484,6 +508,56 @@ def test_listas_de_apoio(cliente, clinica):
     assert [p['nome'] for p in do_prof['profissionais']] == ['Profissional']
     assert [s['nome'] for s in do_prof['servicos']] == ['Limpeza']
     assert cliente.get('/api/loja/servicos', headers=c.lt.h_prof).status_code == 403
+
+
+def test_apoio_traz_os_materiais_ativos_so_com_o_modulo(cliente, clinica, engine_dono):
+    c = clinica
+    gaze = cliente.post(
+        '/api/loja/materiais', json={'nome': 'Gaze', 'unidade': 'pct'}, headers=c.lt.h_admin
+    ).json()['id']
+    cliente.put(
+        f'/api/loja/materiais/{gaze}',
+        json={'nome': 'Gaze', 'unidade': 'pct', 'ativo': False},
+        headers=c.lt.h_admin,
+    )
+    do_prof = cliente.get('/api/loja/apoio/agendamento', headers=c.lt.h_prof).json()
+    assert do_prof['materiais'] == [
+        {'id': c.luvas, 'nome': 'Luvas', 'unidade': 'un'}
+    ]  # sem leitura em Materiais
+    mudar_modulo(engine_dono, c.lt.loja.id, 'materiais', habilitado=False)
+    assert cliente.get('/api/loja/apoio/agendamento', headers=c.lt.h_admin).json()['materiais'] is None
+
+
+def test_filtros_da_agenda(cliente, clinica, engine_dono):
+    c = clinica
+    url = '/api/loja/apoio/filtros-agenda'
+    cliente.put(
+        f'/api/loja/locais/{c.sala2}',
+        json={'nome': 'Sala 2', 'tipo': 'presencial', 'ativo': False},
+        headers=c.lt.h_admin,
+    )
+    da_recepcao = cliente.get(url, headers=c.lt.h_recepcao).json()
+    assert da_recepcao['so_propria'] is False
+    assert [p['nome'] for p in da_recepcao['profissionais']] == ['Admin', 'Profissional', 'Recepção']
+    assert [(loc['nome'], loc['ativo']) for loc in da_recepcao['locais']] == [
+        ('Online', True),
+        ('Sala 1', True),
+        ('Sala 2', False),  # inativo no fim: serve para filtrar agendamentos antigos
+    ]
+
+    # Só Minha agenda: só ele mesmo. Leitura na equipe basta (sem escrita)
+    do_prof = cliente.get(url, headers=c.lt.h_prof).json()
+    assert do_prof['so_propria'] is True
+    assert [p['id'] for p in do_prof['profissionais']] == [str(c.lt.prof.id)]
+    so_le = usuario_com(engine_dono, c.lt.loja, {'agenda_equipe': 'leitura'})
+    assert len(cliente.get(url, headers=so_le).json()['profissionais']) == 4
+    assert (
+        cliente.get(url, headers=usuario_com(engine_dono, c.lt.loja, {'clientes': 'escrita'})).status_code
+        == 403
+    )
+
+    mudar_modulo(engine_dono, c.lt.loja.id, 'locais', habilitado=False)
+    assert cliente.get(url, headers=c.lt.h_admin).json()['locais'] is None
 
 
 def test_disponibilidade(cliente, clinica):

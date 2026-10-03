@@ -1,3 +1,0 @@
-- [Identidade visual](identidade-visual.md) — tinta + marca-texto, fonte, onde ficam os tokens e regras de uso do destaque
-- [Padrões de tela](padroes-de-tela.md) — Pagina/Secao/CadastroTabela e armadilhas do antd 6 e Vite 8 já resolvidas
-- [Painel lateral](painel-lateral.md) — todo formulário/consulta por cima da tela é painel lateral; API, regras e armadilhas

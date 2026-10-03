@@ -1,12 +1,11 @@
-import { Button } from 'antd'
-import { CalendarOutlined, PlusOutlined } from '@ant-design/icons'
+import { Button, Skeleton } from 'antd'
+import { CalendarOutlined, DisconnectOutlined, PlusOutlined } from '@ant-design/icons'
 import { useNavigate } from 'react-router-dom'
-import dayjs from 'dayjs'
-import { useData } from '../data/DataContext.jsx'
 import { useAcesso } from '../data/useAcesso.js'
-import { useNomes } from '../data/useNomes.js'
+import { useInicio } from '../data/useInicio.js'
+import { agoraNaLoja, lerData } from '../data/api/conversao.js'
 import { capitalizar, horaCurta, plural } from '../utils/formatos.js'
-import { fimDe, inativo } from '../components/agenda/util.js'
+import { COR_PADRAO, corDe, fimDe, inativo } from '../components/agenda/util.js'
 import Pagina from '../components/base/Pagina.jsx'
 import Secao from '../components/base/Secao.jsx'
 import Tabela from '../components/base/Tabela.jsx'
@@ -17,39 +16,69 @@ import AceiteSolicitacao from '../components/AceiteSolicitacao.jsx'
 import AgendamentoPainel from '../components/AgendamentoPainel.jsx'
 import { usePainel } from '../components/base/usePainel.js'
 
-const chaveData = (a) => `${a.data} ${a.hora}`
+// "desde 9h" para quem entrou hoje; com a data para entrada aberta desde outro dia (esqueceu de sair).
+// entradaEm (dayjs, hora da loja) dá a data exata da entrada
+function desde(p, hoje) {
+  if (!p.entradaEm?.isValid?.()) return p.entrada ? `desde ${horaCurta(p.entrada)}` : null
+  const hora = horaCurta(p.entradaEm.format('HH:mm'))
+  if (p.entradaEm.isSame(hoje, 'day')) return `desde ${hora}`
+  if (p.entradaEm.isSame(hoje.subtract(1, 'day'), 'day')) return `desde ontem, ${hora}`
+  return `desde ${p.entradaEm.format('DD/MM')}, ${hora}`
+}
+
+// "Dra. Ana Souza" -> "Ana" (pula tratamentos abreviados como Dr., Dra., Sr.)
+const primeiroNome = (nome) => {
+  const partes = (nome ?? '').split(' ').filter(Boolean)
+  return partes.find((p) => !p.endsWith('.')) ?? partes[0] ?? ''
+}
+
+// Enquanto o resumo chega: linhas no formato da lista (sem spinner)
+function CarregandoLinhas({ linhas = 3 }) {
+  return (
+    <div className="carregando-linhas" aria-busy="true" aria-label="Carregando">
+      <Skeleton active title={false} paragraph={{ rows: linhas, width: '100%' }} />
+    </div>
+  )
+}
+
+const numero = new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 2 })
+const qtd = (n) => numero.format(Number(n) || 0)
 
 // Início: o que a recepção (ou o profissional) precisa resolver agora.
-// Cada bloco só aparece se o usuário tiver acesso ao recurso correspondente.
+// Cada bloco vem do servidor (GET /api/loja/inicio) e só aparece se o usuário tiver acesso:
+// bloco null = sem acesso (o servidor decide; useAcesso só adianta o formato enquanto carrega).
 export default function Dashboard() {
-  const { agendamentos, materiais, pontos } = useData()
   const { pode, agenda, moduloAtivo, usuario } = useAcesso()
-  const nomes = useNomes()
+  const { resumo: dados, carregando, erro, recarregar } = useInicio()
   const navigate = useNavigate()
   const painel = usePainel()
-  const agora = dayjs()
-  const hoje = agora.format('YYYY-MM-DD')
+  const agora = agoraNaLoja()
+  const hoje = dados?.data ?? agora
 
-  const verAgenda = pode('agenda_propria') || pode('agenda_equipe')
-  const verMateriais = pode('materiais')
-  const verEquipe = pode('ponto_equipe')
+  const verAgenda = dados ? dados.agendaHoje != null : pode('agenda_propria') || pode('agenda_equipe')
+  const verMateriais = dados ? dados.materiaisARepor != null : pode('materiais')
+  const verEquipe = dados ? dados.equipeEmServico != null : pode('ponto_equipe')
+  const verClientes = dados ? dados.clientesCadastrados != null : pode('clientes')
   const comServicos = moduloAtivo('servicos')
+  const soPropria = dados ? dados.soPropria : !agenda.verEquipe
 
-  const agendaHoje = agendamentos.itens.filter((a) => a.data === hoje && agenda.ver(a)).sort((a, b) => a.hora.localeCompare(b.hora))
+  const agendaHoje = dados?.agendaHoje ?? []
   const ativosHoje = agendaHoje.filter((a) => !inativo(a))
-  const proximo = ativosHoje.find((a) => a.hora >= agora.format('HH:mm'))
-  const pendentes = agendamentos.itens.filter((a) => a.status === 'pendente' && agenda.ver(a)).sort((a, b) => chaveData(a).localeCompare(chaveData(b)))
-  const emServico = pontos.itens.filter((p) => p.data === hoje && !p.saida)
-  const aRepor = materiais.itens.filter((m) => m.quantidade < m.minimo).sort((a, b) => a.quantidade / a.minimo - b.quantidade / b.minimo)
+  const horaAgora = agora.format('HH:mm')
+  const proximo = hoje.isSame(agora, 'day') ? ativosHoje.find((a) => a.hora >= horaAgora) : null
+  const pendentes = dados?.solicitacoesSite ?? []
+  const emServico = dados?.equipeEmServico ?? []
+  const aRepor = dados?.materiaisARepor ?? []
 
-  const resumo = verAgenda
-    ? [
-        ativosHoje.length ? plural(ativosHoje.length, 'atendimento hoje', 'atendimentos hoje') : 'Nenhum atendimento hoje',
-        proximo && `o próximo às ${horaCurta(proximo.hora)} com ${nomes.cliente(proximo.clienteId)}`,
-      ]
-        .filter(Boolean)
-        .join(', ') + '.'
-    : undefined
+  const resumo =
+    verAgenda && dados
+      ? [
+          ativosHoje.length ? plural(ativosHoje.length, 'atendimento hoje', 'atendimentos hoje') : 'Nenhum atendimento hoje',
+          proximo && `o próximo às ${horaCurta(proximo.hora)} com ${proximo.clienteNome ?? 'cliente'}`,
+        ]
+          .filter(Boolean)
+          .join(', ') + '.'
+      : undefined
 
   const colunasHoje = [
     {
@@ -57,19 +86,19 @@ export default function Dashboard() {
       key: 'hora',
       width: 120,
       render: (_, a) => (
-        <span className={a.hora < agora.format('HH:mm') ? 'texto-apoio sem-quebra' : 'sem-quebra'}>
+        <span className={a.hora < horaAgora ? 'texto-apoio sem-quebra' : 'sem-quebra'}>
           {horaCurta(a.hora)} às {horaCurta(fimDe(a))}
         </span>
       ),
     },
-    { title: 'Cliente', dataIndex: 'clienteId', render: (id) => <strong>{nomes.cliente(id)}</strong> },
-    comServicos && { title: 'Serviço', dataIndex: 'servicoId', render: nomes.servico },
-    agenda.verEquipe && {
+    { title: 'Cliente', dataIndex: 'clienteNome', render: (nome) => <strong>{nome ?? '—'}</strong> },
+    comServicos && { title: 'Serviço', dataIndex: 'servicoNome', render: (nome) => nome ?? '—' },
+    !soPropria && {
       title: 'Profissional',
-      dataIndex: 'funcionarioId',
-      render: (id) => (
+      key: 'profissional',
+      render: (_, a) => (
         <span className="com-ponto">
-          <PontoCor cor={nomes.corDe(id)} /> {nomes.profissional(id)}
+          <PontoCor cor={corDe(a)} /> {a.funcionarioNome ?? '—'}
         </span>
       ),
     },
@@ -81,25 +110,41 @@ export default function Dashboard() {
       title: 'Quando',
       key: 'quando',
       width: 150,
-      render: (_, a) => `${capitalizar(dayjs(a.data).format('ddd DD/MM'))}, ${horaCurta(a.hora)}`,
+      render: (_, a) => (a.data ? `${capitalizar(lerData(a.data).format('ddd DD/MM'))}, ${horaCurta(a.hora)}` : '—'),
     },
-    { title: 'Cliente', dataIndex: 'clienteId', render: (id) => <strong>{nomes.cliente(id)}</strong> },
-    comServicos && { title: 'Serviço', dataIndex: 'servicoId', render: nomes.servico },
-    agenda.verEquipe && { title: 'Profissional', dataIndex: 'funcionarioId', render: nomes.profissional },
+    { title: 'Cliente', dataIndex: 'clienteNome', render: (nome) => <strong>{nome ?? '—'}</strong> },
+    comServicos && { title: 'Serviço', dataIndex: 'servicoNome', render: (nome) => nome ?? '—' },
+    !soPropria && { title: 'Profissional', dataIndex: 'funcionarioNome', render: (nome) => nome ?? '—' },
     {
       title: <span className="sr-only">Ações</span>,
       key: 'acoes',
       align: 'right',
-      render: (_, a) => (agenda.editar(a) ? <AceiteSolicitacao agendamento={a} /> : <EtiquetaStatus status="pendente" />),
+      render: (_, a) =>
+        agenda.editar(a) ? <AceiteSolicitacao agendamento={a} onRespondido={recarregar} /> : <EtiquetaStatus status="pendente" />,
     },
   ].filter(Boolean)
 
-  const lateral = verEquipe || verMateriais
+  const lateral = verEquipe || verMateriais || verClientes
+
+  if (erro && !dados) {
+    return (
+      <Pagina titulo={capitalizar(agora.format('dddd, D [de] MMMM'))}>
+        <Secao>
+          <EstadoVazio
+            icone={<DisconnectOutlined />}
+            titulo="Não foi possível carregar o resumo do dia"
+            descricao={erro.mensagem}
+            acao={<Button onClick={recarregar}>Tentar de novo</Button>}
+          />
+        </Secao>
+      </Pagina>
+    )
+  }
 
   return (
     <Pagina
-      titulo={capitalizar(agora.format('dddd, D [de] MMMM'))}
-      descricao={resumo ?? `Olá, ${usuario?.nome?.split(' ')[0] ?? ''}.`}
+      titulo={capitalizar(hoje.format('dddd, D [de] MMMM'))}
+      descricao={resumo ?? `Olá, ${primeiroNome(usuario?.nome)}.`}
       acoes={
         verAgenda && (
           <>
@@ -131,42 +176,48 @@ export default function Dashboard() {
 
       <div className={verAgenda && lateral ? 'grade-principal' : 'pilha'}>
         {verAgenda && (
-          <Secao rente titulo={agenda.verEquipe ? 'Agenda de hoje' : 'Minha agenda de hoje'}>
-            <Tabela
-              columns={colunasHoje}
-              dataSource={agendaHoje}
-              pagination={false}
-              rowClassName={(a) => (inativo(a) ? 'linha-clicavel linha-apagada' : 'linha-clicavel')}
-              onRow={(a) => ({ onClick: () => painel.abrir(a) })}
-              destaqueId={painel.destaqueId}
-              vazio={
-                <EstadoVazio
-                  titulo="Nenhum atendimento hoje"
-                  descricao="Os horários marcados para hoje aparecem aqui."
-                  acao={agenda.criar && <Button onClick={() => painel.abrir({})}>Agendar horário</Button>}
-                />
-              }
-            />
+          <Secao rente titulo={soPropria ? 'Minha agenda de hoje' : 'Agenda de hoje'}>
+            {carregando ? (
+              <CarregandoLinhas linhas={5} />
+            ) : (
+              <Tabela
+                columns={colunasHoje}
+                dataSource={agendaHoje}
+                pagination={false}
+                rowClassName={(a) => (inativo(a) ? 'linha-clicavel linha-apagada' : 'linha-clicavel')}
+                onRow={(a) => ({ onClick: () => painel.abrir(a) })}
+                destaqueId={painel.destaqueId}
+                vazio={
+                  <EstadoVazio
+                    titulo="Nenhum atendimento hoje"
+                    descricao="Os horários marcados para hoje aparecem aqui."
+                    acao={agenda.criar && <Button onClick={() => painel.abrir({})}>Agendar horário</Button>}
+                  />
+                }
+              />
+            )}
           </Secao>
         )}
 
         {lateral && (
           <div className="pilha">
             {verEquipe && (
-              <Secao titulo="Equipe em serviço" descricao="Quem registrou entrada hoje e ainda não saiu.">
-                {emServico.length ? (
+              <Secao titulo="Equipe em serviço" descricao="Quem registrou entrada e ainda não saiu.">
+                {carregando ? (
+                  <CarregandoLinhas linhas={2} />
+                ) : emServico.length ? (
                   <ul className="lista-linhas lista-compacta">
                     {emServico.map((p) => (
                       <li key={p.id}>
                         <span className="com-ponto">
-                          <PontoCor cor={nomes.corDe(p.funcionarioId)} /> {nomes.profissional(p.funcionarioId)}
+                          <PontoCor cor={p.cor ?? COR_PADRAO} /> {p.nome}
                         </span>
-                        <span className="texto-apoio numeros">desde {horaCurta(p.entrada)}</span>
+                        {desde(p, hoje) && <span className="texto-apoio numeros">{desde(p, hoje)}</span>}
                       </li>
                     ))}
                   </ul>
                 ) : (
-                  <EstadoVazio compacto titulo="Ninguém registrou entrada hoje" />
+                  <EstadoVazio compacto titulo="Ninguém em serviço agora" />
                 )}
               </Secao>
             )}
@@ -180,16 +231,18 @@ export default function Dashboard() {
                   </Button>
                 }
               >
-                {aRepor.length ? (
+                {carregando ? (
+                  <CarregandoLinhas linhas={2} />
+                ) : aRepor.length ? (
                   <ul className="lista-linhas lista-compacta">
                     {aRepor.map((m) => (
                       <li key={m.id}>
                         <span>{m.nome}</span>
                         <span className="numeros">
-                          <span className="marca-texto">{m.quantidade}</span>
+                          <span className="marca-texto">{qtd(m.quantidade)}</span>
                           <span className="texto-apoio">
                             {' '}
-                            de {m.minimo} {m.unidade}
+                            de {qtd(m.minimo)} {m.unidade}
                           </span>
                         </span>
                       </li>
@@ -200,6 +253,23 @@ export default function Dashboard() {
                 )}
               </Secao>
             )}
+
+            {verClientes && (
+              <Secao
+                titulo="Clientes"
+                acoes={
+                  <Button type="link" size="small" onClick={() => navigate('/painel/clientes')}>
+                    Ver clientes
+                  </Button>
+                }
+              >
+                {dados ? (
+                  <p className="texto-ajuda numeros">{plural(dados.clientesCadastrados ?? 0, 'cliente cadastrado', 'clientes cadastrados')}</p>
+                ) : (
+                  <CarregandoLinhas linhas={1} />
+                )}
+              </Secao>
+            )}
           </div>
         )}
       </div>
@@ -207,7 +277,9 @@ export default function Dashboard() {
       <AgendamentoPainel
         open={painel.aberto}
         agendamento={painel.registro?.id ? painel.registro : null}
+        dataInicial={hoje}
         onClose={painel.fechar}
+        onSalvo={recarregar}
       />
     </Pagina>
   )

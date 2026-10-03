@@ -62,6 +62,7 @@ ROTULOS = {
 # Não ocupam o horário (mesma regra das restrições EXCLUDE do banco)
 LIBERAM_HORARIO = (S.cancelado, S.nao_compareceu)
 FINAIS = frozenset({S.concluido, S.cancelado, S.nao_compareceu})
+ATIVOS = (S.pendente, S.agendado, S.confirmado)
 # Fluxo de status (estrutura.md, 2.13). Dos finais só sai o Administrador, reabrindo.
 TRANSICOES: dict[StatusAgendamento, frozenset[StatusAgendamento]] = {
     S.pendente: frozenset({S.confirmado, S.cancelado}),
@@ -95,10 +96,17 @@ def pode_editar(ctx: ContextoLoja, funcionario_id: UUID) -> bool:
     )
 
 
-def buscar_visivel(ctx: ContextoLoja, agendamento_id: UUID) -> Agendamento:
-    ag = ctx.db.scalar(
-        select(Agendamento).where(Agendamento.id == agendamento_id, Agendamento.loja_id == ctx.loja_id)
-    )
+def buscar_visivel(ctx: ContextoLoja, agendamento_id: UUID, *, travar: bool = False) -> Agendamento:
+    """Agendamento que o usuário pode ver (404 se não puder ou for de outra loja).
+
+    travar=True: SELECT ... FOR UPDATE, para toda rota que altera o agendamento. Duas mudanças
+    simultâneas (ex.: dois cliques em "Concluir") são serializadas e a segunda valida a transição
+    com o status que a primeira gravou, sem baixar nem estornar o estoque duas vezes (LOG-02, LOG-07).
+    """
+    consulta = select(Agendamento).where(Agendamento.id == agendamento_id, Agendamento.loja_id == ctx.loja_id)
+    if travar:
+        consulta = consulta.with_for_update().execution_options(populate_existing=True)
+    ag = ctx.db.scalar(consulta)
     if ag is None or not pode_ver(ctx, ag):
         raise nao_encontrado(MSG_404)
     return ag
@@ -145,8 +153,24 @@ def mudar_status(
 # --- Criação e edição ----------------------------------------------------------------------------
 
 
-def _carregar[M](db: Session, modelo: type[M], loja_id: UUID, id_: UUID, mensagem: str) -> M:
-    obj = db.scalar(select(modelo).where(modelo.id == id_, modelo.loja_id == loja_id))  # type: ignore[attr-defined]
+def _carregar[M](
+    db: Session,
+    modelo: type[M],
+    loja_id: UUID,
+    id_: UUID,
+    mensagem: str,
+    *,
+    incluir_excluidos: bool = False,
+    travar_chave: bool = False,
+) -> M:
+    """travar_chave: SELECT ... FOR KEY SHARE até o fim da transação. Não bloqueia outras leituras
+    nem edições comuns, só quem trava a linha para excluí-la (FOR UPDATE)."""
+    consulta = select(modelo).where(modelo.id == id_, modelo.loja_id == loja_id)  # type: ignore[attr-defined]
+    if travar_chave:
+        consulta = consulta.with_for_update(read=True, key_share=True).execution_options(
+            populate_existing=True
+        )
+    obj = db.scalar(consulta.execution_options(incluir_excluidos=incluir_excluidos))
     if obj is None:
         raise invalido(mensagem)
     return obj
@@ -204,7 +228,18 @@ def salvar(ctx: ContextoLoja, dados: AgendamentoEntrada, atual: Agendamento | No
     if com_servicos:
         if dados.servico_id is None:
             raise invalido('Escolha o serviço.')
-        servico = _carregar(db, Servico, loja_id, dados.servico_id, 'Serviço não encontrado.')
+        # O serviço que o agendamento já tinha vale mesmo se tiver sido excluído depois
+        mesmo_servico = atual is not None and atual.servico_id == dados.servico_id
+        # Trava o serviço contra uma exclusão simultânea (DELETE /servicos/{id} usa FOR UPDATE)
+        servico = _carregar(
+            db,
+            Servico,
+            loja_id,
+            dados.servico_id,
+            'Serviço não encontrado.',
+            incluir_excluidos=mesmo_servico,
+            travar_chave=True,
+        )
         servico_mudou = atual is None or atual.servico_id != servico.id
         if servico_mudou and not servico.ativo:
             raise invalido('Este serviço está inativo.')
