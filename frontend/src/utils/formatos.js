@@ -63,6 +63,30 @@ export const nomeCompleto = (pessoa) => [pessoa?.nome, pessoa?.sobrenome].filter
 
 export const capitalizar = (texto = '') => texto.charAt(0).toUpperCase() + texto.slice(1)
 
+// Endereço da loja (slug): minúsculas, números e hífens entre eles, ex.: clinica-sorriso
+export const PADRAO_SLUG = /^[a-z0-9]+(?:-[a-z0-9]+)*$/
+// Endereços do próprio sistema, que nunca são loja (PLA-16). Cópia da lista de backend/app/services/slugs.py
+// (SLUGS_RESERVADOS, que vale de verdade: 422 na API e CHECK no banco): mudou lá, mude aqui.
+// Aqui ela evita que /superadmin/painel (e afins) abra o painel de uma "loja" que não existe.
+export const SLUGS_RESERVADOS = new Set([
+  'superadmin',
+  'api',
+  'painel',
+  'site',
+  'docs',
+  'redoc',
+  'openapi',
+  'admin',
+  'login',
+  'static',
+  'assets',
+  'app',
+  'www',
+  'saude',
+  'health',
+])
+export const slugValido = (valor) => PADRAO_SLUG.test(valor ?? '') && !SLUGS_RESERVADOS.has(valor)
+
 // "1 atendimento", "3 atendimentos"
 export const plural = (n, um, varios) => `${n} ${n === 1 ? um : varios}`
 

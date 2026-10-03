@@ -123,10 +123,3 @@ export const temaPlataforma = {
     },
   },
 }
-
-// Site do consumidor: cada tipo de loja tem a própria cara (cor e faixa do topo), sobre a mesma base
-export const temasSite = {
-  clinica: { cor: '#1F5C99', topo: '#1F5C99' },
-  barbearia: { cor: '#8A4B1F', topo: '#1E2230' },
-  escola: { cor: '#2F6B3A', topo: '#2F6B3A' },
-}

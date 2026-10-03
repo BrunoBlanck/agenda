@@ -206,3 +206,38 @@
   color: var(--cor-tinta);
   background: var(--cor-tinta-clara);
 }
+
+/* Acesso de suporte (Acessar loja do SUPERADMIN): faixa acima da barra superior, rola com a página */
+.aviso-suporte {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--espaco-2);
+  padding: var(--espaco-2) var(--espaco-6);
+  border-bottom: 1px solid var(--cor-tinta-borda);
+  color: var(--cor-tinta-escura);
+  background: var(--cor-tinta-clara);
+  font-size: 13px;
+  line-height: 20px;
+}
+
+.aviso-suporte p {
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.aviso-suporte strong {
+  font-weight: 700;
+}
+
+.aviso-suporte-icone {
+  flex-shrink: 0;
+  font-size: 14px;
+  line-height: 20px;
+}
+
+@media (max-width: 991px) {
+  .aviso-suporte {
+    padding-inline: var(--espaco-4);
+  }
+}

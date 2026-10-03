@@ -8,7 +8,7 @@ from app.auth.dependencias import DbDep
 from app.config import get_settings
 from app.erros import registrar_tratadores
 from app.limites import LimiteDoCorpo
-from app.routers import arquivos, loja, site, superadmin
+from app.routers import arquivos, loja, paginas, site, superadmin
 
 
 def criar_app() -> FastAPI:
@@ -40,6 +40,8 @@ def criar_app() -> FastAPI:
     app.include_router(superadmin.router)
     app.include_router(site.router)
     app.include_router(arquivos.router)
+    # Por último: as páginas HTML (/, /painel, /<slug>...) não podem capturar /api nem /docs
+    app.include_router(paginas.router)
     return app
 
 

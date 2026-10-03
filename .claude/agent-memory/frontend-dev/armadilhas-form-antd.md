@@ -15,4 +15,4 @@ abertura (ex.: materiais do agendamento, que só vêm no GET do detalhe) recria 
 
 Teste no navegador sem gastar tentativas de login (5 falhas bloqueiam o IP): playwright-core no scratchpad
 com o Chromium de `%LOCALAPPDATA%/ms-playwright/chromium-*`, gravando o token em
-`sessionStorage['agenda.sessao.loja']` via `addInitScript`. Ver [[integracao-agenda]].
+`sessionStorage['agenda.sessao.loja.<slug>'] (desde 2026-10-03, uma chave por loja)` via `addInitScript`. Ver [[integracao-agenda]].

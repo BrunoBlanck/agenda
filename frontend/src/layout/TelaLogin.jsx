@@ -5,9 +5,9 @@ import MarcaPlataforma from '../superadmin/MarcaPlataforma.jsx'
 import './login.css'
 
 // Login das duas áreas: folha de agenda sobre o papel, com a marca e o nome da área no topo.
-// campos: Form.Items extras antes do e-mail (ex.: endereço da loja). aoEntrar(valores) => Promise.
-// motivo: por que voltou ao login (sessão expirou, loja suspensa).
-export default function TelaLogin({ area, titulo, descricao, campos, valoresIniciais, motivo, aoEntrar, rodape }) {
+// marca: o que fica ao lado do título (padrão: marca da plataforma; no painel, a logo da loja).
+// aoEntrar(valores) => Promise. motivo: por que voltou ao login (sessão expirou, loja suspensa).
+export default function TelaLogin({ area, titulo, descricao, marca, motivo, aoEntrar, rodape }) {
   const [form] = Form.useForm()
   const [enviando, setEnviando] = useState(false)
   const [erro, setErro] = useState(null)
@@ -32,8 +32,8 @@ export default function TelaLogin({ area, titulo, descricao, campos, valoresInic
     <main className="login">
       <section className="login-folha" aria-labelledby="login-titulo">
         <header className="login-cabecalho">
-          <MarcaPlataforma tamanho={40} />
-          <div>
+          {marca ?? <MarcaPlataforma tamanho={40} />}
+          <div className="login-cabecalho-textos">
             <span className="login-area">{area}</span>
             <h1 id="login-titulo">{titulo}</h1>
           </div>
@@ -44,8 +44,7 @@ export default function TelaLogin({ area, titulo, descricao, campos, valoresInic
           <Alert type={erro ? 'error' : 'warning'} showIcon title={erro ?? motivo} className="login-alerta" role="alert" />
         )}
 
-        <Form form={form} layout="vertical" requiredMark={false} initialValues={valoresIniciais} onFinish={enviar} disabled={enviando}>
-          {campos}
+        <Form form={form} layout="vertical" requiredMark={false} onFinish={enviar} disabled={enviando}>
           <Form.Item
             name="email"
             label="E-mail"

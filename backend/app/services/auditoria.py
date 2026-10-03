@@ -79,11 +79,14 @@ def registrar_acao(
     registro_id: str,
     depois: dict[str, Any],
     antes: dict[str, Any] | None = None,
+    campos: Sequence[str] | None = None,
 ) -> None:
     """Grava na auditoria uma ação que não altera nenhuma linha (ex.: enviar link de nova senha).
 
     Entra como "alterar", com o detalhe em ``depois`` (estrutura.md, 1.9). Quem fez, a origem e o IP vêm
     do contexto da transação, como nos triggers. Nunca passe senha, token ou dado pessoal no detalhe.
+    ``campos`` são os que o histórico mostra (padrão: todos de ``depois``); um campo só de rótulo, como
+    ``nome``, fica fora para não parecer alterado.
     """
     db.execute(
         text(
@@ -101,7 +104,7 @@ def registrar_acao(
             'operacao': OperacaoAuditoria.alterar.value,
             'antes': json.dumps(antes) if antes is not None else None,
             'depois': json.dumps(depois),
-            'campos': sorted(depois),
+            'campos': sorted(depois if campos is None else campos),
         },
     )
 

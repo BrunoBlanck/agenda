@@ -7,6 +7,12 @@ Fonte: `estrutura.md` seção 1 e 6.2. Rotas em `/api/superadmin/...` (só token
 - **PLA-02** Criar loja gera, no mesmo fluxo: os **perfis padrão** (ACE-16), uma linha de `loja_funcionalidades` por módulo opcional (habilitado conforme marcado), a linha de `loja_configuracoes` e o **primeiro funcionário** com perfil Administrador.
 - **PLA-03** Status `ativa`, `suspensa`, `cancelada`; qualquer troca é permitida (inclusive reativar cancelada). Suspensa: ninguém faz login, dados mantidos. Cancelada: dados mantidos.
 - **PLA-04** **Excluir** (lógica) só loja `cancelada`; o `slug` fica livre de novo. Loja excluída some do painel, do login e do site.
+- **PLA-16** **Slugs reservados** (viram o primeiro pedaço da URL, GER-29): `superadmin`, `api`, `painel`, `site`, `docs`, `redoc`, `openapi`, `admin`, `login`, `static`, `assets`, `app`, `www`, `saude`, `health`. Recusados com 422 no campo `slug` e por CHECK no banco.
+
+## Acessar loja (suporte)
+- **PLA-17** No detalhe da loja, **Acessar loja** gera uma sessão do painel como o **Administrador da loja** (funcionário ativo com o perfil Administrador padrão, o mais antigo). Tudo que for feito nela fica registrado **como esse Administrador** (decisão do usuário). O ato de gerar o acesso entra na auditoria da loja como ação do superadmin (PLA-14).
+- **PLA-18** A sessão dura **1 hora**, sem renovação.
+- **PLA-19** Vale para loja ativa, suspensa ou cancelada (funcionários continuam bloqueados pela GER-25); loja excluída = 404; sem Administrador ativo = 409.
 
 ## Módulos da loja
 - **PLA-05** Lojas › Módulos: liga/desliga cada módulo opcional, com observação e prazo (`expira_em`, sem fuso = fuso da loja). `PATCH` só muda os campos enviados. Recusa módulo não opcional. Ver ACE-06 a ACE-09.

@@ -11,7 +11,7 @@ Confirmado em 2026-10-02 na integração da área A (clientes, funcionários, pe
 - **O seed tem CPFs inválidos** (Fernanda 111.222.333-44, Maria 123.456.789-00): editar esses clientes dá 422 "CPF inválido." no campo até alguém corrigir o CPF. Não é defeito da tela.
 - **Form do CadastroTabela é o mesmo entre aberturas:** um valor que não é campo registrado (ex.: `id` nos valores iniciais) fica no store e passa para o próximo "novo". Para saber se é edição dentro dos campos, registre `<Form.Item name="id" hidden>` (no fim, para não roubar o foco) e use `Form.useWatch('id', form)`; nunca `useWatch(..., { preserve: true })`.
 - **409 de unicidade** (CPF, e-mail, nome) vem só com `detail`; o `useTratarErro` só põe no campo o que vem em `campos`. `data/api/registro.js` (`conflitoNoCampo`) converte o erro pelo texto da mensagem.
-- **Playwright nesta máquina:** não há pacote no projeto; `npm i playwright-core` numa pasta do scratchpad e `executablePath` = `%LOCALAPPDATA%/ms-playwright/chromium-1243/chrome-win64/chrome.exe`. O token vai direto no `sessionStorage` (`agenda.sessao.loja`) por `addInitScript` (não gasta tentativa de login). Esc não fechou o painel lateral no headless (Cancelar/X fecham); aba ativa do antd 6 = `.ant-tabs-content-active`; Enter no RangePicker envia o `PainelFormulario`.
+- **Playwright nesta máquina:** não há pacote no projeto; `npm i playwright-core` numa pasta do scratchpad e `executablePath` = `%LOCALAPPDATA%/ms-playwright/chromium-1243/chrome-win64/chrome.exe`. O token vai direto no `sessionStorage` (`agenda.sessao.loja.<slug>`, uma chave por loja desde 2026-10-03) por `addInitScript` (não gasta tentativa de login). Esc não fechou o painel lateral no headless (Cancelar/X fecham); aba ativa do antd 6 = `.ant-tabs-content-active`; Enter no RangePicker envia o `PainelFormulario`.
 
 - **useConsulta mantém os dados antigos enquanto a chave muda** (`carregando` só é true se `dados === inicial`). Hook cujo
   resultado depende de um parâmetro trocável (ex.: ponto aberto por funcionário) mostra por um instante o dado do anterior com o
@@ -22,3 +22,7 @@ Confirmado em 2026-10-02 na integração da área A (clientes, funcionários, pe
 
 **Why:** cada um custou investigação; os dois primeiros parecem defeito do front e não são.
 **How to apply:** ao testar telas com datas de controle ou clientes do seed, e ao escrever scripts de verificação. Relacionado: [[integracao-api]]
+
+Mais (2026-10-03, acessar-loja):
+- Efeito do filho roda **antes** do efeito do Provider da sessão: token gravado no efeito de uma tela (ex.: `/suporte`) é visto pelo `useEffect` de montagem do Provider, que dispara um `GET /eu` paralelo **sem** as checagens da tela. Ao recusar o token, `controle.current?.abort()` nessa conferência, senão ela termina depois e marca `logado` (comprovado: token comum plantado na entrega entrava no painel).
+- Provar que nada sensível vai para o histórico global: `chromium.launchPersistentContext(pasta, { executablePath: <chrome-win64/chrome.exe>, headless: true })` grava `Default/History` (copiar o arquivo e ler a tabela `urls` com o sqlite3 do Python).

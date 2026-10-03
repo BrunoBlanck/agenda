@@ -844,6 +844,28 @@ body {
   font-size: 18px;
 }
 
+/* Endereço (/clinica-sorriso/painel) desce inteiro para a linha de baixo; só quebra no meio se não couber
+   numa linha (slug de 60 caracteres no celular) */
+.endereco {
+  display: inline-block;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+/* Detalhe da loja: atalhos para o site e o painel, abaixo da descrição */
+.loja-enderecos {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--espaco-2) var(--espaco-4);
+  margin-top: var(--espaco-3);
+}
+
+.loja-enderecos a {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
 .acoes-linha {
   display: inline-flex;
   justify-content: flex-end;
@@ -891,6 +913,32 @@ body {
 
 .carregando-area {
   padding: var(--espaco-6);
+}
+
+/* Tela fora das áreas (endereço inexistente): uma folha sobre o papel, no terço superior */
+.pagina-solta {
+  min-height: 100vh;
+  min-height: 100dvh;
+  padding: var(--espaco-7) var(--espaco-4);
+  background: var(--cor-papel);
+}
+
+.pagina-solta-folha {
+  max-width: 440px;
+  margin: 6vh auto 0;
+  background: var(--cor-superficie);
+  border: 1px solid var(--cor-linha);
+  border-radius: var(--raio-conteiner);
+}
+
+@media (max-width: 480px) {
+  .pagina-solta {
+    padding: var(--espaco-4);
+  }
+
+  .pagina-solta-folha {
+    margin-top: var(--espaco-4);
+  }
 }
 
 /* Campos de formulário ocupam a coluna inteira; exceções com classe própria */

@@ -24,7 +24,7 @@ Sistema web para gestão de uma clínica com vários funcionários: agenda de at
 
 - Cada funcionário tem um **perfil** (Administrador, Recepção, Profissional ou outros criados pela loja). O menu e os botões mostrados dependem do nível do perfil em cada área.
 - **Serviços, Materiais, Controle de Tempo e Locais** podem ser desativados por loja. Sem Serviços, o agendamento é feito sem serviço (duração e preço manuais). Sem Locais, o agendamento não pede local.
-- Entre em `/painel/login` com um dos usuários do seed (lista em [`backend/README.md`](backend/README.md)) para ver o painel com os acessos de cada perfil; os módulos e o tipo da loja são definidos no SUPERADMIN.
+- Entre em `/<slug-da-loja>/painel` (ex.: `/clinica-sorriso/painel`) com um dos usuários do seed (lista em [`backend/README.md`](backend/README.md)) para ver o painel com os acessos de cada perfil; os módulos e o tipo da loja são definidos no SUPERADMIN.
 - Detalhes das regras em [`estrutura.md`](estrutura.md).
 
 ### Painel SUPERADMIN
@@ -55,10 +55,10 @@ O que o superadmin muda numa loja (módulos, dados, funcionários) vale no paine
 
 | Área | Tecnologia | Por quê |
 |---|---|---|
-| Painel da loja (`/painel`) e SUPERADMIN (`/superadmin`) | SPA em React (esta pasta `frontend/`) | Áreas logadas, sem SEO e muito interativas |
-| Site do consumidor (`/`) | HTML renderizado no servidor pelo back-end Python, com JS mínimo | Público: precisa de SEO, link bonito no WhatsApp e abrir rápido no celular. Um modelo de site por tipo de loja |
+| Painel da loja (`/<slug>/painel`) e SUPERADMIN (`/superadmin`) | SPA em React (esta pasta `frontend/`) | Áreas logadas, sem SEO e muito interativas |
+| Site do consumidor (`/<slug>`) | HTML renderizado no servidor pelo back-end Python, com JS mínimo | Público: precisa de SEO, link bonito no WhatsApp e abrir rápido no celular. Um modelo de site por tipo de loja |
 
-O site do consumidor que existe hoje em `frontend/src/site/` é só um **protótipo do fluxo** e será substituído pela versão do back-end. As regras de negócio (horários livres, conflitos etc.) ficarão no back-end e serão usadas pelo site e pela API dos painéis.
+Por enquanto `/<slug>` mostra uma página simples da loja (nome, logo e contato) gerada pelo back-end; o site com o fluxo de agendamento vem a seguir. As regras de negócio (horários livres, conflitos etc.) ficarão no back-end e serão usadas pelo site e pela API dos painéis.
 
 ## Tecnologias
 
@@ -101,13 +101,16 @@ npm install
 npm run dev
 ```
 
-Abra o endereço exibido no terminal (por padrão http://localhost:5173). Em desenvolvimento o Vite encaminha `/api` para a API (`API_PROXY_ALVO`, padrão http://localhost:8000); em produção, `VITE_API_URL` aponta para a API (ver `frontend/.env.example`).
+Abra o endereço exibido no terminal (por padrão http://localhost:5173). Em desenvolvimento o Vite faz o papel do nginx de produção: serve o painel e o SUPERADMIN e encaminha todo o resto (`/api`, o site das lojas) para a API (`API_PROXY_ALVO`, padrão http://localhost:8000). Assim as URLs são as mesmas em dev e em produção.
 
-| Endereço | O que é |
-|---|---|
-| `/site/<slug>` | Protótipo do site do consumidor final (será renderizado pelo back-end Python), ex.: `/site/clinica-sorriso`: escolhe o serviço, vê horários livres, faz um cadastro e solicita o agendamento |
-| `/painel` | Painel da loja (login em `/painel/login`; todos os menus ficam em `/painel/...`) |
-| `/superadmin` | Painel SUPERADMIN (login em `/superadmin/login`) |
+| Endereço | Quem atende | O que é |
+|---|---|---|
+| `/<slug>` | back-end | Site do consumidor da loja, ex.: `/clinica-sorriso` (por enquanto uma página simples com os dados da loja) |
+| `/<slug>/painel` | front | Painel da loja, já identificado pela URL: o login pede só e-mail e senha. Todos os menus ficam em `/<slug>/painel/...` |
+| `/superadmin` | front | Painel SUPERADMIN (login em `/superadmin/login`) |
+| `/api/...` | back-end | API |
+
+Os arquivos do build ficam em `/_app/` e alguns slugs são reservados (`superadmin`, `api`, `painel`...). Deploy com nginx: [`deploy/README.md`](deploy/README.md).
 
 ### Outros comandos
 

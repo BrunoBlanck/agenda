@@ -1,6 +1,5 @@
 """Plataforma (SUPERADMIN): lojas, módulos, funcionários pelo suporte, planos, usuários admin e auditoria."""
 
-import re
 from datetime import datetime
 from typing import Annotated, Any, Literal
 from uuid import UUID
@@ -24,8 +23,7 @@ from app.schemas.comum import (
 )
 from app.schemas.configuracoes import DadosLojaEntrada
 from app.schemas.funcionarios import Senha
-
-SLUG = re.compile(r'^[a-z0-9]+(?:-[a-z0-9]+)*$')
+from app.services.slugs import MSG_SLUG_RESERVADO, SLUG, SLUG_TAMANHO_MAXIMO, SLUGS_RESERVADOS
 
 # Fuso das telas da plataforma (planos, usuários admin, ações recentes) e da auditoria da "plataforma".
 # O que é de uma loja sai no fuso dela (GER-15); o front mostra o horário como veio.
@@ -46,8 +44,10 @@ def _slug(valor: Any) -> Any:
     if not isinstance(valor, str):
         return valor
     slug = valor.strip().lower()
-    if not 2 <= len(slug) <= 60 or not SLUG.fullmatch(slug):
+    if not 2 <= len(slug) <= SLUG_TAMANHO_MAXIMO or not SLUG.fullmatch(slug):
         raise regra('Use de 2 a 60 caracteres: letras minúsculas, números e hífens (ex.: clinica-sorriso).')
+    if slug in SLUGS_RESERVADOS:  # PLA-16 (o banco também recusa: ck_lojas_slug_reservado)
+        raise regra(MSG_SLUG_RESERVADO)
     return slug
 
 
@@ -244,6 +244,15 @@ class PerfilOpcao(Esquema):
     id: UUID
     nome: str
     acesso_total: bool
+
+
+class AcessoLoja(BaseModel):
+    """Sessão do painel como o Administrador da loja, aberta pelo suporte (PLA-17/18)."""
+
+    token: str
+    expira_em: datetime = Field(description='Quando a sessão vence (1 hora), no fuso da loja')
+    slug: str
+    funcionario_nome: str
 
 
 # --- Planos --------------------------------------------------------------------------------------

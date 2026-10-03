@@ -73,7 +73,8 @@ Migração reversível: `uv run alembic downgrade base` e `uv run alembic upgrad
 
 A lista completa, com os campos de entrada e saída, está em http://localhost:8000/docs (OpenAPI).
 Envie o token em `Authorization: Bearer <token>`. Token de superadmin não vale nas rotas da loja,
-e vice-versa (401). Loja suspensa ou cancelada recebe 403.
+e vice-versa (401). Loja suspensa ou cancelada recebe 403 (menos na sessão de suporte, abaixo).
+`GET eu` traz `sessao: {suporte, expira_em}` (`expira_em` = vencimento do token, no fuso da loja).
 
 | Área | Rotas (`/api/loja/...`) | Recurso exigido |
 |---|---|---|
@@ -105,6 +106,7 @@ Saúde: `GET /api/saude`. Arquivos públicos: `GET /api/arquivos/logos/{loja_id}
 | Lojas | `GET/POST lojas`, `GET lojas/opcoes`, `GET/PUT/DELETE lojas/{id}`, `POST lojas/{id}/status`, `PUT/DELETE lojas/{id}/logo` |
 | Módulos da loja | `GET lojas/{id}/modulos`, `PATCH lojas/{id}/modulos/{codigo}` (habilitado, observacao, expira_em) |
 | Funcionários (suporte) | `GET lojas/{id}/perfis`, `GET/POST lojas/{id}/funcionarios`, `PUT lojas/{id}/funcionarios/{fid}`, `POST .../redefinir-senha` |
+| Acessar loja | `POST lojas/{id}/acesso` (token de funcionário do Administrador da loja, 1 hora) |
 | Planos | `GET/POST planos`, `GET/PUT/DELETE planos/{id}` |
 | Usuários admin | `GET/POST usuarios`, `GET/PUT/DELETE usuarios/{id}` |
 | Auditoria | `GET auditoria?loja=<id ou plataforma>&tabela=&periodo=&inicio=&fim=&quem=`, `GET auditoria/pessoas`, `GET auditoria/tabelas` |
@@ -114,6 +116,13 @@ Saúde: `GET /api/saude`. Arquivos públicos: `GET /api/arquivos/logos/{loja_id}
 - Sem envio de e-mail ainda: criar loja, funcionário ou usuário admin sem `senha`, e redefinir senha
   sem `senha`, geram uma **senha provisória**, devolvida uma única vez em `senha_provisoria`.
 - Loja só é excluída (exclusão lógica) depois de cancelada; o `slug` fica livre de novo.
+- **Acessar loja** (PLA-17 a 19, `app/services/suporte.py`): token do tipo `funcionario` do
+  Administrador da loja (perfil padrão com acesso total, ativo, o mais antigo), com a claim
+  `suporte: true` e validade fixa de 1 hora (`VALIDADE_SUPORTE`, não usa `JWT_EXPIRA_MINUTOS`). Com a
+  claim, `obter_contexto_loja` só dispensa a loja ativa (vale suspensa ou cancelada); o resto é igual
+  e o que for feito fica como o Administrador. Gerar o acesso grava `registrar_acao` na auditoria da
+  loja como ação do superadmin (`{"acao": "acessar_loja", "como_funcionario": ...}`), sem o token, e
+  não mexe em `ultimo_login_em`. Não há revogação: o token vale até vencer.
 - Auditoria: `periodo` = `hoje`, `7d`, `30d` (padrão), `90d`, `ano` ou `intervalo` (com `inicio` e
   `fim`), nos dias do fuso da loja; `quem` = `f:<id>`, `s:<id>`, `site` ou `sistema` (valores de
   `auditoria/pessoas`). Cada item traz `quem` com o nome resolvido, `rotulo` do registro e
@@ -138,6 +147,40 @@ Saúde: `GET /api/saude`. Arquivos públicos: `GET /api/arquivos/logos/{loja_id}
 - **Proteção contra abuso** (ver "Limite de requisições"): limite por IP em todas as rotas do site, limite
   de pedidos por IP em cada loja (429 com `Retry-After`) e no máximo `SITE_PENDENTES_POR_TELEFONE`
   pedidos aguardando aceite por telefone (409). Captcha ainda não existe.
+
+### Páginas HTML (fora de `/api`)
+
+Mapa de URLs (GER-29), igual no nginx de produção ([`deploy/nginx/agenda.conf`](../deploy/nginx/agenda.conf))
+e no servidor de dev do front: `/superadmin...` e `/<slug>/painel...` são do front (SPA); `/_app/...`
+são os arquivos do build; `/api/...`, `/<slug>` e o resto chegam aqui. As páginas ficam em
+`app/routers/paginas.py` (Jinja2 com autoescape, templates em `app/templates/`), registradas depois de
+todos os routers `/api` e da documentação, e fora do OpenAPI.
+
+| Rota (GET e HEAD) | Resposta |
+|---|---|
+| `/` | 404 HTML "Página não encontrada" |
+| `/painel`, `/painel/...` | 404 HTML com a orientação de usar `/nome-da-loja/painel` |
+| `/{slug}` | 200, página provisória da loja (SIT-11: logo, nome, telefone, e-mail, endereço, "Agendamento online em breve"); loja inexistente, excluída, suspensa ou cancelada, slug inválido ou reservado: 404 HTML "Loja não encontrada" |
+| `/{slug}/` | 308 para `/{slug}` (slug inválido ou reservado: 404) |
+| `/{slug}/...` | 404 HTML (futuras páginas do site) |
+
+- Só os dados que `GET /api/site/{slug}` já expõe (`LojaPublica`); a regra de visibilidade é a mesma
+  (`app/services/site.py`, usada pelas duas).
+- Cabeçalhos: `Content-Security-Policy: default-src 'none'; img-src 'self'; style-src 'unsafe-inline';
+  base-uri 'none'; form-action 'none'; frame-ancestors 'none'`, `X-Content-Type-Options: nosniff`,
+  `Referrer-Policy: same-origin`, `X-Frame-Options: DENY`, `Cache-Control: no-cache`. Sem JavaScript.
+- `/{slug}` conta no mesmo limite por IP do site (`LIMITE_SITE_POR_IP`); passou: 429 HTML com
+  `Retry-After`. Endereço inválido ou reservado responde 404 sem consultar o banco e sem contar.
+- `/api` e `/api/...` nunca caem nessas rotas: o que não existe na API continua 404 em JSON.
+
+### Slugs reservados (PLA-16)
+
+`superadmin`, `api`, `painel`, `site`, `docs`, `redoc`, `openapi`, `admin`, `login`, `static`, `assets`,
+`app`, `www`, `saude`, `health` não podem ser slug de loja (lista em `app/services/slugs.py`).
+`POST /api/superadmin/lojas` e `PUT /api/superadmin/lojas/{id}`: 422 com
+`erros: [{campo: "slug", mensagem: "Este endereço é reservado pelo sistema. Escolha outro."}]`. O banco
+também recusa (`ck_lojas_slug_reservado`, migração 0005; a migração para se alguma loja, mesmo
+excluída, já usar um desses endereços).
 
 ### Logo da loja
 
@@ -312,7 +355,9 @@ Convenções das rotas da loja:
 - Deadlock ou falha de serialização no banco (SQLSTATE 40P01/40001) respondem 409 "Outra alteração foi
   feita ao mesmo tempo e esta não foi salva. Tente novamente." (nada foi gravado).
 - **IP:** é o mesmo da auditoria (`request.client.host`). Atrás de um proxy reverso, rode o uvicorn com
-  `--proxy-headers --forwarded-allow-ips=<ip do proxy>`; senão todos os clientes contam como o IP do proxy.
+  `--proxy-headers` e o IP do proxy em `FORWARDED_ALLOW_IPS` (o `Dockerfile` já faz isso, padrão
+  `127.0.0.1`; ver "Docker" e [`deploy/README.md`](../deploy/README.md)); senão todos os clientes contam
+  como o IP do proxy.
 
 ## Como o banco protege os dados
 
@@ -359,3 +404,10 @@ docker build -t agenda-backend .
 
 As logos enviadas ficam em `/app/arquivos` (`ARQUIVOS_DIR`): monte um volume persistente nesse caminho
 (ex.: `docker run -v agenda-arquivos:/app/arquivos ...`), senão elas somem ao recriar o contêiner.
+
+**Atrás do nginx** (produção, [`deploy/README.md`](../deploy/README.md)): a imagem roda o uvicorn com
+`--proxy-headers`, então o IP do cliente (auditoria e limite de requisições) vem do `X-Forwarded-For`,
+mas **só** quando a conexão chega de um IP listado em `FORWARDED_ALLOW_IPS` (variável lida pelo
+próprio uvicorn; padrão `127.0.0.1`, o nginx na mesma máquina com `--network host`). Endereço e porta
+do uvicorn: `UVICORN_HOST` (padrão `0.0.0.0`) e `UVICORN_PORT` (padrão `8000`). Nunca use
+`FORWARDED_ALLOW_IPS=*` com a API exposta.

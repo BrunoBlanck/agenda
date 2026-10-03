@@ -10,12 +10,12 @@ from typing import Annotated
 from uuid import UUID
 from zoneinfo import ZoneInfo
 
-from fastapi import APIRouter, Depends, File, Query, UploadFile, status
+from fastapi import APIRouter, Depends, File, Query, Request, UploadFile, status
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app.auth.catalogo import MODULOS
-from app.auth.dependencias import ContextoSuperadmin, ContextoSuperadminDep
+from app.auth.dependencias import ContextoSuperadmin, ContextoSuperadminDep, ip_da_requisicao
 from app.auth.senhas import gerar_hash, gerar_senha_provisoria
 from app.db import fuso_conhecido_pelo_banco
 from app.models import (
@@ -31,6 +31,7 @@ from app.models.enums import StatusLoja, TipoLoja
 from app.schemas.comum import Erro, Pagina, Paginacao, paginacao
 from app.schemas.superadmin import (
     MSG_FUSO,
+    AcessoLoja,
     FuncionarioSuporte,
     FuncionarioSuporteCriacao,
     FuncionarioSuporteCriado,
@@ -72,6 +73,7 @@ from app.services.plataforma import (
     nomes_superadmins,
     ultima_alteracao_loja,
 )
+from app.services.suporte import abrir_acesso_suporte
 
 ERROS = {404: {'model': Erro}, 409: {'model': Erro}, 422: {'model': Erro}}
 router = APIRouter(prefix='/lojas', tags=['Superadmin: lojas'], responses=ERROS)
@@ -269,6 +271,22 @@ def remover(loja_id: UUID, ctx: ContextoSuperadminDep) -> None:
     if loja.status != StatusLoja.cancelada:
         raise conflito('Só uma loja cancelada pode ser excluída. Cancele a loja antes.')
     excluir(ctx.db, loja)
+
+
+@router.post(
+    '/{loja_id}/acesso',
+    status_code=status.HTTP_201_CREATED,
+    summary='Acessar loja: sessão de 1 hora no painel como o Administrador da loja (sem corpo)',
+)
+def acessar(loja_id: UUID, request: Request, ctx: ContextoSuperadminDep) -> AcessoLoja:
+    loja = buscar_loja(ctx.db, loja_id)  # excluída = 404; suspensa e cancelada podem (PLA-19)
+    acesso = abrir_acesso_suporte(ctx.db, loja, ctx.superadmin.id, ip_da_requisicao(request))
+    return AcessoLoja(
+        token=acesso.token,
+        expira_em=acesso.expira_em.astimezone(fuso(loja.fuso_horario)),
+        slug=loja.slug,
+        funcionario_nome=acesso.funcionario.nome,
+    )
 
 
 # --- Módulos -------------------------------------------------------------------------------------

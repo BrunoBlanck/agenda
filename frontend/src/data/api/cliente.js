@@ -43,11 +43,22 @@ export const urlDaApi = (caminho) =>
 export const foiCancelada = (erro) => erro?.name === 'AbortError'
 
 // ---------------------------------------------------------------------------------------------
-// Tokens: em memória + sessionStorage (sobrevive ao F5, some ao fechar a aba). Um por área.
+// Tokens: em memória + sessionStorage (sobrevive ao F5, some ao fechar a aba). Um por sessão:
+// 'superadmin' e uma por loja ('loja.clinica-sorriso'), para duas lojas em abas diferentes não se misturarem.
 // ---------------------------------------------------------------------------------------------
 
-const CHAVE = { loja: 'agenda.sessao.loja', superadmin: 'agenda.sessao.superadmin' }
+const PREFIXO = 'agenda.sessao.'
 const memoria = {}
+// Chave de sessão das requisições api.loja: a loja do painel aberto nesta aba (o slug da URL)
+let sessaoDaLoja = null
+
+/** Chave de sessão da área: 'superadmin', ou 'loja.<slug>' no painel da loja. */
+export const chaveSessao = (area, slug) => (area === 'loja' ? (slug ? `loja.${slug}` : null) : area)
+
+/** O painel da loja da URL passa a ser o dono do token usado por api.loja (chamado pela sessão da loja). */
+export function usarSessaoDaLoja(chave) {
+  sessaoDaLoja = chave
+}
 
 function armazenamento() {
   try {
@@ -57,31 +68,60 @@ function armazenamento() {
   }
 }
 
+// Restos da versão com a loja digitada no login (uma sessão de loja por aba e a última loja lembrada)
+try {
+  armazenamento()?.removeItem('agenda.sessao.loja')
+  window.localStorage?.removeItem('agenda.ultimaLoja')
+} catch {
+  // storage bloqueado: nada a limpar
+}
+
 export const tokens = {
-  ler(area) {
-    if (!(area in CHAVE)) return null
-    if (memoria[area] === undefined) memoria[area] = armazenamento()?.getItem(CHAVE[area]) ?? null
-    return memoria[area]
+  ler(chave) {
+    if (!chave) return null
+    if (memoria[chave] === undefined) memoria[chave] = armazenamento()?.getItem(PREFIXO + chave) ?? null
+    return memoria[chave]
   },
-  gravar(area, token) {
-    memoria[area] = token
+  gravar(chave, token) {
+    if (!chave) return
+    memoria[chave] = token
     try {
-      armazenamento()?.setItem(CHAVE[area], token)
+      armazenamento()?.setItem(PREFIXO + chave, token)
     } catch {
       // cota cheia ou storage bloqueado: segue só em memória
     }
   },
-  limpar(area) {
-    memoria[area] = null
+  limpar(chave) {
+    if (!chave) return
+    memoria[chave] = null
     try {
-      armazenamento()?.removeItem(CHAVE[area])
+      armazenamento()?.removeItem(PREFIXO + chave)
     } catch {
       // nada a limpar
     }
   },
+  /**
+   * Apaga desta aba (memória e sessionStorage) toda sessão que não seja `chave`: SUPERADMIN e outras lojas.
+   * A aba aberta por window.open nasce com uma cópia do sessionStorage de quem abriu; as outras abas não mudam.
+   */
+  manterSo(chave) {
+    for (const outra of Object.keys(memoria)) if (outra !== chave) memoria[outra] = null
+    const storage = armazenamento()
+    if (!storage) return
+    try {
+      const sobras = []
+      for (let i = 0; i < storage.length; i += 1) {
+        const nome = storage.key(i)
+        if (nome?.startsWith(PREFIXO) && nome !== PREFIXO + chave) sobras.push(nome)
+      }
+      sobras.forEach((nome) => storage.removeItem(nome))
+    } catch {
+      // storage bloqueado: nada a limpar
+    }
+  },
 }
 
-// Sessão expirada (401 com token): a área limpa o estado e leva ao login
+// Sessão expirada (401 com token): a sessão daquela chave limpa o estado e leva ao login
 const ouvintesExpirou = new Set()
 export function aoExpirarSessao(fn) {
   ouvintesExpirou.add(fn)
@@ -121,7 +161,9 @@ async function lerCorpo(resposta) {
  * sinal: AbortSignal de quem chamou (cancelar não vira erro de conexão).
  */
 export async function requisitar(area, metodo, caminho, { corpo, query, sinal } = {}) {
-  const token = tokens.ler(area)
+  // O site é público: nunca leva token. A loja usa o token da loja aberta nesta aba.
+  const sessao = area === 'loja' ? sessaoDaLoja : area === 'superadmin' ? 'superadmin' : null
+  const token = tokens.ler(sessao)
   const arquivo = typeof FormData !== 'undefined' && corpo instanceof FormData
   const controle = new AbortController()
   let esgotou = false
@@ -169,9 +211,10 @@ export async function requisitar(area, metodo, caminho, { corpo, query, sinal } 
 
   const status = resposta.status
   // 401 com token = sessão vencida ou revogada. Sem token (login errado) é só a mensagem.
-  if (status === 401 && token) {
-    tokens.limpar(area)
-    ouvintesExpirou.forEach((fn) => fn(area))
+  // Só se o token ainda é o mesmo: um login novo feito nesse meio tempo não é desfeito
+  if (status === 401 && token && tokens.ler(sessao) === token) {
+    tokens.limpar(sessao)
+    ouvintesExpirou.forEach((fn) => fn(sessao))
   }
   const detalhe = typeof dados?.detail === 'string' ? dados.detail : null
   const tentarEm = Number(resposta.headers.get('Retry-After')) || null
