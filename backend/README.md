@@ -139,6 +139,40 @@ Saúde: `GET /api/saude`. Arquivos públicos: `GET /api/arquivos/logos/{loja_id}
   de pedidos por IP em cada loja (429 com `Retry-After`) e no máximo `SITE_PENDENTES_POR_TELEFONE`
   pedidos aguardando aceite por telefone (409). Captcha ainda não existe.
 
+### Páginas HTML (fora de `/api`)
+
+Mapa de URLs (GER-29), igual no nginx de produção ([`deploy/nginx/agenda.conf`](../deploy/nginx/agenda.conf))
+e no servidor de dev do front: `/superadmin...` e `/<slug>/painel...` são do front (SPA); `/_app/...`
+são os arquivos do build; `/api/...`, `/<slug>` e o resto chegam aqui. As páginas ficam em
+`app/routers/paginas.py` (Jinja2 com autoescape, templates em `app/templates/`), registradas depois de
+todos os routers `/api` e da documentação, e fora do OpenAPI.
+
+| Rota (GET e HEAD) | Resposta |
+|---|---|
+| `/` | 404 HTML "Página não encontrada" |
+| `/painel`, `/painel/...` | 404 HTML com a orientação de usar `/nome-da-loja/painel` |
+| `/{slug}` | 200, página provisória da loja (SIT-11: logo, nome, telefone, e-mail, endereço, "Agendamento online em breve"); loja inexistente, excluída, suspensa ou cancelada, slug inválido ou reservado: 404 HTML "Loja não encontrada" |
+| `/{slug}/` | 308 para `/{slug}` (slug inválido ou reservado: 404) |
+| `/{slug}/...` | 404 HTML (futuras páginas do site) |
+
+- Só os dados que `GET /api/site/{slug}` já expõe (`LojaPublica`); a regra de visibilidade é a mesma
+  (`app/services/site.py`, usada pelas duas).
+- Cabeçalhos: `Content-Security-Policy: default-src 'none'; img-src 'self'; style-src 'unsafe-inline';
+  base-uri 'none'; form-action 'none'; frame-ancestors 'none'`, `X-Content-Type-Options: nosniff`,
+  `Referrer-Policy: same-origin`, `X-Frame-Options: DENY`, `Cache-Control: no-cache`. Sem JavaScript.
+- `/{slug}` conta no mesmo limite por IP do site (`LIMITE_SITE_POR_IP`); passou: 429 HTML com
+  `Retry-After`. Endereço inválido ou reservado responde 404 sem consultar o banco e sem contar.
+- `/api` e `/api/...` nunca caem nessas rotas: o que não existe na API continua 404 em JSON.
+
+### Slugs reservados (PLA-16)
+
+`superadmin`, `api`, `painel`, `site`, `docs`, `redoc`, `openapi`, `admin`, `login`, `static`, `assets`,
+`app`, `www`, `saude`, `health` não podem ser slug de loja (lista em `app/services/slugs.py`).
+`POST /api/superadmin/lojas` e `PUT /api/superadmin/lojas/{id}`: 422 com
+`erros: [{campo: "slug", mensagem: "Este endereço é reservado pelo sistema. Escolha outro."}]`. O banco
+também recusa (`ck_lojas_slug_reservado`, migração 0005; a migração para se alguma loja, mesmo
+excluída, já usar um desses endereços).
+
 ### Logo da loja
 
 | Rota | Permissão | Entrada | Saída |
@@ -312,7 +346,9 @@ Convenções das rotas da loja:
 - Deadlock ou falha de serialização no banco (SQLSTATE 40P01/40001) respondem 409 "Outra alteração foi
   feita ao mesmo tempo e esta não foi salva. Tente novamente." (nada foi gravado).
 - **IP:** é o mesmo da auditoria (`request.client.host`). Atrás de um proxy reverso, rode o uvicorn com
-  `--proxy-headers --forwarded-allow-ips=<ip do proxy>`; senão todos os clientes contam como o IP do proxy.
+  `--proxy-headers` e o IP do proxy em `FORWARDED_ALLOW_IPS` (o `Dockerfile` já faz isso, padrão
+  `127.0.0.1`; ver "Docker" e [`deploy/README.md`](../deploy/README.md)); senão todos os clientes contam
+  como o IP do proxy.
 
 ## Como o banco protege os dados
 
@@ -359,3 +395,10 @@ docker build -t agenda-backend .
 
 As logos enviadas ficam em `/app/arquivos` (`ARQUIVOS_DIR`): monte um volume persistente nesse caminho
 (ex.: `docker run -v agenda-arquivos:/app/arquivos ...`), senão elas somem ao recriar o contêiner.
+
+**Atrás do nginx** (produção, [`deploy/README.md`](../deploy/README.md)): a imagem roda o uvicorn com
+`--proxy-headers`, então o IP do cliente (auditoria e limite de requisições) vem do `X-Forwarded-For`,
+mas **só** quando a conexão chega de um IP listado em `FORWARDED_ALLOW_IPS` (variável lida pelo
+próprio uvicorn; padrão `127.0.0.1`, o nginx na mesma máquina com `--network host`). Endereço e porta
+do uvicorn: `UVICORN_HOST` (padrão `0.0.0.0`) e `UVICORN_PORT` (padrão `8000`). Nunca use
+`FORWARDED_ALLOW_IPS=*` com a API exposta.

@@ -12,6 +12,8 @@ from fastapi.responses import JSONResponse
 from sqlalchemy.exc import DBAPIError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
+from app.services.slugs import MSG_SLUG_RESERVADO
+
 log = logging.getLogger('app.erros')
 
 # Mensagens padrão do Starlette/FastAPI (em inglês) traduzidas
@@ -117,6 +119,7 @@ MENSAGENS_CONSTRAINT = {
     'categorias_material_nome_uk': 'Já existe uma categoria com este nome.',
     'lojas_cnpj_uk': 'Este CNPJ já está cadastrado em outra loja.',
     'lojas_slug_uk': 'Este endereço de acesso já está em uso por outra loja.',
+    'ck_lojas_slug_reservado': MSG_SLUG_RESERVADO,
     'planos_nome_uk': 'Já existe um plano com este nome.',
     'superadmin_usuarios_email_uk': 'Já existe um usuário admin com este e-mail.',
     'registros_ponto_um_aberto': 'Este funcionário já tem um registro de ponto em aberto.',

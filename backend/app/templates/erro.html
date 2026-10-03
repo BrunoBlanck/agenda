@@ -1,0 +1,10 @@
+{% extends 'base.html' %}
+{% block titulo %}{{ titulo }}{% endblock %}
+{% block conteudo %}
+    <h1>{{ titulo }}</h1>
+    {% if dica %}
+    <p class="aviso">{{ dica }}</p>
+    {% else %}
+    <p>Confira o endereço digitado.</p>
+    {% endif %}
+{% endblock %}

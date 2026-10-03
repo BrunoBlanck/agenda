@@ -1,0 +1,28 @@
+{% extends 'base.html' %}
+{% block titulo %}{{ loja.nome_fantasia }}{% endblock %}
+{% block conteudo %}
+    {% if loja.logo_url %}
+    <img class="logo" src="{{ loja.logo_url }}" alt="Logo de {{ loja.nome_fantasia }}">
+    {% endif %}
+    {% if tipo %}
+    <p class="rotulo">{{ tipo }}</p>
+    {% endif %}
+    <h1>{{ loja.nome_fantasia }}</h1>
+    <p class="aviso">Agendamento online em breve.</p>
+    {% if loja.telefone or loja.email or endereco %}
+    <dl>
+      {% if loja.telefone %}
+      <dt>Telefone</dt>
+      <dd>{% if telefone_link %}<a href="{{ telefone_link }}">{{ loja.telefone }}</a>{% else %}{{ loja.telefone }}{% endif %}</dd>
+      {% endif %}
+      {% if loja.email %}
+      <dt>E-mail</dt>
+      <dd><a href="mailto:{{ loja.email }}">{{ loja.email }}</a></dd>
+      {% endif %}
+      {% if endereco %}
+      <dt>Endereço</dt>
+      <dd>{% for linha in endereco %}{{ linha }}{% if not loop.last %}<br>{% endif %}{% endfor %}</dd>
+      {% endif %}
+    </dl>
+    {% endif %}
+{% endblock %}

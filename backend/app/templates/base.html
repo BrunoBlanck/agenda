@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  {% if not indexar %}
+  <meta name="robots" content="noindex">
+  {% endif %}
+  <title>{% block titulo %}{% endblock %}</title>
+  <style>
+    :root {
+      --papel: #f6f1e7;
+      --folha: #fffdf8;
+      --tinta: #2b2620;
+      --tinta-suave: #6b6257;
+      --linha: #e2d8c6;
+      --destaque: #9a3b26;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --papel: #1d1a16;
+        --folha: #26221d;
+        --tinta: #efe7da;
+        --tinta-suave: #b3a897;
+        --linha: #3a342c;
+        --destaque: #e08a6f;
+      }
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px 16px;
+      background: var(--papel);
+      color: var(--tinta);
+      font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    }
+    .folha {
+      width: 100%;
+      max-width: 520px;
+      background: var(--folha);
+      border: 1px solid var(--linha);
+      border-radius: 6px;
+      padding: 32px 28px;
+      box-shadow: 0 1px 0 var(--linha), 0 12px 32px -24px rgba(0, 0, 0, .35);
+    }
+    h1 {
+      margin: 0 0 4px;
+      font: 600 1.6rem/1.25 Georgia, "Times New Roman", serif;
+      overflow-wrap: anywhere;
+    }
+    .rotulo {
+      margin: 0 0 12px;
+      color: var(--tinta-suave);
+      font-size: .8rem;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+    }
+    .aviso {
+      margin: 20px 0;
+      padding: 12px 14px;
+      border-left: 3px solid var(--destaque);
+      background: var(--papel);
+    }
+    .logo { display: block; max-width: 160px; max-height: 96px; margin: 0 0 16px; object-fit: contain; }
+    dl { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 6px 16px; }
+    dt { color: var(--tinta-suave); }
+    dd { margin: 0; overflow-wrap: anywhere; }
+    a { color: var(--destaque); }
+    p { margin: 0 0 8px; }
+  </style>
+</head>
+<body>
+  <main class="folha">
+{% block conteudo %}{% endblock %}
+  </main>
+</body>
+</html>

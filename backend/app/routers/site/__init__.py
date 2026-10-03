@@ -8,7 +8,6 @@ Só sai o necessário: dados de contato da loja, serviços ativos, nome dos prof
 locais (sem links) e horários livres. Nada de outros clientes nem dados internos.
 """
 
-import re
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
 from typing import Annotated
@@ -21,10 +20,9 @@ from sqlalchemy.orm import Session
 
 from app.auth.dependencias import DbDep, ip_da_requisicao
 from app.config import get_settings
-from app.db import definir_contexto
 from app.limites import limite_site, limite_site_pedido
-from app.models import Agendamento, AgendamentoMaterial, Cliente, Local, Loja, LojaConfiguracao, Servico
-from app.models.enums import CanalCliente, OrigemAgendamento, StatusAgendamento, StatusLoja
+from app.models import Agendamento, AgendamentoMaterial, Cliente, Local, Loja, Servico
+from app.models.enums import CanalCliente, OrigemAgendamento, StatusAgendamento
 from app.schemas.comum import Data, Erro, so_digitos
 from app.schemas.site import (
     DiaLivre,
@@ -47,6 +45,7 @@ from app.services.horarios_livres import (
     locais_permitidos,
     profissionais,
 )
+from app.services.site import carregar_loja_publica, dados_publicos
 
 router = APIRouter(
     prefix='/api/site/{slug}',
@@ -56,7 +55,6 @@ router = APIRouter(
 )
 
 MSG_LOJA_404 = 'Loja não encontrada.'
-SLUG = re.compile(r'^[a-z0-9]+(?:-[a-z0-9]+)*$')
 
 
 @dataclass
@@ -84,15 +82,9 @@ def obter_contexto_site(
     request: Request,
     db: DbDep,
 ) -> ContextoSite:
-    if not SLUG.fullmatch(slug):
+    loja = carregar_loja_publica(db, slug, ip_da_requisicao(request))
+    if loja is None:
         raise nao_encontrado(MSG_LOJA_404)
-    ip = ip_da_requisicao(request)
-    definir_contexto(db, origem='site', ip=ip)
-    loja = db.scalar(select(Loja).where(Loja.slug == slug))
-    if loja is None or loja.status != StatusLoja.ativa:
-        raise nao_encontrado(MSG_LOJA_404)
-    # RLS: daqui em diante só enxerga os dados desta loja
-    definir_contexto(db, origem='site', loja_id=loja.id, ip=ip)
     return ContextoSite(db=db, loja=loja, modulos=modulos_da_loja(db, loja.id), zona=fuso(loja.fuso_horario))
 
 
@@ -172,26 +164,7 @@ def _horario(ctx: ContextoSite, livre: Livre, locais: dict[UUID, Local]) -> Hora
 
 @router.get('', summary='Dados públicos da loja')
 def loja(ctx: Site) -> LojaPublica:
-    dados = ctx.loja
-    configuracao = ctx.db.scalar(select(LojaConfiguracao).where(LojaConfiguracao.loja_id == dados.id))
-    return LojaPublica(
-        tipo=dados.tipo,
-        slug=dados.slug,
-        nome_fantasia=dados.nome_fantasia or dados.nome,
-        logo_url=dados.logo_url,
-        telefone=dados.telefone,
-        email=dados.email,
-        logradouro=dados.logradouro,
-        numero=dados.numero,
-        complemento=dados.complemento,
-        bairro=dados.bairro,
-        cidade=dados.cidade,
-        uf=dados.uf,
-        fuso_horario=dados.fuso_horario,
-        usa_servicos=ctx.usa_servicos,
-        usa_locais=ctx.usa_locais,
-        rotulo_local=configuracao.rotulo_local if configuracao else 'Local',
-    )
+    return dados_publicos(ctx.db, ctx.loja, ctx.modulos)
 
 
 @router.get('/servicos', summary='Serviços ativos com os profissionais habilitados')
