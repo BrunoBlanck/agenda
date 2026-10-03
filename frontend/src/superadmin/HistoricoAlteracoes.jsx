@@ -89,8 +89,16 @@ const nomesCampos = {
   rotulo_local: 'Rótulo do local',
   rotulo_local_plural: 'Rótulo do local (plural)',
   origem: 'Origem',
+  // Ações gravadas sem alterar linha (registrar_acao no back-end), ex.: Acessar loja (PLA-17)
+  acao: 'Ação',
+  como_funcionario: 'Como o funcionário',
 }
 const nomeCampo = (campo) => nomesCampos[campo] ?? campo.replace(/_/g, ' ')
+
+// Valores de código gravados no detalhe das ações; valor desconhecido aparece como veio
+const valoresCampos = {
+  acao: { acessar_loja: 'Acessar loja' },
+}
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 const codigoCurto = (id) => (UUID.test(id) ? id.slice(0, 8) : id || '—')
@@ -125,13 +133,16 @@ const textoOperacao = {
   restaurar: 'Registro restaurado',
 }
 
+// Valor de um campo: o rótulo do código quando o campo tem um, senão o formato geral
+const formatarCampo = (campo, v) => (typeof v === 'string' && valoresCampos[campo]?.[v]) || formatar(v)
+
 // Um campo alterado: valor antigo riscado, seta, valor novo
-function Mudanca({ antes, depois }) {
+function Mudanca({ campo, antes, depois }) {
   return (
     <span className="mudanca">
-      <del>{formatar(antes)}</del>
+      <del>{formatarCampo(campo, antes)}</del>
       <ArrowRightOutlined aria-label="mudou para" />
-      <strong>{formatar(depois)}</strong>
+      <strong>{formatarCampo(campo, depois)}</strong>
     </span>
   )
 }
@@ -231,7 +242,7 @@ export default function HistoricoAlteracoes({ lojaId }) {
           <span className="recurso">
             {h.mudancas.slice(0, 3).map((c) => (
               <span key={c.campo}>
-                {nomeCampo(c.campo)}: <Mudanca antes={c.antes} depois={c.depois} />
+                {nomeCampo(c.campo)}: <Mudanca campo={c.campo} antes={c.antes} depois={c.depois} />
               </span>
             ))}
             {h.mudancas.length > 3 && <span className="texto-apoio">e mais {h.mudancas.length - 3}</span>}
@@ -312,8 +323,8 @@ export default function HistoricoAlteracoes({ lojaId }) {
                 dataSource={h.mudancas}
                 columns={[
                   { title: 'Campo', dataIndex: 'campo', width: 200, render: nomeCampo },
-                  { title: 'Antes', dataIndex: 'antes', render: formatar },
-                  { title: 'Depois', dataIndex: 'depois', render: (v) => <strong>{formatar(v)}</strong> },
+                  { title: 'Antes', dataIndex: 'antes', render: (v, c) => formatarCampo(c.campo, v) },
+                  { title: 'Depois', dataIndex: 'depois', render: (v, c) => <strong>{formatarCampo(c.campo, v)}</strong> },
                 ]}
               />
             ) : (
@@ -324,7 +335,11 @@ export default function HistoricoAlteracoes({ lojaId }) {
                 dataSource={retrato(h)}
                 columns={[
                   { title: 'Campo', dataIndex: 'campo', width: 200, render: nomeCampo },
-                  { title: h.operacao === 'excluir' ? 'Valor ao excluir' : 'Valor', dataIndex: 'valor', render: formatar },
+                  {
+                    title: h.operacao === 'excluir' ? 'Valor ao excluir' : 'Valor',
+                    dataIndex: 'valor',
+                    render: (v, c) => formatarCampo(c.campo, v),
+                  },
                 ]}
               />
             ),

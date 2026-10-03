@@ -856,8 +856,9 @@ body {
 .loja-enderecos {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--espaco-1) var(--espaco-4);
-  margin-top: var(--espaco-2);
+  align-items: center;
+  gap: var(--espaco-2) var(--espaco-4);
+  margin-top: var(--espaco-3);
 }
 
 .loja-enderecos a {

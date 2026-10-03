@@ -24,6 +24,7 @@ import CampoEnderecoLoja from '../CampoEnderecoLoja.jsx'
 import { caminhoPainel, caminhoSite } from '../../layout/caminhos.js'
 import HistoricoAlteracoes from '../HistoricoAlteracoes.jsx'
 import SenhaProvisoria from '../SenhaProvisoria.jsx'
+import BotaoAcessarLoja from '../BotaoAcessarLoja.jsx'
 
 const FUSOS = ['America/Sao_Paulo', 'America/Manaus', 'America/Cuiaba', 'America/Rio_Branco', 'America/Noronha']
 
@@ -586,7 +587,7 @@ function Detalhe({ id }) {
       descricao={
         <>
           {`${tiposLoja[loja.tipo]?.nome ?? loja.tipo ?? '—'}, plano ${loja.planoNome ?? '—'}.${criadaEm ? ` Cliente desde ${criadaEm}.` : ''}`}
-          {loja.slug && <EnderecosLoja slug={loja.slug} />}
+          {loja.slug && <EnderecosLoja slug={loja.slug} lojaId={loja.id} />}
         </>
       }
       acoes={<AcoesSituacao loja={loja} mudarStatus={mudarStatus} excluir={excluir} />}
@@ -631,10 +632,12 @@ function Detalhe({ id }) {
   )
 }
 
-// Site (página do back-end) e painel da loja abrem em outra aba: links de página inteira, fora da SPA do SUPERADMIN
-function EnderecosLoja({ slug }) {
+// Site (página do back-end) e painel da loja abrem em outra aba: links de página inteira, fora da SPA do SUPERADMIN.
+// "Acessar loja" abre o mesmo painel já logado como o Administrador (suporte).
+function EnderecosLoja({ slug, lojaId }) {
   return (
     <span className="loja-enderecos">
+      <BotaoAcessarLoja lojaId={lojaId} />
       <a href={caminhoSite(slug)} target="_blank" rel="noopener">
         <GlobalOutlined aria-hidden="true" /> Abrir site <span className="texto-apoio endereco">{caminhoSite(slug)}</span>
       </a>

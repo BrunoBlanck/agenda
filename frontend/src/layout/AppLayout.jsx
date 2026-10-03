@@ -7,6 +7,7 @@ import { menuPermitido, telaDaRota } from './navegacao.jsx'
 import { caminhoSite, usePainelPath, useSlugLoja } from './caminhos.js'
 import Casca from './Casca.jsx'
 import Usuario from './Usuario.jsx'
+import AvisoSuporte from './AvisoSuporte.jsx'
 import ExigirSessao from './ExigirSessao.jsx'
 import Pagina from '../components/base/Pagina.jsx'
 import Secao from '../components/base/Secao.jsx'
@@ -65,6 +66,7 @@ function Painel() {
       selecionado={pathname}
       abertos={pathname.startsWith(caminho('/configuracoes')) ? [caminho('/configuracoes')] : []}
       onNavegar={navigate}
+      aviso={<AvisoSuporte />}
       acoes={
         <>
           {/* O site do consumidor é página do back-end, fora da SPA: link de página inteira, não rota do React */}

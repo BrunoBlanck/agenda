@@ -30,6 +30,8 @@ export default function Login() {
   }
 
   const nome = loja?.nome || slug
+  // state.motivo: uma tela recusou a entrada e mandou para cá (ex.: acesso de suporte vencido)
+  const motivo = typeof state?.motivo === 'string' ? state.motivo : sessao.motivo
 
   return (
     <TelaLogin
@@ -41,7 +43,7 @@ export default function Login() {
         </span>
       }
       descricao="Entre com o e-mail e a senha que o administrador da loja cadastrou para você."
-      motivo={sessao.motivo}
+      motivo={motivo}
       aoEntrar={({ email, senha }) => sessao.entrar({ email, senha })}
       rodape="Esqueceu a senha? Peça ao administrador da loja para redefinir."
     />

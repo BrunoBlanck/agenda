@@ -12,6 +12,8 @@ export const converterEuLoja = (dados) => {
     loja: eu.loja && { ...eu.loja, logoUrl: urlDaApi(eu.loja.logoUrl) },
     modulos: eu.modulos ?? {},
     acessos: eu.acessos ?? {},
+    // sessao: { suporte, expira_em } (acessar-loja). Falta ou null = login normal sem prazo conhecido
+    sessao: { suporte: eu.sessao?.suporte === true, expiraEm: eu.sessao?.expiraEm || null },
   }
 }
 

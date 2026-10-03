@@ -1,4 +1,4 @@
-import { api, urlDaApi } from './cliente.js'
+import { api, ErroApi, urlDaApi } from './cliente.js'
 import { enviarDataHora, enviarNumero, lerNumero, lerPagina, paraCamel, textoOuNulo } from './conversao.js'
 import { conflitoNoCampo } from './registro.js'
 
@@ -134,6 +134,22 @@ export async function enviarLogoDaLoja(lojaId, arquivo) {
 }
 
 export const removerLogoDaLoja = (lojaId) => sa.delete(`/lojas/${id(lojaId)}/logo`)
+
+// Acessar loja (PLA-17): sessão de 1 hora no painel como o Administrador da loja. Sem corpo.
+// O token só passa por aqui e pelo sessionStorage da aba nova (nunca na URL, em log nem em mensagem: INT-06).
+export async function gerarAcessoLoja(lojaId) {
+  const d = (await sa.post(`/lojas/${id(lojaId)}/acesso`)) ?? {}
+  // Sem token ou sem slug não há aonde ir: vira erro tratado, não uma aba em /undefined/painel
+  if (typeof d.token !== 'string' || !d.token || typeof d.slug !== 'string' || !d.slug) {
+    throw new ErroApi({ status: 500, mensagem: 'Não foi possível gerar o acesso à loja. Tente novamente em instantes.' })
+  }
+  return {
+    token: d.token,
+    expiraEm: d.expira_em ?? null,
+    slug: d.slug,
+    funcionarioNome: d.funcionario_nome ?? '',
+  }
+}
 
 // --- Módulos da loja -----------------------------------------------------------------------------
 

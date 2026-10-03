@@ -10,8 +10,8 @@ const { Header, Sider, Content } = Layout
 
 // Estrutura comum ao painel da loja e ao SUPERADMIN: menu lateral (recolhível no desktop,
 // gaveta no celular), barra superior com as ações e o conteúdo da tela.
-// escuro: barra lateral em grafite (SUPERADMIN).
-export default function Casca({ marca, itens, selecionado, abertos, onNavegar, acoes, escuro = false, children }) {
+// escuro: barra lateral em grafite (SUPERADMIN). aviso: faixa acima da barra superior (ex.: acesso de suporte).
+export default function Casca({ marca, itens, selecionado, abertos, onNavegar, acoes, aviso, escuro = false, children }) {
   const [recolhido, setRecolhido] = useState(false)
   const [gaveta, setGaveta] = useState(false)
   const { pathname } = useLocation()
@@ -63,6 +63,7 @@ export default function Casca({ marca, itens, selecionado, abertos, onNavegar, a
       </Drawer>
 
       <Layout>
+        {aviso}
         <Header className="casca-topo">
           <Button
             className="casca-abrir-menu"

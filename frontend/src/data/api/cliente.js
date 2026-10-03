@@ -100,6 +100,25 @@ export const tokens = {
       // nada a limpar
     }
   },
+  /**
+   * Apaga desta aba (memória e sessionStorage) toda sessão que não seja `chave`: SUPERADMIN e outras lojas.
+   * A aba aberta por window.open nasce com uma cópia do sessionStorage de quem abriu; as outras abas não mudam.
+   */
+  manterSo(chave) {
+    for (const outra of Object.keys(memoria)) if (outra !== chave) memoria[outra] = null
+    const storage = armazenamento()
+    if (!storage) return
+    try {
+      const sobras = []
+      for (let i = 0; i < storage.length; i += 1) {
+        const nome = storage.key(i)
+        if (nome?.startsWith(PREFIXO) && nome !== PREFIXO + chave) sobras.push(nome)
+      }
+      sobras.forEach((nome) => storage.removeItem(nome))
+    } catch {
+      // storage bloqueado: nada a limpar
+    }
+  },
 }
 
 // Sessão expirada (401 com token): a sessão daquela chave limpa o estado e leva ao login

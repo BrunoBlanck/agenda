@@ -8,6 +8,7 @@ const AreaLoja = lazy(() => import('./layout/AreaLoja.jsx'))
 const NaoEncontrada = lazy(() => import('./layout/NaoEncontrada.jsx'))
 const AppLayout = lazy(() => import('./layout/AppLayout.jsx'))
 const Login = lazy(() => import('./pages/Login.jsx'))
+const AcessoSuporte = lazy(() => import('./pages/AcessoSuporte.jsx'))
 const Dashboard = lazy(() => import('./pages/Dashboard.jsx'))
 const Agenda = lazy(() => import('./pages/Agenda.jsx'))
 const Agendamentos = lazy(() => import('./pages/Agendamentos.jsx'))
@@ -55,6 +56,8 @@ export default function App() {
       <Routes>
         <Route path=":slug/painel" element={<AreaLoja />}>
           <Route path="login" element={<Login />} />
+          {/* Entrada do "Acessar loja" do SUPERADMIN (token entregue no sessionStorage da aba): fora do layout, como o login */}
+          <Route path="suporte" element={<AcessoSuporte />} />
           <Route element={<AppLayout />}>
           <Route index element={<Dashboard />} />
           <Route path="agenda" element={<Agenda />} />
