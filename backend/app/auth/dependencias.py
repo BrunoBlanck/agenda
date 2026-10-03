@@ -1,7 +1,8 @@
 """Dependências de autenticação e permissão.
 
 - ``ContextoLojaDep``: funcionário logado (token do tipo funcionario), loja ativa, acesso calculado
-  e contexto da transação gravado (app.funcionario_id, app.loja_id, app.origem = painel).
+  e contexto da transação gravado (app.funcionario_id, app.loja_id, app.origem = painel). O token de
+  suporte ("Acessar loja" do SUPERADMIN, claim ``suporte``) dispensa só a loja ativa (PLA-19).
 - ``exigir(recurso, nivel)``: além do acima, exige o nível no recurso (perfil + módulo ligado).
 - ``ContextoSuperadminDep``: superadmin logado (token do tipo superadmin), contexto gravado
   (app.superadmin_id, app.origem = superadmin).
@@ -83,6 +84,7 @@ class ContextoLoja:
     funcionario: Funcionario
     perfil: Perfil
     acesso: Acesso
+    token: DadosToken
 
     @property
     def loja_id(self) -> UUID:
@@ -113,14 +115,20 @@ def obter_contexto_loja(
     )
     if loja is None or funcionario is None or not funcionario.ativo:
         raise nao_autenticado()
-    verificar_status_loja(loja)
+    if not dados.suporte:
+        verificar_status_loja(loja)
     perfil = db.scalar(select(Perfil).where(Perfil.id == funcionario.perfil_id, Perfil.loja_id == loja.id))
     if perfil is None:
         raise HTTPException(
             status.HTTP_403_FORBIDDEN, 'Seu usuário está sem perfil de acesso. Fale com o administrador.'
         )
     return ContextoLoja(
-        db=db, loja=loja, funcionario=funcionario, perfil=perfil, acesso=calcular_acesso(db, loja.id, perfil)
+        db=db,
+        loja=loja,
+        funcionario=funcionario,
+        perfil=perfil,
+        acesso=calcular_acesso(db, loja.id, perfil),
+        token=dados,
     )
 
 

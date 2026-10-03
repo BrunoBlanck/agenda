@@ -248,6 +248,27 @@ def test_pagina_da_loja_sem_dados_opcionais(cliente, engine_dono):
     assert '<dl>' not in resposta.text
 
 
+def test_pagina_da_loja_nao_leva_ao_painel_nem_ao_login(cliente, engine_dono):
+    """DIR-003: o site do consumidor não tem caminho para o painel, o login ou o SUPERADMIN."""
+    criar_loja(engine_dono, 'loja-a')
+    alterar_loja(
+        engine_dono,
+        'loja-a',
+        telefone='(11) 98888-1111',
+        email='contato@sorriso.com',
+        logradouro='Rua das Flores',
+        cidade='Campinas',
+        uf='SP',
+        logo_url='/api/arquivos/logos/x/logo.png',
+    )
+    for caminho in ('/loja-a', '/loja-a/'):
+        resposta = cliente.get(caminho, follow_redirects=True)
+        eh_html(resposta, 200)
+        html = resposta.text.lower()
+        for proibido in ('painel', 'superadmin', 'login'):  # 'painel' cobre /painel e /{slug}/painel
+            assert proibido not in html, proibido
+
+
 def test_pagina_da_loja_escapa_o_html(cliente, engine_dono):
     criar_loja(engine_dono, 'loja-a')
     alterar_loja(

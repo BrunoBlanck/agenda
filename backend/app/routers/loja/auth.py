@@ -15,7 +15,7 @@ from app.auth.tokens import criar_token
 from app.db import definir_contexto
 from app.limites import BloqueioLogin, limite_login
 from app.models import Cargo, Funcionario, Loja, LojaConfiguracao
-from app.schemas.auth import CargoResumo, Eu, FuncionarioEu, LoginLoja, LojaEu, PerfilEu, Token
+from app.schemas.auth import CargoResumo, Eu, FuncionarioEu, LoginLoja, LojaEu, PerfilEu, SessaoEu, Token
 from app.schemas.comum import Erro
 from app.services.comum import fuso
 
@@ -88,6 +88,9 @@ def eu(ctx: ContextoLojaDep) -> Eu:
         funcionario=funcionario,
         perfil=PerfilEu.model_validate(ctx.perfil),
         loja=loja,
+        sessao=SessaoEu(
+            suporte=ctx.token.suporte, expira_em=ctx.token.expira_em.astimezone(fuso(ctx.loja.fuso_horario))
+        ),
         modulos=ctx.acesso.modulos,
         acessos=ctx.acesso.niveis,
     )

@@ -73,7 +73,8 @@ Migração reversível: `uv run alembic downgrade base` e `uv run alembic upgrad
 
 A lista completa, com os campos de entrada e saída, está em http://localhost:8000/docs (OpenAPI).
 Envie o token em `Authorization: Bearer <token>`. Token de superadmin não vale nas rotas da loja,
-e vice-versa (401). Loja suspensa ou cancelada recebe 403.
+e vice-versa (401). Loja suspensa ou cancelada recebe 403 (menos na sessão de suporte, abaixo).
+`GET eu` traz `sessao: {suporte, expira_em}` (`expira_em` = vencimento do token, no fuso da loja).
 
 | Área | Rotas (`/api/loja/...`) | Recurso exigido |
 |---|---|---|
@@ -105,6 +106,7 @@ Saúde: `GET /api/saude`. Arquivos públicos: `GET /api/arquivos/logos/{loja_id}
 | Lojas | `GET/POST lojas`, `GET lojas/opcoes`, `GET/PUT/DELETE lojas/{id}`, `POST lojas/{id}/status`, `PUT/DELETE lojas/{id}/logo` |
 | Módulos da loja | `GET lojas/{id}/modulos`, `PATCH lojas/{id}/modulos/{codigo}` (habilitado, observacao, expira_em) |
 | Funcionários (suporte) | `GET lojas/{id}/perfis`, `GET/POST lojas/{id}/funcionarios`, `PUT lojas/{id}/funcionarios/{fid}`, `POST .../redefinir-senha` |
+| Acessar loja | `POST lojas/{id}/acesso` (token de funcionário do Administrador da loja, 1 hora) |
 | Planos | `GET/POST planos`, `GET/PUT/DELETE planos/{id}` |
 | Usuários admin | `GET/POST usuarios`, `GET/PUT/DELETE usuarios/{id}` |
 | Auditoria | `GET auditoria?loja=<id ou plataforma>&tabela=&periodo=&inicio=&fim=&quem=`, `GET auditoria/pessoas`, `GET auditoria/tabelas` |
@@ -114,6 +116,13 @@ Saúde: `GET /api/saude`. Arquivos públicos: `GET /api/arquivos/logos/{loja_id}
 - Sem envio de e-mail ainda: criar loja, funcionário ou usuário admin sem `senha`, e redefinir senha
   sem `senha`, geram uma **senha provisória**, devolvida uma única vez em `senha_provisoria`.
 - Loja só é excluída (exclusão lógica) depois de cancelada; o `slug` fica livre de novo.
+- **Acessar loja** (PLA-17 a 19, `app/services/suporte.py`): token do tipo `funcionario` do
+  Administrador da loja (perfil padrão com acesso total, ativo, o mais antigo), com a claim
+  `suporte: true` e validade fixa de 1 hora (`VALIDADE_SUPORTE`, não usa `JWT_EXPIRA_MINUTOS`). Com a
+  claim, `obter_contexto_loja` só dispensa a loja ativa (vale suspensa ou cancelada); o resto é igual
+  e o que for feito fica como o Administrador. Gerar o acesso grava `registrar_acao` na auditoria da
+  loja como ação do superadmin (`{"acao": "acessar_loja", "como_funcionario": ...}`), sem o token, e
+  não mexe em `ultimo_login_em`. Não há revogação: o token vale até vencer.
 - Auditoria: `periodo` = `hoje`, `7d`, `30d` (padrão), `90d`, `ano` ou `intervalo` (com `inicio` e
   `fim`), nos dias do fuso da loja; `quem` = `f:<id>`, `s:<id>`, `site` ou `sistema` (valores de
   `auditoria/pessoas`). Cada item traz `quem` com o nome resolvido, `rotulo` do registro e

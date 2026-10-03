@@ -61,12 +61,18 @@ class LojaEu(Esquema):
     rotulo_local_plural: str = 'Locais'
 
 
+class SessaoEu(BaseModel):
+    suporte: bool = Field(description='Sessão aberta pelo SUPERADMIN em "Acessar loja" (PLA-17)')
+    expira_em: datetime | None = Field(description='Quando o token vence, no fuso da loja')
+
+
 class Eu(BaseModel):
     """O que o front precisa para montar o menu e esconder botões (ver useAcesso.js)."""
 
     funcionario: FuncionarioEu
     perfil: PerfilEu
     loja: LojaEu
+    sessao: SessaoEu
     modulos: dict[str, bool] = Field(description='Todos os módulos do catálogo; true = ativo na loja')
     acessos: dict[str, NivelAcesso] = Field(
         description=(

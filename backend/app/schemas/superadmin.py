@@ -246,6 +246,15 @@ class PerfilOpcao(Esquema):
     acesso_total: bool
 
 
+class AcessoLoja(BaseModel):
+    """Sessão do painel como o Administrador da loja, aberta pelo suporte (PLA-17/18)."""
+
+    token: str
+    expira_em: datetime = Field(description='Quando a sessão vence (1 hora), no fuso da loja')
+    slug: str
+    funcionario_nome: str
+
+
 # --- Planos --------------------------------------------------------------------------------------
 
 
