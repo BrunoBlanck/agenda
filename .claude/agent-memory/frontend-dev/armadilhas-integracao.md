@@ -22,3 +22,7 @@ Confirmado em 2026-10-02 na integração da área A (clientes, funcionários, pe
 
 **Why:** cada um custou investigação; os dois primeiros parecem defeito do front e não são.
 **How to apply:** ao testar telas com datas de controle ou clientes do seed, e ao escrever scripts de verificação. Relacionado: [[integracao-api]]
+
+Mais (2026-10-03, acessar-loja):
+- Efeito do filho roda **antes** do efeito do Provider da sessão: token gravado no efeito de uma tela (ex.: `/suporte`) é visto pelo `useEffect` de montagem do Provider, que dispara um `GET /eu` paralelo **sem** as checagens da tela. Ao recusar o token, `controle.current?.abort()` nessa conferência, senão ela termina depois e marca `logado` (comprovado: token comum plantado na entrega entrava no painel).
+- Provar que nada sensível vai para o histórico global: `chromium.launchPersistentContext(pasta, { executablePath: <chrome-win64/chrome.exe>, headless: true })` grava `Default/History` (copiar o arquivo e ler a tabela `urls` com o sqlite3 do Python).

@@ -1168,3 +1168,7 @@ Especificação: `docs/funcionalidades/roteamento-url.md`.
 - **Slugs reservados (PLA-16):** validação (422) + CHECK `ck_lojas_slug_reservado`.
 - **Sessão do painel por loja:** o token fica no `sessionStorage` com a chave da loja; duas lojas em abas diferentes não se misturam, e um token de outra loja na URL volta ao login.
 - **Provisória (SIT-11):** `/{slug}` é uma página simples com os dados públicos da loja até o site real; o protótipo React do site saiu.
+
+## 6.5 Acessar loja pelo SUPERADMIN
+
+Especificação: `docs/funcionalidades/acessar-loja.md`. `POST /api/superadmin/lojas/{id}/acesso` devolve um token de funcionário do **Administrador** da loja (perfil Administrador padrão, ativo, o mais antigo) com a claim `suporte` e validade fixa de **1 hora** (PLA-17/18). As ações na sessão ficam registradas como o Administrador (decisão do usuário); o ato de gerar o acesso fica na auditoria da loja como ação do superadmin. A claim `suporte` deixa a sessão funcionar com a loja suspensa ou cancelada (PLA-19). O front entrega o token à aba nova gravando-o no `sessionStorage` dela (aba `about:blank` aberta no clique, mesma origem) e abre `/{slug}/painel/suporte` **sem token na URL** (na URL ele iria para o histórico do navegador); o painel mostra uma faixa "Acesso de suporte" até vencer. Não atualiza `ultimo_login_em`.

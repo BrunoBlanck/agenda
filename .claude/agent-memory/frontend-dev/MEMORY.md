@@ -1,6 +1,6 @@
 - [armadilhas-ambiente](armadilhas-ambiente.md) — API local (uvicorn --reload no Windows, curl com acentos), porta 5173 ocupada, node órfão após TaskStop, Vite com base /_app/
 - [armadilhas-form-antd](armadilhas-form-antd.md) — Form.List dentro do PainelFormulario (preserve={false}) perde os valores quando os dados chegam depois da abertura; e como testar o painel no navegador sem login
-- [armadilhas-integracao](armadilhas-integracao.md) — Fuso das colunas de controle, CPFs do seed, Form com id, 409 no campo, useConsulta com dado antigo, ponto sem DELETE, route do Playwright
+- [armadilhas-integracao](armadilhas-integracao.md) — Fuso, CPFs do seed, Form com id, 409 no campo, useConsulta, route do Playwright, efeito filho x Provider da sessão, History do Chromium
 - [datas-controle-utc](datas-controle-utc.md) — Fuso das datas da API — o back-end responde tudo no fuso da loja; o front usa a hora escrita na string e só converte UTC ("Z")
 - [integracao-superadmin](integracao-superadmin.md) — Armadilhas confirmadas da API do SUPERADMIN e do back-end em geral (datas em UTC "Z", ruído de login na auditoria, senha provisória)
 - [verificacao-navegador](verificacao-navegador.md) — Como verificar telas no navegador sem o MCP do Playwright (playwright-core no scratchpad + chromium já instalado) e armadilhas de seletor no antd 6

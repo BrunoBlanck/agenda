@@ -5,3 +5,4 @@ Uma especificação por funcionalidade (`<slug>.md`), escrita pelo agente `coord
 | Funcionalidade | Status | Branch |
 |---|---|---|
 | [Roteamento por URL e nginx](roteamento-url.md) | aprovada | feat/roteamento-url |
+| [Acessar loja pelo SUPERADMIN](acessar-loja.md) | aprovada | feat/acessar-loja |
