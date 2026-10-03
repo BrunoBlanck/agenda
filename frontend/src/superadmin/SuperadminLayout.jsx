@@ -1,7 +1,8 @@
 import { Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { Button, ConfigProvider } from 'antd'
-import { ArrowLeftOutlined, AuditOutlined, CreditCardOutlined, HomeOutlined, ShopOutlined, TeamOutlined } from '@ant-design/icons'
-import { useData } from '../data/DataContext.jsx'
+import { AuditOutlined, CreditCardOutlined, HomeOutlined, LogoutOutlined, ShopOutlined, TeamOutlined } from '@ant-design/icons'
+import { useSessaoSuperadmin } from '../data/sessao/sessoes.js'
+import ExigirSessao from '../layout/ExigirSessao.jsx'
 import { temaPlataforma } from '../tema.js'
 import Casca from '../layout/Casca.jsx'
 import Usuario from '../layout/Usuario.jsx'
@@ -21,13 +22,23 @@ const itemDaRota = (pathname) =>
 
 // Área da Plataforma: mesma estrutura do painel da loja, com a barra lateral escura para não confundir as duas
 export default function SuperadminLayout() {
-  const navigate = useNavigate()
-  const { pathname } = useLocation()
-  const { superadmins, sessao } = useData()
-  const eu = superadmins.itens.find((s) => s.id === sessao.superadminId)
-
+  const sessao = useSessaoSuperadmin()
   return (
     <ConfigProvider theme={temaPlataforma}>
+      <ExigirSessao sessao={sessao} login="/superadmin/login">
+        <Plataforma />
+      </ExigirSessao>
+    </ConfigProvider>
+  )
+}
+
+function Plataforma() {
+  const navigate = useNavigate()
+  const { pathname } = useLocation()
+  const { eu, sair } = useSessaoSuperadmin()
+
+  return (
+    <>
       <Casca
         escuro
         marca={(recolhido) => (
@@ -36,7 +47,7 @@ export default function SuperadminLayout() {
             {!recolhido && (
               <div className="casca-marca-textos">
                 <strong>Plataforma</strong>
-                <span>SUPERADMIN (prévia)</span>
+                <span>SUPERADMIN</span>
               </div>
             )}
           </>
@@ -46,15 +57,15 @@ export default function SuperadminLayout() {
         onNavegar={navigate}
         acoes={
           <>
-            <Button type="text" icon={<ArrowLeftOutlined />} onClick={() => navigate('/painel')} aria-label="Painel da loja">
-              <span className="rotulo-largo">Painel da loja</span>
-            </Button>
             <Usuario nome={eu?.nome} detalhe="Superadmin" />
+            <Button type="text" icon={<LogoutOutlined />} onClick={sair} aria-label="Sair">
+              <span className="rotulo-largo">Sair</span>
+            </Button>
           </>
         }
       >
         <Outlet />
       </Casca>
-    </ConfigProvider>
+    </>
   )
 }

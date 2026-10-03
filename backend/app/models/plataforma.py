@@ -59,6 +59,8 @@ class Recurso(IdMixin, ControleMixin, Base):
     codigo: Mapped[str] = mapped_column(String(50))
     nome: Mapped[str] = mapped_column(String(100))
     descricao: Mapped[str | None] = mapped_column(Text)
+    leitura: Mapped[str] = mapped_column(String(200), doc='O que o nível leitura permite')
+    escrita: Mapped[str] = mapped_column(String(200), doc='O que o nível escrita permite')
     ordem: Mapped[int | None] = mapped_column(SmallInteger)
 
 

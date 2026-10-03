@@ -18,16 +18,18 @@ def cenario(cliente, engine_dono):
     a, b = criar_loja_teste(engine_dono, 'loja-a'), criar_loja_teste(engine_dono, 'loja-b')
     maria = cliente.post(
         '/api/loja/clientes',
-        json={'nome': 'Maria', 'sobrenome': 'Oliveira', 'telefone': '1111'},
+        json={'nome': 'Maria', 'sobrenome': 'Oliveira', 'telefone': '(11) 91111-1111'},
         headers=a.h_admin,
     ).json()
     cliente.put(
         f'/api/loja/clientes/{maria["id"]}',
-        json={'nome': 'Maria', 'sobrenome': 'Oliveira', 'telefone': '2222'},
+        json={'nome': 'Maria', 'sobrenome': 'Oliveira', 'telefone': '(11) 92222-2222'},
         headers=a.h_recepcao,
     )
     cliente.post(
-        '/api/loja/clientes', json={'nome': 'Bia', 'sobrenome': 'B', 'telefone': '3'}, headers=b.h_admin
+        '/api/loja/clientes',
+        json={'nome': 'Bia', 'sobrenome': 'B', 'telefone': '(11) 93333-3333'},
+        headers=b.h_admin,
     )
     return superadmin, h, a, b, maria
 
@@ -49,11 +51,16 @@ def test_lista_alteracoes_de_uma_loja_e_tabela(cliente, cenario):
         'nome': 'Recepção',
         'chave': f'f:{a.recepcao.id}',
     }
-    assert alterar['mudancas'] == [{'campo': 'telefone', 'antes': '1111', 'depois': '2222'}]
-    assert alterar['antes']['telefone'] == '1111'
+    assert alterar['mudancas'] == [
+        {'campo': 'telefone', 'antes': '(11) 91111-1111', 'depois': '(11) 92222-2222'}
+    ]
+    assert alterar['antes']['telefone'] == '(11) 91111-1111'
     assert inserir['quem']['nome'] == 'Admin'
     assert inserir['mudancas'] == []
     assert alterar['criado_em'].endswith('-03:00')
+    # Datas dentro da linha também no fuso da loja (no banco são UTC)
+    assert alterar['antes']['criado_em'].endswith('-03:00')
+    assert alterar['depois']['atualizado_em'].endswith('-03:00')
 
 
 def test_uma_loja_nao_ve_a_auditoria_da_outra(cliente, cenario):

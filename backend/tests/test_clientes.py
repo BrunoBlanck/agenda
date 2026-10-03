@@ -11,7 +11,7 @@ URL = '/api/loja/clientes'
 MARIA = {
     'nome': 'Maria',
     'sobrenome': 'Oliveira',
-    'cpf': '123.456.789-00',
+    'cpf': '529.982.247-25',
     'telefone': '(11) 98888-1111',
     'email': 'maria@email.com',
     'data_nascimento': '1985-04-12',
@@ -60,8 +60,24 @@ def test_crud_completo(cliente, lojas, engine_dono):
 def test_lista_paginada_com_busca_e_filtros(cliente, lojas):
     a, _ = lojas
     _criar(cliente, a.h_admin)
-    _criar(cliente, a.h_admin, nome='João', sobrenome='Pereira', cpf=None, telefone='2222', canais=['site'])
-    _criar(cliente, a.h_admin, nome='Fernanda', sobrenome='Costa', cpf='', telefone='3333', ativo=False)
+    _criar(
+        cliente,
+        a.h_admin,
+        nome='João',
+        sobrenome='Pereira',
+        cpf=None,
+        telefone='(21) 3222-2222',
+        canais=['site'],
+    )
+    _criar(
+        cliente,
+        a.h_admin,
+        nome='Fernanda',
+        sobrenome='Costa',
+        cpf='',
+        telefone='(31) 93333-3333',
+        ativo=False,
+    )
 
     pagina = cliente.get(URL, params={'por_pagina': 2}, headers=a.h_admin).json()
     assert pagina['total'] == 3
@@ -76,6 +92,7 @@ def test_lista_paginada_com_busca_e_filtros(cliente, lojas):
 
     assert nomes(busca='maria oli') == ['Maria']
     assert nomes(busca='2222') == ['João']
+    assert nomes(busca='2132222222') == ['João']  # telefone sem máscara
     assert nomes(busca='%') == []  # curinga do LIKE é tratado como texto
     assert nomes(canal='site') == ['João']
     assert nomes(ativo=False) == ['Fernanda']

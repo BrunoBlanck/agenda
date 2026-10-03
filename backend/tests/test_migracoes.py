@@ -153,3 +153,149 @@ def test_unicidade_usa_indices_parciais(engine_dono):
         if nome.endswith('_loja_id_uk'):
             continue
         assert 'excluido_em IS NULL' in definicao, nome
+
+
+def test_0003_normaliza_cpf_e_telefone_e_exige_ponto_sem_sobreposicao():
+    """Dados gravados antes da validação (A7) são normalizados; ponto sobreposto impede a migração (A11)."""
+    import pytest
+
+    from tests.fabricas import criar_funcionario
+
+    url = URL_DONO.set(database=f'{URL_DONO.database}_migracao3')
+    recriar_banco(url)
+    config = config_alembic(url)
+    engine = create_engine(url)
+    try:
+        command.upgrade(config, '0002')
+        loja, perfis = criar_loja(engine, 'loja-x')
+        funcionario = criar_funcionario(engine, loja, perfis['Profissional'], 'p@x.com')
+        with sessao(engine) as db:
+            for nome, cpf, telefone in (
+                ('sem_mascara', '52998224725', '11988881111'),
+                ('ja_canonico', '123.456.789-09', '(21) 3222-1010'),
+                ('colide', '12345678909', '2132221010'),
+                ('lixo', 'xyz', 'abc'),
+            ):
+                db.execute(
+                    text(
+                        'INSERT INTO clientes (loja_id, nome, sobrenome, cpf, telefone)'
+                        " VALUES (:l, :n, 'X', :c, :t)"
+                    ),
+                    {'l': loja.id, 'n': nome, 'c': cpf, 't': telefone},
+                )
+            db.execute(
+                text("UPDATE funcionarios SET cpf = '52998224725', telefone = '11 99999 0001' WHERE id = :f"),
+                {'f': funcionario.id},
+            )
+            for entrada, saida in (('2026-01-05 08:00', '2026-01-05 12:00'), ('2026-01-05 11:00', None)):
+                db.execute(
+                    text(
+                        'INSERT INTO registros_ponto (loja_id, funcionario_id, entrada, saida)'
+                        ' VALUES (:l, :f, :e, :s)'
+                    ),
+                    {'l': loja.id, 'f': funcionario.id, 'e': entrada, 's': saida},
+                )
+
+        with pytest.raises(RuntimeError, match='registros de ponto sobrepostos'):
+            command.upgrade(config, 'head')
+        with sessao(engine) as db:  # exclusão lógica (trigger) já resolve
+            db.execute(text('DELETE FROM registros_ponto WHERE saida IS NULL'))
+        command.upgrade(config, 'head')
+
+        with engine.connect() as conexao:
+            clientes = dict(
+                (nome, (cpf, telefone))
+                for nome, cpf, telefone in conexao.execute(text('SELECT nome, cpf, telefone FROM clientes'))
+            )
+            func = conexao.execute(
+                text('SELECT cpf, telefone FROM funcionarios WHERE id = :f'), {'f': funcionario.id}
+            ).one()
+            auditoria = conexao.execute(
+                text(
+                    "SELECT count(*) FROM auditoria WHERE tabela = 'clientes' AND operacao = 'alterar'"
+                    " AND origem = 'sistema'"
+                )
+            ).scalar()
+        assert clientes['sem_mascara'] == ('529.982.247-25', '(11) 98888-1111')
+        assert clientes['ja_canonico'] == ('123.456.789-09', '(21) 3222-1010')
+        assert clientes['colide'] == ('12345678909', '(21) 3222-1010')  # CPF repetido: conferência manual
+        assert clientes['lixo'] == ('xyz', 'abc')  # não dá para normalizar: fica como está
+        assert tuple(func) == ('529.982.247-25', '(11) 99999-0001')
+        assert auditoria == 3  # CPF e telefone da 1ª e telefone da 3ª, como alteração do sistema
+        command.downgrade(config, '0002')
+        command.upgrade(config, 'head')
+    finally:
+        engine.dispose()
+        servidor = create_engine(url.set(database='postgres'), isolation_level='AUTOCOMMIT')
+        with servidor.connect() as conexao:
+            conexao.execute(text(f'DROP DATABASE IF EXISTS "{url.database}" WITH (FORCE)'))
+        servidor.dispose()
+
+
+def test_0004_login_fora_do_historico_e_textos_dos_recursos():
+    """0004: textos de leitura/escrita separados e login fora da auditoria; o downgrade volta ao da 0003."""
+    from app.db import definir_contexto
+    from tests.fabricas import criar_funcionario
+
+    url = URL_DONO.set(database=f'{URL_DONO.database}_migracao4')
+    recriar_banco(url)
+    config = config_alembic(url)
+    engine = create_engine(url)
+
+    def logar(funcionario) -> list[list[str]]:
+        """UPDATE de login (com a marca); devolve as alterações do funcionário na auditoria."""
+        with sessao(engine) as db:
+            definir_contexto(
+                db, origem='painel', funcionario_id=funcionario.id, loja_id=funcionario.loja_id, login=True
+            )
+            db.execute(
+                text(
+                    'UPDATE funcionarios SET ultimo_login_em = now(), senha_hash = gen_random_uuid()::text WHERE id = :f'
+                ),
+                {'f': funcionario.id},
+            )
+            return list(
+                db.execute(
+                    text(
+                        "SELECT campos_alterados FROM auditoria WHERE tabela = 'funcionarios'"
+                        " AND registro_id = :f AND operacao = 'alterar' ORDER BY id"
+                    ),
+                    {'f': str(funcionario.id)},
+                ).scalars()
+            )
+
+    try:
+        command.upgrade(config, 'head')
+        loja, perfis = criar_loja(engine, 'loja-x')
+        funcionario = criar_funcionario(engine, loja, perfis['Profissional'], 'p@x.com')
+        with engine.connect() as conexao:
+            textos = {
+                c: (leitura, escrita)
+                for c, leitura, escrita in conexao.execute(
+                    text('SELECT codigo, leitura, escrita FROM recursos')
+                )
+            }
+        assert len(textos) == 12
+        assert textos['clientes'] == ('Ver lista e ficha', 'Cadastrar, editar, inativar')
+        assert textos['locais'] == (
+            'Ver salas, cadeiras, links online...',
+            'Cadastrar, editar, inativar e definir como a loja chama os locais',
+        )
+        assert logar(funcionario) == []  # o login ficou fora da auditoria
+
+        command.downgrade(config, '0003')
+        with engine.connect() as conexao:
+            colunas = {c['name'] for c in inspect(conexao).get_columns('recursos')}
+            funcao = conexao.execute(text("SELECT count(*) FROM pg_proc WHERE proname = 'so_dados_de_login'"))
+            assert funcao.scalar() == 0
+        assert {'leitura', 'escrita'}.isdisjoint(colunas)
+        assert logar(funcionario) == [['senha_hash', 'ultimo_login_em']]  # comportamento da 0003
+
+        command.upgrade(config, 'head')
+        assert len(logar(funcionario)) == 1  # o novo login não entrou
+    finally:
+        engine.dispose()
+        servidor = create_engine(url.set(database='postgres'), isolation_level='AUTOCOMMIT')
+        with servidor.connect() as conexao:
+            conexao.execute(text(f'DROP DATABASE IF EXISTS "{url.database}" WITH (FORCE)'))
+        servidor.dispose()

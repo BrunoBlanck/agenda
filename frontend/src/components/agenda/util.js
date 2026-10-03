@@ -1,18 +1,30 @@
-import dayjs from 'dayjs'
 import { cores } from '../../tema.js'
+import { agoraNaLoja } from '../../data/api/conversao.js'
 
 // Cor de quem não tem cor definida na agenda
 export const COR_PADRAO = cores.textoTerciario
 
 export const minutosDe = (hora) => {
-  const [h, m] = hora.split(':').map(Number)
-  return h * 60 + m
+  const [h, m] = String(hora ?? '').split(':').map(Number)
+  return Number.isFinite(h) && Number.isFinite(m) ? h * 60 + m : 0
 }
+
+export const MINUTOS_DIA = 24 * 60
 
 export const horaDe = (minutos) =>
   `${String(Math.floor(minutos / 60)).padStart(2, '0')}:${String(minutos % 60).padStart(2, '0')}`
 
-export const fimDe = (a) => horaDe(minutosDe(a.hora) + (a.duracao ?? 0))
+// Hora do fim (depois da meia-noite volta a contar do zero: 23h + 2h = 1h)
+export const fimDe = (a) => a.horaFim ?? horaDe((minutosDe(a.hora) + (a.duracao ?? 0)) % MINUTOS_DIA)
+
+// Agendamento que começa num dia e termina no seguinte (ex.: 23h às 1h)
+export const passaDaMeiaNoite = (a) => minutosDe(a.hora) + (a.duracao ?? 0) > MINUTOS_DIA
+
+// Cor do profissional na agenda (vem com o agendamento da API)
+export const corDe = (a) => a?.cor ?? COR_PADRAO
+
+// Local do agendamento para o LocalInfo (null = sem local)
+export const localDe = (a) => (a?.localId ? { nome: a.localNome ?? '—', tipo: a.localTipo } : null)
 
 // Cancelados e faltas aparecem esmaecidos e não contam como horário ocupado
 export const inativo = (a) => a.status === 'cancelado' || a.status === 'nao_compareceu'
@@ -32,7 +44,8 @@ export const nomesDias = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb']
 
 export const mesmoDia = (a, b) => a.isSame(b, 'day')
 
-export const ehHoje = (d) => d.isSame(dayjs(), 'day')
+// "Hoje" é o dia da loja, não o do navegador
+export const ehHoje = (d) => d.isSame(agoraNaLoja(), 'day')
 
 // Distribui agendamentos sobrepostos lado a lado (coluna e total de colunas do grupo)
 export function distribuir(eventos) {

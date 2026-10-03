@@ -7,7 +7,8 @@ from sqlalchemy import text
 from app.auth.dependencias import DbDep
 from app.config import get_settings
 from app.erros import registrar_tratadores
-from app.routers import loja, site, superadmin
+from app.limites import LimiteDoCorpo
+from app.routers import arquivos, loja, site, superadmin
 
 
 def criar_app() -> FastAPI:
@@ -20,6 +21,7 @@ def criar_app() -> FastAPI:
         redoc_url=None,
         openapi_url=None if settings.ambiente == 'producao' else '/openapi.json',
     )
+    app.add_middleware(LimiteDoCorpo)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_origens,
@@ -37,6 +39,7 @@ def criar_app() -> FastAPI:
     app.include_router(loja.router)
     app.include_router(superadmin.router)
     app.include_router(site.router)
+    app.include_router(arquivos.router)
     return app
 
 

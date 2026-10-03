@@ -38,7 +38,10 @@ def test_ler_e_editar_dados_da_loja(cliente, lojas, engine_dono):
     assert corpo['uf'] == 'SP'
     assert corpo['complemento'] is None
     assert (corpo['slug'], corpo['status']) == ('loja-a', 'ativa')  # só o superadmin muda
-    assert (corpo['atualizado_por'], corpo['atualizado_por_nome']) == ('funcionario', 'Admin')
+    # Mesmo contrato do Controle das outras rotas: uuid do funcionário + nome, no fuso da loja
+    assert (corpo['atualizado_por'], corpo['atualizado_por_nome']) == (str(a.admin.id), 'Admin')
+    assert corpo['atualizado_em'].endswith('-03:00')
+    assert corpo['criado_em'].endswith('-03:00')
     with engine_dono.connect() as conexao:
         quem = conexao.execute(select(Loja.atualizado_por_funcionario).where(Loja.id == a.loja.id)).scalar()
     assert quem == a.admin.id
@@ -76,13 +79,15 @@ def test_remover_logo(cliente, lojas, engine_dono):
     assert cliente.get(URL, headers=a.h_admin).json()['logo_url'] is None
 
 
-def test_alteracao_do_superadmin_aparece_como_superadmin(cliente, lojas, engine_dono):
+def test_alteracao_do_superadmin_fica_sem_autor(cliente, lojas, engine_dono):
+    """GER-13: alteração do superadmin deixa atualizado_por nulo (o front mostra "Superadmin")."""
     a, _ = lojas
+    cliente.put(URL, json=DADOS, headers=a.h_admin)
     admin = criar_superadmin(engine_dono)
     with sessao(engine_dono, 'superadmin', superadmin_id=admin.id) as db:
         db.get(Loja, a.loja.id).telefone = '(11) 0000-0000'
     corpo = cliente.get(URL, headers=a.h_admin).json()
-    assert (corpo['atualizado_por'], corpo['atualizado_por_nome']) == ('superadmin', 'Admin')
+    assert (corpo['atualizado_por'], corpo['atualizado_por_nome']) == (None, None)
 
 
 def test_permissoes(cliente, lojas):

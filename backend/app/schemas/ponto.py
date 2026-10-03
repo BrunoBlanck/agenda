@@ -4,13 +4,18 @@ from datetime import date, datetime
 from typing import Literal
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from app.models.enums import OrigemPonto
-from app.schemas.comum import Controle, Entrada, texto
+from app.schemas.comum import Controle, DataHora, Entrada, texto
+
+AcaoPonto = Literal['entrada', 'saida']
 
 
 class RegistrarEntrada(Entrada):
+    acao: AcaoPonto = Field(
+        description='O que o usuário pediu: entrada ou saída. Se não bater com a situação atual = 409'
+    )
     funcionario_id: UUID | None = Field(
         default=None,
         description='Vazio = o próprio usuário. Outro funcionário exige escrita em Ponto da equipe',
@@ -18,8 +23,8 @@ class RegistrarEntrada(Entrada):
 
 
 class CorrecaoEntrada(Entrada):
-    entrada: datetime = Field(description='Sem fuso, vale o horário da loja')
-    saida: datetime | None = None
+    entrada: DataHora = Field(description='Sem fuso, vale o horário da loja')
+    saida: DataHora | None = None
     justificativa: texto() = Field(description='Motivo da correção (obrigatório)')
 
 
@@ -42,7 +47,7 @@ class RegistroSaida(Controle):
 
 
 class RegistroFeito(BaseModel):
-    acao: Literal['entrada', 'saida']
+    acao: AcaoPonto
     registro: RegistroSaida
 
 
@@ -60,3 +65,14 @@ class PontoPeriodo(BaseModel):
     totais: list[TotalDia] = Field(
         description='Horas trabalhadas por funcionário e dia (só registros fechados)'
     )
+
+
+class FuncionarioPonto(BaseModel):
+    """Funcionário para escolher no ponto da equipe (registrar, lançar e filtrar)."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    nome: str
+    cor_agenda: str | None
+    ativo: bool

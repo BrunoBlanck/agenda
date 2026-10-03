@@ -1,9 +1,10 @@
 import { useState } from 'react'
-import { Button, Flex, Segmented, Select, Tooltip } from 'antd'
+import { Alert, Button, Flex, Segmented, Select, Tooltip } from 'antd'
 import { LeftOutlined, MenuFoldOutlined, PlusOutlined, RightOutlined } from '@ant-design/icons'
-import dayjs from 'dayjs'
-import { useData } from '../data/DataContext.jsx'
 import { useAcesso } from '../data/useAcesso.js'
+import { useAgenda } from '../data/useAgenda.js'
+import { useFiltrosAgenda } from '../data/useAgendamentos.js'
+import { agoraNaLoja } from '../data/api/conversao.js'
 import AgendamentoPainel from '../components/AgendamentoPainel.jsx'
 import { usePainel } from '../components/base/usePainel.js'
 import VisaoSemana from '../components/agenda/VisaoSemana.jsx'
@@ -13,7 +14,6 @@ import Pagina from '../components/base/Pagina.jsx'
 import Secao from '../components/base/Secao.jsx'
 import PontoCor from '../components/base/PontoCor.jsx'
 import { COR_PADRAO, diasDaSemana, diasDoMes, minutosDe } from '../components/agenda/util.js'
-import { alvoBloqueio, bloqueioAtinge, jornadaDe } from '../data/horarios.js'
 import { capitalizar } from '../utils/formatos.js'
 import '../components/agenda/agenda.css'
 
@@ -45,11 +45,10 @@ const tituloPeriodo = (modo, referencia) => {
 }
 
 export default function Agenda() {
-  const { agendamentos, funcionarios, perfis, jornadas, bloqueios } = useData()
-  const { agenda, usuario, moduloAtivo } = useAcesso()
+  const { agenda, moduloAtivo } = useAcesso()
   const [modo, setModo] = useState('semana')
-  const [referencia, setReferencia] = useState(dayjs()) // semana/mês exibido
-  const [dia, setDia] = useState(dayjs()) // dia detalhado no painel lateral
+  const [referencia, setReferencia] = useState(agoraNaLoja) // semana/mês exibido (no dia da loja)
+  const [dia, setDia] = useState(agoraNaLoja) // dia detalhado no painel lateral
   const [profissional, setProfissional] = useState(null)
   const painelAgendamento = usePainel() // agendamento aberto; {hora} = novo naquele horário
   const [painelAberto, setPainelAberto] = useState(lerPainel)
@@ -58,20 +57,30 @@ export default function Agenda() {
     gravarPainel(aberto)
   }
 
-  const func = (id) => funcionarios.itens.find((f) => f.id === id)
+  // Período da tela: a semana ou a grade do mês (6 semanas). O servidor devolve só o que o usuário
+  // pode ver (quem só tem Minha agenda recebe só os próprios) e os bloqueios que atingem o filtro.
+  const dias = modo === 'semana' ? diasDaSemana(referencia) : diasDoMes(referencia)
+  const filtros = useFiltrosAgenda({ ativo: agenda.verEquipe })
+  const funcionarioId = agenda.verEquipe ? profissional : null
+  const periodo = useAgenda({ inicio: dias[0], fim: dias.at(-1), funcionarioId })
 
-  // Quem só vê a própria agenda fica sempre filtrado em si mesmo
-  const filtroFunc = agenda.verEquipe ? profissional : usuario?.id
-  const visiveis = agendamentos.itens.filter(agenda.ver).filter((a) => !filtroFunc || a.funcionarioId === filtroFunc)
+  // Ao trocar de semana/mês/profissional a consulta mantém os dados antigos até a resposta chegar.
+  // Guarda qual período terminou de carregar por último: enquanto não for o da tela, a grade mostra
+  // o formato dela vazio (blocos cinza), em vez de uma semana que parece livre.
+  const chavePeriodo = `${dias[0].format('YYYY-MM-DD')}|${dias.at(-1).format('YYYY-MM-DD')}|${funcionarioId ?? ''}`
+  const [carga, setCarga] = useState({ buscando: periodo.atualizando, chave: null })
+  if (carga.buscando !== periodo.atualizando) {
+    setCarga({ buscando: periodo.atualizando, chave: periodo.atualizando ? carga.chave : chavePeriodo })
+  }
+  const carregandoPeriodo = carga.chave !== chavePeriodo
+  const visiveis = periodo.agendamentos
   // quem: para quem é o bloqueio (null = loja inteira)
-  const bloqueiosVisiveis = bloqueios.itens
-    .filter((b) => !filtroFunc || bloqueioAtinge(b, func(filtroFunc)))
-    .map((b) => ({ ...b, quem: alvoBloqueio(b, funcionarios.itens, perfis.itens) }))
+  const bloqueiosVisiveis = periodo.bloqueios
 
   // Faixa de horas da semana: cobre as jornadas e os agendamentos, com mínimo de 8h às 18h
   const minutosUsados = [
-    ...(filtroFunc ? jornadaDe(func(filtroFunc), jornadas.itens) : jornadas.itens).flatMap((j) => [minutosDe(j.inicio), minutosDe(j.fim)]),
-    ...visiveis.flatMap((a) => [minutosDe(a.hora), minutosDe(a.hora) + (a.duracao ?? 0)]),
+    ...periodo.jornadas.flatMap((j) => [minutosDe(j.inicio), minutosDe(j.fim)]),
+    ...visiveis.flatMap((a) => [minutosDe(a.hora), Math.min(24 * 60, minutosDe(a.hora) + (a.duracao ?? 0))]),
   ]
   const horaInicio = Math.min(8, ...minutosUsados.map((m) => Math.floor(m / 60)))
   const horaFim = Math.min(24, Math.max(18, ...minutosUsados.map((m) => Math.ceil(m / 60))))
@@ -80,12 +89,12 @@ export default function Agenda() {
     const nova = referencia.add(passo, unidade[modo])
     setReferencia(nova)
     if (modo === 'semana') setDia(dia.add(passo, 'week'))
-    else setDia(nova.isSame(dayjs(), 'month') ? dayjs() : nova.startOf('month'))
+    else setDia(nova.isSame(agoraNaLoja(), 'month') ? agoraNaLoja() : nova.startOf('month'))
   }
 
   const irParaHoje = () => {
-    setReferencia(dayjs())
-    setDia(dayjs())
+    setReferencia(agoraNaLoja())
+    setDia(agoraNaLoja())
   }
 
   const trocarModo = (novo) => {
@@ -130,13 +139,15 @@ export default function Agenda() {
                   placeholder="Todos os profissionais"
                   aria-label="Profissional"
                   value={profissional}
-                  onChange={setProfissional}
-                  options={funcionarios.itens.map((f) => ({
+                  onChange={(id) => setProfissional(id ?? null)}
+                  loading={filtros.carregando}
+                  notFoundContent={filtros.erro ? filtros.erro.mensagem : undefined}
+                  options={filtros.profissionais.map((f) => ({
                     value: f.id,
                     label: (
                       <Flex align="center" gap={8}>
                         <PontoCor cor={f.cor ?? COR_PADRAO} />
-                        {f.nome}
+                        {f.ativo ? f.nome : `${f.nome} (inativo)`}
                       </Flex>
                     ),
                   }))}
@@ -160,29 +171,47 @@ export default function Agenda() {
             </div>
           </div>
 
-          {modo === 'semana' ? (
-            <VisaoSemana
-              dias={diasDaSemana(referencia)}
-              agendamentos={visiveis}
-              bloqueios={bloqueiosVisiveis}
-              horaInicio={horaInicio}
-              horaFim={horaFim}
-              diaSelecionado={dia}
-              onSelecionarDia={setDia}
-              onAbrir={abrir}
-              onNovo={agenda.criar ? novo : null}
-              destaqueId={painelAgendamento.destaqueId}
-            />
-          ) : (
-            <VisaoMes
-              dias={diasDoMes(referencia)}
-              mes={referencia}
-              agendamentos={visiveis}
-              bloqueios={bloqueiosVisiveis}
-              diaSelecionado={dia}
-              onSelecionarDia={setDia}
+          {periodo.erro && (
+            <Alert
+              type="error"
+              showIcon
+              title="Não foi possível carregar a agenda."
+              description={periodo.erro.mensagem}
+              action={
+                <Button size="small" onClick={periodo.recarregar}>
+                  Tentar de novo
+                </Button>
+              }
+              className="agenda-erro"
             />
           )}
+          <div aria-busy={periodo.atualizando}>
+            {modo === 'semana' ? (
+              <VisaoSemana
+                dias={dias}
+                agendamentos={visiveis}
+                bloqueios={bloqueiosVisiveis}
+                horaInicio={horaInicio}
+                horaFim={horaFim}
+                diaSelecionado={dia}
+                onSelecionarDia={setDia}
+                onAbrir={abrir}
+                onNovo={agenda.criar ? novo : null}
+                destaqueId={painelAgendamento.destaqueId}
+                carregando={carregandoPeriodo}
+              />
+            ) : (
+              <VisaoMes
+                dias={dias}
+                mes={referencia}
+                agendamentos={visiveis}
+                bloqueios={bloqueiosVisiveis}
+                diaSelecionado={dia}
+                onSelecionarDia={setDia}
+                carregando={carregandoPeriodo}
+              />
+            )}
+          </div>
         </Secao>
 
         {painelAberto && (
@@ -196,7 +225,9 @@ export default function Agenda() {
             comLocais={moduloAtivo('locais')}
             onNovo={() => novo(dia)}
             onAbrir={abrir}
+            onRespondido={periodo.recarregar}
             destaqueId={painelAgendamento.destaqueId}
+            carregando={carregandoPeriodo}
             onFechar={() => alternarPainel(false)}
           />
         )}
@@ -207,6 +238,7 @@ export default function Agenda() {
         dataInicial={dia}
         horaInicial={painelAgendamento.registro?.id ? null : painelAgendamento.registro?.hora}
         onClose={painelAgendamento.fechar}
+        onSalvo={periodo.recarregar}
       />
     </Pagina>
   )

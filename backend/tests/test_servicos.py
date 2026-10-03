@@ -3,7 +3,7 @@
 from sqlalchemy import select
 
 from app.models import Auditoria, ServicoFuncionario
-from tests.fabricas import mudar_modulo
+from tests.fabricas import mudar_modulo, usuario_com
 
 URL = '/api/loja/servicos'
 
@@ -188,3 +188,33 @@ def test_isolamento_entre_lojas(cliente, lojas):
         == 422
     )
     assert cliente.get(URL, headers=b.h_admin).json() == []
+
+
+def test_opcoes_do_formulario(cliente, lojas, engine_dono):
+    """GET /servicos/opcoes: só ativos, da própria loja, sem exigir Funcionários/Locais/Materiais."""
+    a, b = lojas
+    sala = _local(cliente, a.h_admin, 'Sala 1')
+    cliente.post('/api/loja/locais', json={'nome': 'Sala velha', 'ativo': False}, headers=a.h_admin)
+    luvas = _material(cliente, a.h_admin, 'Luvas')
+    cliente.post('/api/loja/materiais', json={'nome': 'Gaze', 'ativo': False}, headers=a.h_admin)
+    _local(cliente, b.h_admin, 'Sala da loja B')
+
+    so_servicos = usuario_com(engine_dono, a.loja, {'servicos': 'escrita'})
+    resposta = cliente.get(f'{URL}/opcoes', headers=so_servicos)
+    assert resposta.status_code == 200, resposta.json()
+    corpo = resposta.json()
+    assert {p['nome'] for p in corpo['profissionais']} >= {'Admin', 'Profissional', 'Recepção'}
+    assert corpo['locais'] == [{'id': sala, 'nome': 'Sala 1', 'tipo': 'presencial'}]
+    assert corpo['materiais'] == [{'id': luvas, 'nome': 'Luvas', 'unidade': 'un'}]
+
+    # Módulos desligados: listas nulas (o formulário esconde os campos)
+    mudar_modulo(engine_dono, a.loja.id, 'locais', habilitado=False)
+    mudar_modulo(engine_dono, a.loja.id, 'materiais', habilitado=False)
+    corpo = cliente.get(f'{URL}/opcoes', headers=a.h_admin).json()
+    assert corpo['locais'] is None
+    assert corpo['materiais'] is None
+
+    # Só leitura em Serviços (Recepção) não precisa das opções
+    assert cliente.get(f'{URL}/opcoes', headers=a.h_recepcao).status_code == 403
+    mudar_modulo(engine_dono, a.loja.id, 'servicos', habilitado=False)
+    assert cliente.get(f'{URL}/opcoes', headers=a.h_admin).status_code == 403

@@ -8,13 +8,13 @@ A lista de perfis (id, nome e funcionários) também é liberada para quem tem l
 Funcionários, para escolher o perfil no cadastro (lista de apoio, 2.2).
 """
 
-from datetime import date
 from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy import and_, func, or_, select
 
+from app.auth.catalogo import PESO
 from app.auth.dependencias import ContextoLoja, ContextoLojaDep, exigir
 from app.models import (
     BloqueioAgenda,
@@ -26,7 +26,7 @@ from app.models import (
     Recurso,
 )
 from app.models.enums import NivelAcesso
-from app.schemas.comum import Erro
+from app.schemas.comum import Data, Erro
 from app.schemas.perfis import (
     AcessosEntrada,
     BloqueioEntrada,
@@ -39,6 +39,7 @@ from app.schemas.perfis import (
     PerfilSaida,
     RecursoSaida,
 )
+from app.services.acesso import acima_do_teto, niveis_do_perfil
 from app.services.comum import (
     buscar,
     com_autor,
@@ -48,6 +49,7 @@ from app.services.comum import (
     intervalo_de_dias,
     invalido,
     no_fuso,
+    proibido,
 )
 from app.services.disponibilidade import descrever_bloqueios
 
@@ -55,6 +57,8 @@ ERROS = {403: {'model': Erro}, 404: {'model': Erro}, 409: {'model': Erro}}
 router = APIRouter(tags=['Loja: perfis e horários'], responses=ERROS)
 
 MSG_404 = 'Perfil não encontrado.'
+MSG_PROPRIO_PERFIL = 'Você não pode alterar o seu próprio perfil de acesso.'
+MSG_ACIMA_DO_SEU = 'Você não pode conceder um nível de acesso maior que o seu.'
 
 VerPerfis = Annotated[ContextoLoja, Depends(exigir(('perfis_acesso', 'config_agendamentos', 'funcionarios')))]
 EscritaPerfis = Annotated[ContextoLoja, Depends(exigir('perfis_acesso', 'escrita'))]
@@ -77,6 +81,8 @@ def recursos(ctx: ContextoLojaDep) -> list[RecursoSaida]:
             codigo=r.codigo,
             nome=r.nome,
             descricao=r.descricao,
+            leitura=r.leitura,
+            escrita=r.escrita,
             modulo=modulo,
             modulo_ativo=ctx.acesso.modulo_ativo(modulo),
             ordem=r.ordem,
@@ -123,6 +129,14 @@ def _perfis(ctx: ContextoLoja, perfis: list[Perfil]) -> list[PerfilSaida]:
             item.acessos = niveis[p.id]
         saida.append(item)
     return com_autor(db, ctx.loja_id, saida)
+
+
+def _sem_escalada(ctx: ContextoLoja, niveis: dict[str, NivelAcesso]) -> None:
+    """403 se ``niveis`` passa do nível de quem age em algum recurso (ACE-19)."""
+    if ctx.perfil.acesso_total:
+        return
+    if acima_do_teto(niveis, niveis_do_perfil(ctx.db, ctx.loja_id, ctx.perfil)):
+        raise proibido(MSG_ACIMA_DO_SEU)
 
 
 def _definir_niveis(ctx: ContextoLoja, perfil: Perfil, niveis: dict[str, NivelAcesso]) -> None:
@@ -175,6 +189,8 @@ def obter_perfil(perfil_id: UUID, ctx: VerPerfis) -> PerfilSaida:
 )
 def criar_perfil(dados: PerfilNovo, ctx: EscritaPerfis) -> PerfilSaida:
     base = buscar(ctx.db, Perfil, ctx.loja_id, dados.copiar_de, MSG_404) if dados.copiar_de else None
+    if base is not None and not base.acesso_total:
+        _sem_escalada(ctx, niveis_do_perfil(ctx.db, ctx.loja_id, base))
     perfil = Perfil(loja_id=ctx.loja_id, nome=dados.nome, descricao=dados.descricao)
     ctx.db.add(perfil)
     ctx.db.flush()
@@ -211,6 +227,8 @@ def criar_perfil(dados: PerfilNovo, ctx: EscritaPerfis) -> PerfilSaida:
 @router.put('/perfis/{perfil_id}', summary='Renomear perfil (perfis padrão não são renomeados)')
 def editar_perfil(perfil_id: UUID, dados: PerfilEdicao, ctx: EscritaPerfis) -> PerfilSaida:
     perfil = buscar(ctx.db, Perfil, ctx.loja_id, perfil_id, MSG_404)
+    if perfil.id == ctx.perfil.id and not ctx.perfil.acesso_total:
+        raise proibido(MSG_PROPRIO_PERFIL)
     if perfil.padrao and dados.nome != perfil.nome:
         raise conflito('Perfis padrão não podem ser renomeados.')
     perfil.nome, perfil.descricao = dados.nome, dados.descricao
@@ -223,6 +241,18 @@ def definir_acessos(perfil_id: UUID, dados: AcessosEntrada, ctx: EscritaPerfis) 
     perfil = buscar(ctx.db, Perfil, ctx.loja_id, perfil_id, MSG_404)
     if perfil.acesso_total:
         raise conflito('O perfil Administrador tem escrita em tudo e não pode ser alterado.')
+    if perfil.id == ctx.perfil.id:
+        raise proibido(MSG_PROPRIO_PERFIL)
+    # Só o que sobe conta como concessão: reenviar um nível que o perfil já tem não é escalada
+    atuais = niveis_do_perfil(ctx.db, ctx.loja_id, perfil)
+    _sem_escalada(
+        ctx,
+        {
+            codigo: nivel
+            for codigo, nivel in dados.acessos.items()
+            if codigo in atuais and PESO[nivel] > PESO[atuais[codigo]]
+        },
+    )
     _definir_niveis(ctx, perfil, dados.acessos)
     return _perfis(ctx, [perfil])[0]
 
@@ -314,8 +344,8 @@ def listar_bloqueios(
     funcionario_id: Annotated[
         UUID | None, Query(description='Os que atingem o funcionário: loja, perfil dele e ele próprio')
     ] = None,
-    inicio: Annotated[date | None, Query(description='Só os que terminam a partir deste dia')] = None,
-    fim: Annotated[date | None, Query(description='Só os que começam até este dia')] = None,
+    inicio: Annotated[Data | None, Query(description='Só os que terminam a partir deste dia')] = None,
+    fim: Annotated[Data | None, Query(description='Só os que começam até este dia')] = None,
 ) -> list[BloqueioSaida]:
     zona = fuso(ctx.loja.fuso_horario)
     da_loja = and_(BloqueioAgenda.perfil_id.is_(None), BloqueioAgenda.funcionario_id.is_(None))

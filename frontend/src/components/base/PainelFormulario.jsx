@@ -18,6 +18,7 @@ const focarPrimeiroCampo = (el) => {
 // extra(fechar): ações no cabeçalho; fechar(depois) respeita o aviso de alterações não salvas.
 // children também pode ser uma função (fechar) => campos, para atalhos dentro do formulário.
 // rodape: informação à esquerda do rodapé (ex.: última alteração). somenteLeitura: só o botão Fechar.
+// salvando: envio em andamento (botão com carregamento e campos travados: evita duplo envio).
 // Fechar (X, Esc, clique fora ou Cancelar) com alterações pendentes pede confirmação antes de descartar.
 export default function PainelFormulario({
   titulo,
@@ -31,6 +32,7 @@ export default function PainelFormulario({
   onSalvar,
   textoSalvar = 'Salvar',
   somenteLeitura = false,
+  salvando = false,
   largura,
   rodape,
   extra,
@@ -53,6 +55,7 @@ export default function PainelFormulario({
       onCancelar()
       if (typeof depois === 'function') depois()
     }
+    if (salvando) return
     if (!alterado) return sair()
     modal.confirm({
       title: 'Descartar alterações?',
@@ -93,8 +96,10 @@ export default function PainelFormulario({
               <Button onClick={onCancelar}>Fechar</Button>
             ) : (
               <>
-                <Button onClick={() => fechar()}>Cancelar</Button>
-                <Button type="primary" onClick={() => form.submit()}>
+                <Button onClick={() => fechar()} disabled={salvando}>
+                  Cancelar
+                </Button>
+                <Button type="primary" loading={salvando} onClick={() => form.submit()}>
                   {textoSalvar}
                 </Button>
               </>
@@ -109,8 +114,10 @@ export default function PainelFormulario({
           layout="vertical"
           preserve={false}
           initialValues={valoresIniciais}
-          disabled={somenteLeitura}
-          onFinish={onSalvar}
+          disabled={somenteLeitura || salvando}
+          onFinish={(valores) => {
+            if (!salvando) onSalvar(valores)
+          }}
           onValuesChange={(...args) => {
             setAlterado(true)
             onValuesChange?.(...args)

@@ -1,19 +1,27 @@
 """Visão geral da plataforma (/api/superadmin/visao-geral)."""
 
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from typing import Annotated
 
 from fastapi import APIRouter, Query
-from sqlalchemy import func, select
+from sqlalchemy import cast, func, not_, or_, select
+from sqlalchemy.dialects.postgresql import ARRAY
+from sqlalchemy.types import Text
 
 from app.auth.dependencias import ContextoSuperadminDep
-from app.models import Auditoria, Funcionalidade, Funcionario, Loja, Plano
-from app.models.enums import StatusLoja, TipoLoja
-from app.schemas.superadmin import AcaoRecente, ModuloEmUso, VisaoGeral
+from app.models import Auditoria, Funcionalidade, Funcionario, Loja, LojaFuncionalidade, Plano
+from app.models.enums import OperacaoAuditoria, StatusLoja, TipoLoja
+from app.schemas.superadmin import AcaoRecente, ModuloEmUso, ModuloExpirando, VisaoGeral
 from app.services.auditoria import nome_tabela
+from app.services.comum import fuso
 from app.services.plataforma import modulos_opcionais_por_loja, nomes_superadmins
 
 router = APIRouter(tags=['Superadmin: visão geral'])
+
+AVISO_PRAZO = timedelta(days=30)
+# Entrar no sistema atualiza o último acesso (e a auditoria registra): não é uma "ação" do admin
+SO_LOGIN = ['ultimo_login_em', 'atualizado_em']
 
 
 @router.get('/visao-geral', summary='Números da plataforma e últimas ações dos admins')
@@ -62,10 +70,54 @@ def visao_geral(
         for codigo, nome in opcionais
     ]
 
+    agora = datetime.now(UTC)
+    expirando = []
+    if ids_ativas:
+        linhas = db.execute(
+            select(
+                Loja.id,
+                Loja.nome_fantasia,
+                Loja.nome,
+                Loja.fuso_horario,
+                Funcionalidade.codigo,
+                Funcionalidade.nome,
+                LojaFuncionalidade.expira_em,
+            )
+            .join(LojaFuncionalidade, LojaFuncionalidade.loja_id == Loja.id)
+            .join(Funcionalidade, Funcionalidade.id == LojaFuncionalidade.funcionalidade_id)
+            .where(
+                Loja.id.in_(ids_ativas),
+                Funcionalidade.opcional,
+                LojaFuncionalidade.habilitado,
+                LojaFuncionalidade.excluido_em.is_(None),
+                LojaFuncionalidade.expira_em.is_not(None),
+                LojaFuncionalidade.expira_em <= agora + AVISO_PRAZO,
+            )
+            .order_by(LojaFuncionalidade.expira_em, Loja.id)
+        ).all()
+        expirando = [
+            ModuloExpirando(
+                loja_id=loja_id,
+                loja_nome=fantasia or nome,
+                codigo=codigo,
+                nome=modulo,
+                expira_em=expira_em.astimezone(fuso(fuso_horario)),
+                vencido=expira_em <= agora,
+            )
+            for loja_id, fantasia, nome, fuso_horario, codigo, modulo, expira_em in linhas
+        ]
+
     ultimas = list(
         db.scalars(
             select(Auditoria)
-            .where(Auditoria.superadmin_id.is_not(None))
+            .where(
+                Auditoria.superadmin_id.is_not(None),
+                or_(
+                    Auditoria.operacao != OperacaoAuditoria.alterar,
+                    Auditoria.campos_alterados.is_(None),
+                    not_(Auditoria.campos_alterados.contained_by(cast(SO_LOGIN, ARRAY(Text)))),
+                ),
+            )
             .order_by(Auditoria.id.desc())
             .limit(acoes)
         )
@@ -89,6 +141,7 @@ def visao_geral(
         receita_mensal=receita,
         lojas_por_tipo=por_tipo,
         modulos_em_uso=em_uso,
+        modulos_expirando=expirando,
         ultimas_acoes=[
             AcaoRecente(
                 id=a.id,

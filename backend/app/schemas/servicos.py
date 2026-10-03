@@ -7,6 +7,7 @@ from pydantic import BaseModel, Field, field_validator
 
 from app.models.enums import TipoLocal
 from app.schemas.comum import (
+    LISTA_MAX,
     Controle,
     DecimalSaida,
     Dinheiro,
@@ -30,14 +31,18 @@ class ServicoEntrada(Entrada):
     duracao_minutos: int = Field(gt=0, le=24 * 60)
     preco: Dinheiro | None = None
     ativo: bool = True
-    funcionario_ids: list[UUID] = Field(default_factory=list, description='Profissionais que realizam')
+    funcionario_ids: list[UUID] = Field(
+        default_factory=list, max_length=LISTA_MAX, description='Profissionais que realizam'
+    )
     local_ids: list[UUID] | None = Field(
         default=None,
+        max_length=LISTA_MAX,
         description='Onde pode acontecer ([] = qualquer local ativo). Nulo = não muda. '
         'Ignorado com o módulo Locais desligado.',
     )
     materiais: list[MaterialDoServico] | None = Field(
         default=None,
+        max_length=LISTA_MAX,
         description='Materiais por atendimento. Nulo = não muda. Ignorado com o módulo Materiais desligado.',
     )
 
@@ -77,3 +82,15 @@ class ServicoSaida(Controle):
     local_ids: list[UUID] = Field(default_factory=list, description='Vazio = qualquer local ativo')
     locais: list[LocalDoServico] = Field(default_factory=list)
     materiais: list[MaterialDoServicoSaida] = Field(default_factory=list)
+
+
+class MaterialOpcao(Referencia):
+    unidade: str
+
+
+class OpcoesServico(BaseModel):
+    """Listas do formulário de serviço (só itens ativos), sem exigir acesso a Funcionários ou Materiais."""
+
+    profissionais: list[Referencia]
+    locais: list[LocalDoServico] | None = Field(description='Nulo = módulo Locais desligado')
+    materiais: list[MaterialOpcao] | None = Field(description='Nulo = módulo Materiais desligado')

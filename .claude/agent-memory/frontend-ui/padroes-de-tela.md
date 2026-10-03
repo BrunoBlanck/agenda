@@ -1,0 +1,26 @@
+---
+name: padroes-de-tela
+description: Padrões de montagem de tela e armadilhas do antd 6 encontradas neste projeto (painel lateral + Form, Drawer className, Table scroll, Enter para enviar)
+metadata:
+  type: project
+---
+
+Padrões adotados em 2026-10-02 e armadilhas confirmadas na prática.
+
+**Why:** evitar repetir investigação e manter todas as telas iguais.
+
+**How to apply:**
+- Toda tela começa com `Pagina` (título, descrição, ações) e agrupa em `Secao` (`rente` para tabela encostada). Cadastros simples usam `CadastroTabela`, que já monta a página inteira.
+- Formulário por cima da tela = painel lateral (ver [[painel-lateral]]); `valoresIniciais` + `destroyOnHidden` + `preserve={false}`, nada de `useEffect` para preencher. Padrões de registro novo vão em `valoresNovo`/`valoresIniciais`, nunca `initialValue` no Form.Item (gera aviso "Form already set initialValues"). Um botão submit oculto faz o Enter enviar.
+- Form.List com `preserve={false}` no Form: os Form.Item dos itens precisam de `preserve`, senão o StrictMode (dev) apaga os valores dos itens ao montar.
+- message/modal via `App.useApp()` (main.jsx envolve em `<AntApp>`); não usar `message.useMessage` + contextHolder.
+- antd 6: `className` do Drawer vai no próprio `.ant-drawer-section` (não num ancestral) — seletor CSS no mesmo elemento.
+- `Tabela` usa `scroll.x = 'max-content'`, que impede quebra de linha; tabelas com texto longo passam `scroll={{ x: <número> }}` (CadastroTabela: prop `larguraTabela`).
+- Rotas com `lazy()`; fallback das telas fica na Casca (skeleton), com `LimiteErro` por rota.
+- Vite 8: chunks manuais via `build.rolldownOptions.output.codeSplitting.groups` (manualChunks foi removido).
+- `useConsulta` (data/api) mantém os dados antigos ao trocar a chave (semana, filtro): `carregando` fica false e só `atualizando` liga. Skeleton por período precisa saber qual chave terminou de carregar (Agenda.jsx guarda `carga.chave` com setState na renderização quando `atualizando` muda). Senão a semana nova aparece "vazia" enquanto carrega.
+- Carregando = skeleton no formato real: grade da semana com blocos `.agenda-fantasma`, mês com `.agenda-fantasma-linha`, listas do Início com `CarregandoLinhas`. Nada de `Spin`/"Carregando…" (UI-22). Skeleton com animação própria precisa de `animation: none` em `prefers-reduced-motion` (a regra global só encurta a duração e um loop infinito de 0,01 ms pisca).
+- Agendamento que passa da meia-noite (decisão 2026-10-02): na semana é cortado às 24h (borda de baixo tracejada + "continua amanhã até 1h") e a sobra aparece no topo do dia seguinte (borda de cima tracejada, "até 1h"); se a sobra termina antes da primeira hora da grade, vira aviso compacto de 22 px no topo, sem esticar a grade até 0h. A API de agenda devolve por sobreposição, então o agendamento do sábado anterior vem junto para a continuação do domingo.
+- Permissão por parte da tela (UI-25): em telas com duas permissões (Perfis e horários = `perfis_acesso` + `config_agendamentos`), a etiqueta "Somente leitura" vai no cabeçalho só quando tudo é leitura; senão vai em `tabBarExtraContent` da aba que não pode alterar.
+- ACE-19 na tela: a API compara os níveis **gravados** no perfil (não os efetivos com módulo desligado). Para desabilitar opções, use `perfil.acessos` da lista de perfis (meu perfil = teto), não `useAcesso().nivel`, que dá falso bloqueio com módulo desligado.
+Relacionado: [[identidade-visual]]

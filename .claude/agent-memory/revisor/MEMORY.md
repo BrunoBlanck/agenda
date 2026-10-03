@@ -1,0 +1,2 @@
+- [Defeitos recorrentes](defeitos-recorrentes.md) — trava em "verificar e gravar", valores extremos, CPF/telefone, escalada ACE-19, limite que vira negação de serviço, fuso horário (back e front)
+- [Testes exploratórios](testes-exploratorios.md) — testes fora do repo com as fixtures do backend, corrida real com uvicorn, limites e migração

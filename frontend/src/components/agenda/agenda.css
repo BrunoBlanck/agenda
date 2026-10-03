@@ -513,3 +513,85 @@
 .agenda-semana-horas {
   border-right: 1px solid var(--cor-linha-suave);
 }
+
+/* Formulário de agendamento: notas curtas, rodapé da busca de clientes e materiais usados */
+.agendamento-nota {
+  margin: 0 0 var(--espaco-3);
+}
+
+.busca-clientes-rodape {
+  margin: 0;
+  padding: var(--espaco-2) var(--espaco-3) var(--espaco-1);
+  border-top: 1px solid var(--cor-linha-suave);
+}
+
+.material-usado-nome {
+  flex: 1;
+  min-width: 0;
+  padding-top: 5px;
+  overflow-wrap: anywhere;
+}
+
+.agenda-erro.ant-alert {
+  margin-bottom: var(--espaco-3);
+}
+
+/* Agendamento que passa da meia-noite: cortado às 24h com a borda de baixo tracejada
+   e a sobra no topo do dia seguinte com a borda de cima tracejada */
+.agenda-evento.continua {
+  border-bottom: 2px dashed var(--cor-texto-terciario);
+  border-bottom-right-radius: 0;
+}
+
+.agenda-evento.continuacao {
+  border-top: 2px dashed var(--cor-texto-terciario);
+  border-top-right-radius: 0;
+}
+
+.agenda-evento-continua {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 11px;
+  color: var(--cor-texto-secundario);
+}
+
+/* Carregando: blocos e linhas cinza no lugar dos agendamentos (sem spinner) */
+.agenda-fantasma,
+.agenda-fantasma-linha {
+  border-radius: 3px 5px 5px 3px;
+  background: var(--tom-neutro-fundo);
+  animation: agenda-pulsar 1.4s ease-in-out infinite;
+}
+
+.agenda-fantasma {
+  position: absolute;
+  left: 2px;
+  right: 2px;
+  z-index: 1;
+  pointer-events: none;
+}
+
+.agenda-fantasma-linha {
+  display: block;
+  height: 12px;
+  margin-top: 2px;
+}
+
+@keyframes agenda-pulsar {
+  50% {
+    opacity: 0.45;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .agenda-fantasma,
+  .agenda-fantasma-linha {
+    animation: none;
+  }
+}
+
+.agenda-dia-resumo-carregando.ant-skeleton-element {
+  display: block;
+  margin-top: var(--espaco-1);
+}

@@ -47,6 +47,26 @@ def cliente_erros(engine_dono):
             )
         return {'ok': True}
 
+    @router.get('/estouro-python')
+    def estouro_python(ctx: ContextoLoja = Depends(exigir('clientes'))):
+        from datetime import date, timedelta
+
+        return {'data': date.max + timedelta(days=1)}
+
+    @router.get('/estouro-numero')
+    def estouro_numero(ctx: ContextoLoja = Depends(exigir('clientes'))):
+        ctx.db.execute(text('SELECT 123456789012::numeric(10,2)'))
+
+    @router.get('/estouro-data')
+    def estouro_data(ctx: ContextoLoja = Depends(exigir('clientes'))):
+        ctx.db.execute(text("SELECT '294276-12-31'::timestamp + interval '1 year'"))
+
+    @router.get('/disputa/{codigo}')
+    def disputa(codigo: str, ctx: ContextoLoja = Depends(exigir('clientes'))):
+        if codigo not in ('40P01', '40001'):
+            return {}
+        ctx.db.execute(text(f"DO $$ BEGIN RAISE EXCEPTION 'disputa' USING ERRCODE = '{codigo}'; END $$"))
+
     app = criar_app()
     app.include_router(router)
     with TestClient(app) as c:
@@ -75,3 +95,28 @@ def test_erro_no_commit_tambem_vira_resposta_em_portugues(cliente_erros, engine_
     assert resposta.json() == {'detail': 'Já existe um cliente com este CPF.'}
     with engine_dono.connect() as conexao:
         assert conexao.execute(text('SELECT count(*) FROM clientes')).scalar() == 0
+
+
+def test_estouro_de_valor_ou_data_vira_422_e_nao_500(cliente_erros):
+    """Rede de segurança (A8): a validação de entrada já barra, mas um estouro não vira 500."""
+    cliente, cabecalho = cliente_erros
+    esperado = {
+        '/api/loja/teste/estouro-python': 'Valor fora do limite permitido.',
+        '/api/loja/teste/estouro-numero': 'Valor fora do limite permitido.',
+        '/api/loja/teste/estouro-data': 'Data fora do limite permitido.',
+    }
+    for url, mensagem in esperado.items():
+        resposta = cliente.get(url, headers=cabecalho)
+        assert resposta.status_code == 422, url
+        assert resposta.json() == {'detail': mensagem}
+
+
+def test_deadlock_e_falha_de_serializacao_viram_409(cliente_erros):
+    """A22: transações disputando as mesmas linhas respondem 409 pedindo para tentar de novo."""
+    cliente, cabecalho = cliente_erros
+    for codigo in ('40P01', '40001'):
+        resposta = cliente.get(f'/api/loja/teste/disputa/{codigo}', headers=cabecalho)
+        assert resposta.status_code == 409
+        assert resposta.json() == {
+            'detail': 'Outra alteração foi feita ao mesmo tempo e esta não foi salva. Tente novamente.'
+        }

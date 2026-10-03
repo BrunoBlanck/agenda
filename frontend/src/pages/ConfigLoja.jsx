@@ -1,53 +1,72 @@
 import { useState } from 'react'
-import { App, Avatar, Button, Descriptions, Flex, Form, Upload } from 'antd'
-import { DeleteOutlined, EyeOutlined, ShopOutlined, UploadOutlined } from '@ant-design/icons'
-import { useData } from '../data/DataContext.jsx'
+import { App, Button, Descriptions, Flex, Form } from 'antd'
+import { DisconnectOutlined, EyeOutlined } from '@ant-design/icons'
 import { useAcesso } from '../data/useAcesso.js'
+import { useConfigLoja } from '../data/useConfigLoja.js'
+import { useTratarErro } from '../data/api/useTratarErro.js'
 import { modulos } from '../data/acesso.js'
-import { tiposLoja } from '../data/plataforma.js'
+import { tiposLoja } from '../data/dominio.js'
 import Pagina from '../components/base/Pagina.jsx'
 import Secao from '../components/base/Secao.jsx'
 import Etiqueta from '../components/base/Etiqueta.jsx'
+import EstadoVazio from '../components/base/EstadoVazio.jsx'
+import CarregandoPagina from '../components/base/CarregandoPagina.jsx'
 import { EtiquetaLoja } from '../components/Etiquetas.jsx'
 import { CamposEmpresa, CamposEndereco } from '../components/CamposLoja.jsx'
 import UltimaAlteracao from '../components/UltimaAlteracao.jsx'
+import EnvioLogo from '../components/EnvioLogo.jsx'
 
-const TIPOS_LOGO = ['image/png', 'image/jpeg', 'image/svg+xml']
-const LOGO_MAX_MB = 2
+const titulo = 'Dados da loja'
+const descricao = 'Aparecem no site de agendamento e nos avisos enviados aos clientes.'
 
 // Configurações > Dados da loja (estrutura.md, 2.18)
 export default function ConfigLoja() {
-  const { loja, planos } = useData()
-  const { pode, moduloAtivo } = useAcesso()
+  const { pode } = useAcesso()
   const { message } = App.useApp()
+  const tratarErro = useTratarErro()
   const [form] = Form.useForm()
-  const [logo, setLogo] = useState(loja.dados.logoUrl)
+  const config = useConfigLoja()
+  const [salvando, setSalvando] = useState(false)
+  const [gravacoes, setGravacoes] = useState(0)
   const somenteLeitura = !pode('config_loja', 'escrita')
-  const dados = loja.dados
+  const dados = config.dados
 
-  const escolherLogo = (arquivo) => {
-    if (!TIPOS_LOGO.includes(arquivo.type)) {
-      message.error('Envie uma imagem PNG, JPG ou SVG.')
-    } else if (arquivo.size > LOGO_MAX_MB * 1024 * 1024) {
-      message.error(`A imagem tem mais de ${LOGO_MAX_MB} MB. Envie uma menor.`)
-    } else {
-      // No sistema real o arquivo vai para o storage e aqui fica só o caminho
-      const leitor = new FileReader()
-      leitor.onload = () => setLogo(leitor.result)
-      leitor.readAsDataURL(arquivo)
+  const salvar = async (valores) => {
+    setSalvando(true)
+    try {
+      await config.salvar(valores)
+      setGravacoes((n) => n + 1)
+      message.success('Dados da loja salvos.')
+    } catch (e) {
+      tratarErro(e, { form })
+    } finally {
+      setSalvando(false)
     }
-    return Upload.LIST_IGNORE
   }
 
-  const salvar = (valores) => {
-    loja.atualizar({ ...valores, logoUrl: logo })
-    message.success('Dados da loja salvos.')
+  if (config.carregando) return <CarregandoPagina />
+
+  if (!dados) {
+    return (
+      <Pagina titulo={titulo} descricao={descricao}>
+        <Secao>
+          <EstadoVazio
+            icone={<DisconnectOutlined />}
+            titulo="Não foi possível carregar os dados da loja"
+            descricao={config.erro?.mensagem}
+            acao={<Button onClick={config.recarregar}>Tentar de novo</Button>}
+          />
+        </Secao>
+      </Pagina>
+    )
   }
+
+  const opcionais = modulos.filter((m) => m.opcional)
 
   return (
     <Pagina
-      titulo="Dados da loja"
-      descricao="Aparecem no site de agendamento e nos avisos enviados aos clientes."
+      titulo={titulo}
+      descricao={descricao}
       acoes={
         somenteLeitura && (
           <Etiqueta icone={<EyeOutlined />} title="Seu perfil permite consultar, mas não alterar">
@@ -58,14 +77,23 @@ export default function ConfigLoja() {
     >
       <div className="grade-principal">
         <Secao titulo="Identificação e contato">
-          <Form form={form} layout="vertical" initialValues={dados} disabled={somenteLeitura} onFinish={salvar}>
+          <Form
+            // Depois de salvar, o formulário volta a mostrar o que ficou gravado (CNPJ e CEP formatados pela API).
+            // Enviar ou remover a logo não recria o formulário (não perde o que está sendo digitado).
+            key={gravacoes}
+            form={form}
+            layout="vertical"
+            initialValues={dados}
+            disabled={somenteLeitura || salvando}
+            onFinish={salvar}
+          >
             <CamposEmpresa />
             <h3 className="grupo-formulario">Endereço</h3>
-            <CamposEndereco />
+            <CamposEndereco somenteLeitura={somenteLeitura} />
             <div className="rodape-formulario">
               <UltimaAlteracao item={dados} />
               {!somenteLeitura && (
-                <Button type="primary" htmlType="submit">
+                <Button type="primary" htmlType="submit" loading={salvando}>
                   Salvar dados
                 </Button>
               )}
@@ -74,39 +102,35 @@ export default function ConfigLoja() {
         </Secao>
 
         <div className="pilha">
-          <Secao titulo="Logo" descricao={`PNG, JPG ou SVG, até ${LOGO_MAX_MB} MB. Aparece no menu e no site da loja.`}>
-            <Flex align="center" gap={16} wrap>
-              <Avatar shape="square" size={96} src={logo} icon={!logo && <ShopOutlined />} className="logo-loja" />
-              {!somenteLeitura && (
-                <Flex gap={8} wrap>
-                  <Upload accept={TIPOS_LOGO.join(',')} showUploadList={false} beforeUpload={escolherLogo}>
-                    <Button icon={<UploadOutlined />}>{logo ? 'Trocar logo' : 'Enviar logo'}</Button>
-                  </Upload>
-                  {logo && <Button danger icon={<DeleteOutlined />} aria-label="Remover logo" onClick={() => setLogo(null)} />}
-                </Flex>
-              )}
-            </Flex>
-            {!somenteLeitura && logo !== dados.logoUrl && <p className="texto-apoio">Clique em Salvar dados para gravar a nova logo.</p>}
+          <Secao titulo="Logo" descricao="Aparece no menu e no site da loja.">
+            <EnvioLogo
+              logoUrl={dados.logoUrl}
+              nome={dados.nomeFantasia}
+              podeAlterar={!somenteLeitura}
+              enviar={config.enviarLogo}
+              remover={config.removerLogo}
+            />
           </Secao>
 
           <Secao titulo="Definido pela plataforma" descricao="Para alterar, fale com o suporte.">
             <Descriptions column={1} size="small" colon={false}>
-              <Descriptions.Item label="Tipo">{tiposLoja[dados.tipo]?.nome}</Descriptions.Item>
+              <Descriptions.Item label="Tipo">{tiposLoja[dados.tipo]?.nome ?? dados.tipo ?? '—'}</Descriptions.Item>
               <Descriptions.Item label="Endereço do site">/{dados.slug}</Descriptions.Item>
-              <Descriptions.Item label="Plano">{planos.todos.find((p) => p.id === dados.planoId)?.nome}</Descriptions.Item>
+              <Descriptions.Item label="Plano">{dados.planoNome ?? '—'}</Descriptions.Item>
               <Descriptions.Item label="Situação">
                 <EtiquetaLoja status={dados.status} />
               </Descriptions.Item>
-              <Descriptions.Item label="Fuso horário">{dados.fusoHorario}</Descriptions.Item>
+              <Descriptions.Item label="Fuso horário">{dados.fusoHorario ?? '—'}</Descriptions.Item>
               <Descriptions.Item label="Módulos">
                 <Flex gap={4} wrap>
-                  {modulos
-                    .filter((m) => m.opcional)
-                    .map((m) => (
-                      <Etiqueta key={m.codigo} tom={moduloAtivo(m.codigo) ? 'sucesso' : 'neutro'}>
-                        {m.nome}: {moduloAtivo(m.codigo) ? 'ativo' : 'desligado'}
+                  {opcionais.map((m) => {
+                    const ativo = !!dados.modulos[m.codigo]
+                    return (
+                      <Etiqueta key={m.codigo} tom={ativo ? 'sucesso' : 'neutro'}>
+                        {m.nome}: {ativo ? 'ativo' : 'desligado'}
                       </Etiqueta>
-                    ))}
+                    )
+                  })}
                 </Flex>
               </Descriptions.Item>
             </Descriptions>

@@ -84,6 +84,9 @@ def test_resumo_do_administrador(cliente, lojas, engine_dono):
     assert [ag['id'] for ag in resumo['solicitacoes_site']] == [str(ids['pendente'])]
     assert resumo['clientes_cadastrados'] == 1  # o excluído não conta
     assert resumo['funcionarios_em_servico'] == 1
+    [em_servico] = resumo['equipe_em_servico']
+    assert (em_servico['funcionario_id'], em_servico['nome']) == (str(a.recepcao.id), 'Recepção')
+    assert em_servico['entrada'].endswith('-03:00')  # fuso da loja
     assert [(m['nome'], m['quantidade_atual']) for m in resumo['materiais_a_repor']] == [('Gaze', 3)]
 
 
@@ -95,6 +98,7 @@ def test_resumo_do_profissional_e_de_quem_nao_ve_nada(cliente, lojas, engine_don
     assert do_prof['so_propria'] is True
     assert do_prof['clientes_cadastrados'] == 1  # leitura em clientes
     assert do_prof['funcionarios_em_servico'] is None
+    assert do_prof['equipe_em_servico'] is None
     assert do_prof['materiais_a_repor'] is None
 
     nada = usuario_com(engine_dono, a.loja, {})
@@ -114,4 +118,5 @@ def test_isolamento_entre_lojas(cliente, lojas, engine_dono):
     assert da_b['solicitacoes_site'] == []
     assert da_b['clientes_cadastrados'] == 0
     assert da_b['funcionarios_em_servico'] == 0
+    assert da_b['equipe_em_servico'] == []
     assert da_b['materiais_a_repor'] == []

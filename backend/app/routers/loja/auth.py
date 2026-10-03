@@ -1,6 +1,6 @@
 """Login do funcionário e dados do usuário logado (/api/loja)."""
 
-from fastapi import APIRouter, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import func, select
 
 from app.auth.dependencias import (
@@ -13,9 +13,11 @@ from app.auth.dependencias import (
 from app.auth.senhas import verificar_senha
 from app.auth.tokens import criar_token
 from app.db import definir_contexto
+from app.limites import BloqueioLogin, limite_login
 from app.models import Cargo, Funcionario, Loja, LojaConfiguracao
 from app.schemas.auth import CargoResumo, Eu, FuncionarioEu, LoginLoja, LojaEu, PerfilEu, Token
 from app.schemas.comum import Erro
+from app.services.comum import fuso
 
 router = APIRouter(tags=['Loja: acesso'])
 
@@ -24,13 +26,17 @@ MSG_LOGIN_INVALIDO = 'Loja, e-mail ou senha inválidos.'
 
 @router.post(
     '/auth/login',
-    responses={401: {'model': Erro}, 403: {'model': Erro}},
+    responses={401: {'model': Erro}, 403: {'model': Erro}, 429: {'model': Erro}},
+    dependencies=[Depends(limite_login)],
     summary='Login do funcionário (loja pelo slug + e-mail + senha)',
 )
 def login(dados: LoginLoja, request: Request, db: DbDep) -> Token:
+    slug = dados.slug.strip().lower()
+    bloqueio = BloqueioLogin(request, 'loja', slug, dados.email)
+    bloqueio.conferir()
     ip = ip_da_requisicao(request)
     definir_contexto(db, origem='painel', ip=ip)
-    loja = db.scalar(select(Loja).where(Loja.slug == dados.slug.strip().lower()))
+    loja = db.scalar(select(Loja).where(Loja.slug == slug))
     funcionario = None
     if loja is not None:
         # RLS: só enxerga os funcionários desta loja
@@ -43,20 +49,23 @@ def login(dados: LoginLoja, request: Request, db: DbDep) -> Token:
         )
     valida, novo_hash = verificar_senha(dados.senha, funcionario.senha_hash if funcionario else None)
     if loja is None or funcionario is None or not valida:
+        bloqueio.falhou()
         raise nao_autenticado(MSG_LOGIN_INVALIDO)
-    # Daqui em diante a senha confere: pode dizer o motivo da recusa
+    # Daqui em diante a senha confere: zera as falhas e pode dizer o motivo da recusa
+    bloqueio.acertou()
     if not funcionario.ativo:
         raise HTTPException(
             status.HTTP_403_FORBIDDEN, 'Seu acesso está desativado. Fale com o administrador da loja.'
         )
     verificar_status_loja(loja)
 
-    definir_contexto(db, origem='painel', funcionario_id=funcionario.id, loja_id=loja.id, ip=ip)
+    # login=True: registrar o acesso (e o novo hash da mesma senha) não é uma alteração do cadastro
+    definir_contexto(db, origem='painel', funcionario_id=funcionario.id, loja_id=loja.id, ip=ip, login=True)
     funcionario.ultimo_login_em = func.now()
     if novo_hash:
         funcionario.senha_hash = novo_hash
     token, expira_em = criar_token(funcionario.id, 'funcionario', loja.id)
-    return Token(token=token, expira_em=expira_em)
+    return Token(token=token, expira_em=expira_em.astimezone(fuso(loja.fuso_horario)))
 
 
 @router.get('/eu', responses={401: {'model': Erro}, 403: {'model': Erro}}, summary='Funcionário logado')

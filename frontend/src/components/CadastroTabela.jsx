@@ -1,6 +1,6 @@
 import { useDeferredValue, useState } from 'react'
-import { App, Button, Form, Input, Popconfirm, Tooltip } from 'antd'
-import { DeleteOutlined, EditOutlined, EyeOutlined, PlusOutlined, SearchOutlined } from '@ant-design/icons'
+import { Alert, App, Button, Form, Input, Popconfirm, Tooltip } from 'antd'
+import { DeleteOutlined, DisconnectOutlined, EditOutlined, EyeOutlined, PlusOutlined, SearchOutlined } from '@ant-design/icons'
 import Pagina from './base/Pagina.jsx'
 import Secao from './base/Secao.jsx'
 import BarraFiltros from './base/BarraFiltros.jsx'
@@ -11,6 +11,7 @@ import PainelFormulario from './base/PainelFormulario.jsx'
 import { usePainel } from './base/usePainel.js'
 import UltimaAlteracao from './UltimaAlteracao.jsx'
 import { capitalizar } from '../utils/formatos.js'
+import { useTratarErro } from '../data/api/useTratarErro.js'
 
 // Tela de cadastro completa: cabeçalho, busca, tabela e formulário no painel lateral.
 // titulo: nome da tela (plural). item: nome de um registro, em minúsculas ("cliente"), usado nos textos.
@@ -26,6 +27,16 @@ import { capitalizar } from '../utils/formatos.js'
 // acoesEdicao(item, fechar): ações no cabeçalho do painel (ex.: atalho para o histórico).
 // destaqueId: outra linha a destacar, aberta pela própria tela (ex.: histórico do cliente).
 // larguraPainel: só quando os campos pedirem mais que os 480 px padrão.
+//
+// lista (dados da API, hook da área):
+//   itens, carregando, atualizando, erro, recarregar()
+//   salvar(valores, registro) => Promise   (registro.id presente = edição)
+//   excluir(registro) => Promise
+//   carregarRegistro?(registro) => Promise<registro completo>  (ficha antes de abrir o painel)
+//   paginacao?: { pagina, porPagina, total, mudarPagina(p) }    (paginação no servidor)
+//   busca?: { valor, mudar(texto) }                              (busca no servidor; sem ela, filtra a lista carregada)
+// mapaErros: { campo_da_api: 'campoDoForm' } para o 422 cair no campo certo quando o nome muda.
+// textoExcluir: descrição da confirmação de exclusão.
 export default function CadastroTabela({
   titulo,
   descricao,
@@ -50,28 +61,81 @@ export default function CadastroTabela({
   corRegistro,
   acoesEdicao,
   destaqueId,
+  mapaErros,
+  textoExcluir = 'Ele sai das listas, mas continua no histórico de alterações.',
 }) {
   const { message } = App.useApp()
-  const [busca, setBusca] = useState('')
+  const tratarErro = useTratarErro()
+  const [buscaLocal, setBuscaLocal] = useState('')
+  const busca = lista.busca?.valor ?? buscaLocal
+  const mudarBusca = lista.busca?.mudar ?? setBuscaLocal
   const termo = useDeferredValue(busca.trim().toLowerCase())
   const painel = usePainel()
-  const { registro: editando, abrir } = painel
+  const { registro: editando } = painel
   const [form] = Form.useForm()
+  const [salvando, setSalvando] = useState(false)
+  const [abrindoId, setAbrindoId] = useState(null)
+  const [excluindoId, setExcluindoId] = useState(null)
 
-  const salvar = (valores) => {
+  const naoEncontrado = () => {
+    painel.fechar()
+    lista.recarregar?.()
+  }
+
+  // Edição de registro com ficha própria (vínculos, campos que a lista não traz): busca antes de abrir
+  const abrir = async (registro) => {
+    if (!registro?.id || !lista.carregarRegistro) return painel.abrir(registro)
+    setAbrindoId(registro.id)
+    try {
+      painel.abrir(await lista.carregarRegistro(registro))
+    } catch (e) {
+      tratarErro(e, { aoNaoEncontrado: () => lista.recarregar?.() })
+    } finally {
+      setAbrindoId(null)
+    }
+  }
+
+  const salvar = async (valores) => {
     const erro = validar?.(valores, editando)
     if (erro) {
       message.error(erro)
       return
     }
-    if (editando.id) lista.atualizar(editando.id, valores)
-    else lista.adicionar(valores)
-    message.success(textoSalvo)
-    painel.fechar()
+    setSalvando(true)
+    try {
+      await lista.salvar(valores, editando)
+      message.success(textoSalvo)
+      painel.fechar()
+    } catch (e) {
+      tratarErro(e, { form, mapa: mapaErros, aoNaoEncontrado: naoEncontrado })
+    } finally {
+      setSalvando(false)
+    }
   }
 
+  const excluir = async (registro) => {
+    setExcluindoId(registro.id)
+    try {
+      await lista.excluir(registro)
+      message.success(`${capitalizar(item)} excluído.`)
+    } catch (e) {
+      tratarErro(e, { aoNaoEncontrado: () => lista.recarregar?.() })
+    } finally {
+      setExcluindoId(null)
+    }
+  }
+
+  const itens = lista.itens ?? []
   const textoBusca = typeof campoBusca === 'function' ? campoBusca : (i) => i[campoBusca]
-  const dados = lista.itens.filter((i) => String(textoBusca(i) ?? '').toLowerCase().includes(termo))
+  const dados = lista.busca ? itens : itens.filter((i) => String(textoBusca(i) ?? '').toLowerCase().includes(termo))
+  const paginacao = lista.paginacao && {
+    current: lista.paginacao.pagina,
+    pageSize: lista.paginacao.porPagina,
+    total: lista.paginacao.total,
+    onChange: lista.paginacao.mudarPagina,
+    showSizeChanger: false,
+    hideOnSinglePage: true,
+  }
 
   const colunaAcoes = {
     title: <span className="sr-only">Ações</span>,
@@ -86,6 +150,7 @@ export default function CadastroTabela({
             type="text"
             size="small"
             icon={somenteLeitura ? <EyeOutlined /> : <EditOutlined />}
+            loading={abrindoId === registro.id}
             aria-label={somenteLeitura ? 'Ver' : 'Editar'}
             onClick={() => abrir(registro)}
           />
@@ -93,17 +158,21 @@ export default function CadastroTabela({
         {permitirExcluir && !somenteLeitura && (
           <Popconfirm
             title={`Excluir este ${item}?`}
-            description="Ele sai das listas, mas continua no histórico de alterações."
+            description={textoExcluir}
             okText="Excluir"
             okButtonProps={{ danger: true }}
             cancelText="Cancelar"
-            onConfirm={() => {
-              lista.remover(registro.id)
-              message.success(`${capitalizar(item)} excluído.`)
-            }}
+            onConfirm={() => excluir(registro)}
           >
             <Tooltip title="Excluir">
-              <Button type="text" size="small" danger icon={<DeleteOutlined />} aria-label="Excluir" />
+              <Button
+                type="text"
+                size="small"
+                danger
+                icon={<DeleteOutlined />}
+                loading={excluindoId === registro.id}
+                aria-label="Excluir"
+              />
             </Tooltip>
           </Popconfirm>
         )}
@@ -117,7 +186,14 @@ export default function CadastroTabela({
     </Button>
   )
 
-  const vazio = termo ? (
+  const vazio = lista.erro ? (
+    <EstadoVazio
+      icone={<DisconnectOutlined />}
+      titulo="Não foi possível carregar a lista"
+      descricao={lista.erro.mensagem}
+      acao={lista.recarregar && <Button onClick={lista.recarregar}>Tentar de novo</Button>}
+    />
+  ) : termo ? (
     <EstadoVazio compacto titulo={`Nada encontrado para "${busca.trim()}"`} descricao="Confira a grafia ou busque por outra parte do nome." />
   ) : (
     <EstadoVazio
@@ -150,12 +226,30 @@ export default function CadastroTabela({
             aria-label={placeholderBusca}
             allowClear
             value={busca}
-            onChange={(e) => setBusca(e.target.value)}
+            onChange={(e) => mudarBusca(e.target.value)}
           />
         </BarraFiltros>
+        {/* Recarga falhou com linhas na tela: elas ficam, com o aviso de que podem estar desatualizadas */}
+        {lista.erro && dados.length > 0 && (
+          <Alert
+            type="warning"
+            showIcon
+            className="alerta-lista"
+            title={`Não foi possível atualizar a lista: ${lista.erro.mensagem}`}
+            action={
+              lista.recarregar && (
+                <Button size="small" onClick={lista.recarregar}>
+                  Tentar de novo
+                </Button>
+              )
+            }
+          />
+        )}
         <Tabela
           columns={[...colunas, colunaAcoes]}
           dataSource={dados}
+          loading={!!(lista.carregando || lista.atualizando)}
+          {...(paginacao && { pagination: paginacao })}
           expandable={expandable}
           vazio={vazio}
           destaqueId={painel.destaqueId ?? destaqueId}
@@ -174,6 +268,7 @@ export default function CadastroTabela({
         form={form}
         valoresIniciais={editando?.id ? editando : valoresNovo}
         somenteLeitura={somenteLeitura}
+        salvando={salvando}
         largura={larguraPainel}
         onCancelar={painel.fechar}
         onSalvar={salvar}

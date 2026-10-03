@@ -16,10 +16,12 @@ from sqlalchemy.orm import Session
 
 from app.models import AgendamentoMaterial, Material, MovimentacaoEstoque
 from app.models.enums import TipoMovimentacao
-from app.services.comum import conflito
+from app.services.comum import conflito, invalido
 
 PERMITIR_ESTOQUE_NEGATIVO = True
 MOTIVO_ESTORNO = 'Estorno: atendimento reaberto'
+SALDO_MAXIMO = Decimal('99999999.99')  # materiais.quantidade_atual é numeric(10,2)
+MSG_SALDO = 'Com esta movimentação o estoque passaria do limite permitido (99.999.999,99).'
 
 
 def lancar(
@@ -31,6 +33,19 @@ def lancar(
     motivo: str | None = None,
     agendamento_id: UUID | None = None,
 ) -> MovimentacaoEstoque:
+    """Lança a movimentação (o trigger soma no material).
+
+    Trava o material (FOR UPDATE) e confere o saldo resultante antes de gravar: o numeric(10,2) não
+    estoura e lançamentos simultâneos no mesmo material somam um depois do outro.
+    """
+    material = db.scalar(
+        select(Material)
+        .where(Material.loja_id == loja_id, Material.id == material_id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
+    if material is not None and abs(material.quantidade_atual + quantidade) > SALDO_MAXIMO:
+        raise invalido(MSG_SALDO)
     movimentacao = MovimentacaoEstoque(
         loja_id=loja_id,
         material_id=material_id,
@@ -41,8 +56,7 @@ def lancar(
     )
     db.add(movimentacao)
     db.flush()
-    # O trigger mudou a quantidade no banco: relê o material se ele estiver na sessão
-    material = db.get(Material, material_id)
+    # O trigger mudou a quantidade no banco: relê o material
     if material is not None:
         db.refresh(material, ['quantidade_atual'])
     return movimentacao
@@ -50,10 +64,12 @@ def lancar(
 
 def baixar_materiais(db: Session, loja_id: UUID, agendamento_id: UUID) -> None:
     """Atendimento concluído: uma saída por material usado (agendamento_materiais)."""
+    # Sempre na ordem de material_id: duas baixas simultâneas travam os materiais na mesma ordem
+    # (sem deadlock entre atendimentos que usam os mesmos materiais)
     usados = db.scalars(
-        select(AgendamentoMaterial).where(
-            AgendamentoMaterial.loja_id == loja_id, AgendamentoMaterial.agendamento_id == agendamento_id
-        )
+        select(AgendamentoMaterial)
+        .where(AgendamentoMaterial.loja_id == loja_id, AgendamentoMaterial.agendamento_id == agendamento_id)
+        .order_by(AgendamentoMaterial.material_id)
     ).all()
     if not PERMITIR_ESTOQUE_NEGATIVO:
         for uso in usados:
@@ -77,6 +93,7 @@ def estornar_materiais(db: Session, loja_id: UUID, agendamento_id: UUID) -> None
         select(MovimentacaoEstoque.material_id, func.sum(MovimentacaoEstoque.quantidade))
         .where(MovimentacaoEstoque.loja_id == loja_id, MovimentacaoEstoque.agendamento_id == agendamento_id)
         .group_by(MovimentacaoEstoque.material_id)
+        .order_by(MovimentacaoEstoque.material_id)
     ).all()
     for material_id, saldo in saldos:
         if saldo < 0:

@@ -44,8 +44,8 @@ def montar_clinica(cliente, lt: LojaTeste) -> Clinica:
     for perfil in lt.perfis.values():
         for ini, fim in (('08:00', '12:00'), ('13:00', '18:00')):
             post(f'perfis/{perfil.id}/horarios', {'dia_semana': 1, 'hora_inicio': ini, 'hora_fim': fim})
-    maria = post('clientes', {'nome': 'Maria', 'sobrenome': 'Oliveira', 'telefone': '1'})
-    joao = post('clientes', {'nome': 'João', 'sobrenome': 'Pereira', 'telefone': '2'})
+    maria = post('clientes', {'nome': 'Maria', 'sobrenome': 'Oliveira', 'telefone': '(11) 98888-1111'})
+    joao = post('clientes', {'nome': 'João', 'sobrenome': 'Pereira', 'telefone': '(11) 98888-2222'})
     sala1, sala2 = post('locais', {'nome': 'Sala 1'}), post('locais', {'nome': 'Sala 2'})
     online = post(
         'locais', {'nome': 'Online', 'tipo': 'online', 'link_padrao': 'https://meet.example.com/fixo'}

@@ -1,6 +1,7 @@
 """Configuração da aplicação, lida só de variáveis de ambiente (ou do arquivo .env)."""
 
 from functools import lru_cache
+from pathlib import Path
 from typing import Literal
 
 from pydantic import Field, SecretStr
@@ -24,6 +25,29 @@ class Settings(BaseSettings):
     jwt_expira_minutos: int = 480
 
     cors_origens: list[str] = ['http://localhost:5173']
+
+    # --- Proteção contra abuso (app/limites.py). Janelas em segundos. ---
+    # Login (loja e superadmin): tentativas por IP
+    limite_login_por_ip: int = Field(default=20, ge=1)
+    limite_login_janela: int = Field(default=60, ge=1)
+    # Login: falhas seguidas por conta (e-mail) até bloquear; o bloqueio dobra a cada nova falha
+    login_falhas_para_bloquear: int = Field(default=5, ge=1)
+    login_falhas_janela: int = Field(default=3600, ge=1)
+    login_bloqueio_inicial: int = Field(default=60, ge=1)
+    login_bloqueio_maximo: int = Field(default=900, ge=1)
+    # Site do consumidor: requisições por IP (todas as rotas) e pedidos de agendamento por IP e loja
+    limite_site_por_ip: int = Field(default=120, ge=1)
+    limite_site_janela: int = Field(default=60, ge=1)
+    limite_site_pedidos_por_ip: int = Field(default=10, ge=1)
+    limite_site_pedidos_janela: int = Field(default=3600, ge=1)
+    # Site: pedidos "Aguardando aceite" (futuros) ao mesmo tempo por telefone, em cada loja
+    site_pendentes_por_telefone: int = Field(default=3, ge=1)
+
+    # --- Arquivos enviados (logo da loja, app/services/arquivos.py) ---
+    # Pasta no disco (em produção, um volume persistente). Padrão: backend/arquivos
+    arquivos_dir: Path = Path(__file__).resolve().parent.parent / 'arquivos'
+    # Tamanho máximo da logo, em bytes (padrão 2 MB)
+    logo_tamanho_maximo: int = Field(default=2 * 1024 * 1024, ge=1024, le=20 * 1024 * 1024)
 
     @property
     def papel_app(self) -> str:

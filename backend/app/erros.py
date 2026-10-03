@@ -22,7 +22,9 @@ MENSAGENS_HTTP = {
     404: 'Não encontrado.',
     405: 'Método não permitido.',
     409: 'Conflito com dados existentes.',
+    413: 'O envio passou do tamanho máximo permitido.',
     422: 'Verifique os dados informados.',
+    429: 'Muitas requisições. Aguarde um pouco e tente novamente.',
     500: 'Erro interno. Tente novamente em instantes.',
 }
 
@@ -53,6 +55,8 @@ MENSAGENS_VALIDACAO = {
     'model_attributes_type': 'Formato inválido.',
     'dict_type': 'Formato inválido.',
     'list_type': 'Informe uma lista.',
+    'too_long': 'Itens demais (máximo de {max_length}).',
+    'too_short': 'Itens de menos (mínimo de {min_length}).',
     'extra_forbidden': 'Campo não permitido.',
 }
 
@@ -77,6 +81,10 @@ def _campo(local: tuple | list) -> str:
     return '.'.join(partes) or 'corpo'
 
 
+MSG_FORA_DO_LIMITE = 'Valor fora do limite permitido.'
+MSG_MULTIPART_INVALIDO = 'O envio do arquivo veio incompleto ou mal formado. Tente enviar de novo.'
+MSG_TENTE_DE_NOVO = 'Outra alteração foi feita ao mesmo tempo e esta não foi salva. Tente novamente.'
+
 # SQLSTATE do Postgres -> (status HTTP, mensagem)
 ERROS_BANCO = {
     '23505': (status.HTTP_409_CONFLICT, 'Já existe um cadastro com esses dados.'),
@@ -85,6 +93,12 @@ ERROS_BANCO = {
     '23514': (status.HTTP_422_UNPROCESSABLE_CONTENT, 'Os dados informados não são válidos.'),
     '23P01': (status.HTTP_409_CONFLICT, 'Horário indisponível: já existe um agendamento nesse período.'),
     '42501': (status.HTTP_403_FORBIDDEN, 'Operação não permitida.'),
+    # Duas transações disputando as mesmas linhas (deadlock ou falha de serialização): nada foi gravado
+    '40P01': (status.HTTP_409_CONFLICT, MSG_TENTE_DE_NOVO),
+    '40001': (status.HTTP_409_CONFLICT, MSG_TENTE_DE_NOVO),
+    # Rede de segurança: valores e datas fora do que o banco suporta (a validação de entrada já barra)
+    '22003': (status.HTTP_422_UNPROCESSABLE_CONTENT, MSG_FORA_DO_LIMITE),
+    '22008': (status.HTTP_422_UNPROCESSABLE_CONTENT, 'Data fora do limite permitido.'),
 }
 
 
@@ -106,6 +120,7 @@ MENSAGENS_CONSTRAINT = {
     'planos_nome_uk': 'Já existe um plano com este nome.',
     'superadmin_usuarios_email_uk': 'Já existe um usuário admin com este e-mail.',
     'registros_ponto_um_aberto': 'Este funcionário já tem um registro de ponto em aberto.',
+    'registros_ponto_sem_sobreposicao': 'Este funcionário já tem um registro de ponto nesse período.',
 }
 
 
@@ -116,6 +131,9 @@ def registrar_tratadores(app: FastAPI) -> None:
         # Mensagem padrão em inglês (ex.: "Not Found") vira português
         if not isinstance(detalhe, str) or detalhe == HTTPStatus(exc.status_code).phrase:
             detalhe = MENSAGENS_HTTP.get(exc.status_code, 'Não foi possível concluir a operação.')
+        elif exc.status_code == 400 and 'multipart' in detalhe.lower():
+            # Erros do parser de multipart do Starlette (em inglês): ex. "Invalid multipart data."
+            detalhe = MSG_MULTIPART_INVALIDO
         return JSONResponse({'detail': detalhe}, status_code=exc.status_code, headers=exc.headers)
 
     @app.exception_handler(RequestValidationError)
@@ -126,6 +144,12 @@ def registrar_tratadores(app: FastAPI) -> None:
         return JSONResponse(
             {'detail': MENSAGENS_HTTP[422], 'erros': erros}, status_code=status.HTTP_422_UNPROCESSABLE_CONTENT
         )
+
+    @app.exception_handler(OverflowError)
+    async def estouro(_: Request, exc: OverflowError) -> JSONResponse:
+        # Ex.: soma de data passando do ano 9999. A validação de entrada (app.schemas.comum.Data) já barra
+        log.info('Estouro de valor tratado (%s)', type(exc).__name__)
+        return JSONResponse({'detail': MSG_FORA_DO_LIMITE}, status_code=status.HTTP_422_UNPROCESSABLE_CONTENT)
 
     @app.exception_handler(DBAPIError)
     async def banco(_: Request, exc: DBAPIError) -> JSONResponse:

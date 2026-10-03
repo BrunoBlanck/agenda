@@ -52,16 +52,19 @@ def test_login_do_funcionario_devolve_token(cliente, loja_a, engine_dono):
     assert dados['sub'] == str(admin.id)
     assert dados['loja_id'] == str(loja.id)
 
+    assert corpo['expira_em'].endswith('-03:00')  # no fuso da loja (America/Sao_Paulo)
+
     with sessao(engine_dono) as db:
-        ultimo = db.execute(
-            text('SELECT ultimo_login_em FROM funcionarios WHERE id = :id'), {'id': admin.id}
-        ).scalar()
-        auditoria = db.scalars(
-            select(Auditoria).where(Auditoria.tabela == 'funcionarios').order_by(Auditoria.id)
+        ultimo, atualizado_em = db.execute(
+            text('SELECT ultimo_login_em, atualizado_em FROM funcionarios WHERE id = :id'), {'id': admin.id}
+        ).one()
+        alteracoes = db.scalars(
+            select(Auditoria).where(Auditoria.tabela == 'funcionarios', Auditoria.operacao == 'alterar')
         ).all()
     assert ultimo is not None
-    assert auditoria[-1].campos_alterados == ['ultimo_login_em']
-    assert auditoria[-1].funcionario_id == admin.id
+    # O login não é alteração do cadastro: fora da auditoria e da "última alteração"
+    assert alteracoes == []
+    assert atualizado_em < ultimo
 
 
 @pytest.mark.parametrize(

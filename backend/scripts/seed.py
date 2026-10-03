@@ -54,6 +54,7 @@ from app.models.enums import (
     TipoLoja,
     TipoMovimentacao,
 )
+from app.schemas.comum import cpf_valido, so_digitos
 from app.services.lojas import provisionar_loja
 
 SENHA_SUPERADMIN = 'superadmin123'
@@ -342,12 +343,12 @@ def _clinica_sorriso(
             )
         )
 
-    # Clientes (chave: CPF)
+    # Clientes (chave: telefone; CPFs com dígito verificador válido)
     clientes_mock = [
         (
             'Maria',
             'Oliveira',
-            '123.456.789-00',
+            '123.456.789-09',
             '(11) 98888-1111',
             'maria@email.com',
             date(1985, 4, 12),
@@ -365,7 +366,7 @@ def _clinica_sorriso(
         (
             'Fernanda',
             'Costa',
-            '111.222.333-44',
+            '111.222.333-96',
             '(11) 98888-3333',
             'fernanda@email.com',
             date(1978, 1, 5),
@@ -374,7 +375,7 @@ def _clinica_sorriso(
     ]
     clientes = []
     for nome, sobrenome, cpf, telefone, email, nascimento, canais in clientes_mock:
-        cliente = _obter(db, Cliente, Cliente.loja_id == lid, Cliente.cpf == cpf)
+        cliente = _obter(db, Cliente, Cliente.loja_id == lid, Cliente.telefone == telefone)
         if cliente is None:
             cliente = Cliente(
                 loja_id=lid,
@@ -387,6 +388,10 @@ def _clinica_sorriso(
                 canais=[CanalCliente(c) for c in canais],
             )
             db.add(cliente)
+            db.flush()
+        elif cliente.cpf is None or not cpf_valido(so_digitos(cliente.cpf)):
+            # Bancos semeados antes da validação de CPF tinham CPFs com dígito errado
+            cliente.cpf = cpf
             db.flush()
         clientes.append(cliente)
 

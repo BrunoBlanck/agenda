@@ -1,27 +1,12 @@
 """Site do consumidor (público): só o necessário para escolher o serviço, o horário e pedir o agendamento."""
 
-import re
 from datetime import date, datetime
-from typing import Annotated, Any
 from uuid import UUID
 
-from pydantic import BaseModel, BeforeValidator, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from app.models.enums import StatusAgendamento, TipoLocal, TipoLoja
-from app.schemas.comum import DecimalSaida, EmailOpcional, regra, texto, texto_opcional
-
-
-def _telefone(valor: Any) -> Any:
-    """Telefone brasileiro com DDD (10 ou 11 dígitos), gravado com máscara: (11) 98888-1111."""
-    if not isinstance(valor, str):
-        return valor
-    digitos = re.sub(r'\D', '', valor)
-    if len(digitos) not in (10, 11) or digitos[0] == '0':
-        raise regra('Informe o telefone com DDD (ex.: (11) 99999-9999).')
-    return f'({digitos[:2]}) {digitos[2:-4]}-{digitos[-4:]}'
-
-
-Telefone = Annotated[str, BeforeValidator(_telefone)]
+from app.schemas.comum import DataHora, DecimalSaida, EmailOpcional, Telefone, texto, texto_opcional
 
 
 class LojaPublica(BaseModel):
@@ -88,7 +73,7 @@ class SolicitacaoEntrada(BaseModel):
 
     servico_id: UUID | None = Field(default=None, description='Obrigatório com o módulo Serviços')
     funcionario_id: UUID
-    inicio: datetime = Field(description='Um dos horários livres. Sem fuso = horário da loja')
+    inicio: DataHora = Field(description='Um dos horários livres. Sem fuso = horário da loja')
     local_id: UUID | None = Field(default=None, description='Vazio = o sistema escolhe um local livre')
     nome: texto(60) = Field(description='Só o primeiro nome')
     sobrenome: texto(100)

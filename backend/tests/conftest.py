@@ -10,6 +10,8 @@ RLS e ao REVOKE da auditoria. O preparo de dados usa o dono do schema.
 """
 
 import os
+import shutil
+import tempfile
 from collections.abc import Iterator
 
 import pytest
@@ -30,6 +32,8 @@ def _configurar_ambiente_de_teste() -> tuple[URL, URL]:
     os.environ['DATABASE_URL'] = url_app.render_as_string(hide_password=False)
     os.environ['DATABASE_OWNER_URL'] = url_dono.render_as_string(hide_password=False)
     os.environ['AMBIENTE'] = 'teste'
+    # Arquivos enviados (logo) numa pasta temporária, nunca em backend/arquivos
+    os.environ['ARQUIVOS_DIR'] = tempfile.mkdtemp(prefix='agenda-arquivos-')
     get_settings.cache_clear()
     return url_app, url_dono
 
@@ -42,6 +46,7 @@ from alembic.config import Config  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
 
 from app.db import get_engine, get_sessionmaker  # noqa: E402
+from app.limites import get_engine_limites  # noqa: E402
 from scripts.criar_papel_app import criar_papel_app  # noqa: E402
 
 TABELAS_PRESERVADAS = {'alembic_version', 'funcionalidades', 'recursos'}
@@ -66,11 +71,14 @@ def recriar_banco(url: URL) -> None:
 def banco() -> Iterator[None]:
     get_engine.cache_clear()
     get_sessionmaker.cache_clear()
+    get_engine_limites.cache_clear()
     recriar_banco(URL_DONO)
     criar_papel_app(URL_DONO.render_as_string(hide_password=False))
     command.upgrade(config_alembic(URL_DONO), 'head')
     yield
     get_engine().dispose()
+    get_engine_limites().dispose()
+    shutil.rmtree(get_settings().arquivos_dir, ignore_errors=True)
 
 
 @pytest.fixture(scope='session')
@@ -97,6 +105,7 @@ def limpar(engine_dono) -> Iterator[None]:
         for tabela in apagar:
             conexao.execute(text(f'DELETE FROM {tabela}'))
         conexao.execute(text("SELECT setval('auditoria_id_seq', 1, false)"))
+        conexao.execute(text('DELETE FROM limites.contadores'))
 
 
 @pytest.fixture
@@ -121,3 +130,34 @@ def clinica(cliente, lojas):
     from tests.clinica import montar_clinica
 
     return montar_clinica(cliente, lojas[0])
+
+
+@pytest.fixture(scope='session')
+def servidor() -> Iterator[str]:
+    """API rodando de verdade (uvicorn numa thread) para os testes de concorrência.
+
+    Cada requisição usa uma conexão própria do pool, como em produção: duas requisições ao mesmo
+    tempo disputam as mesmas linhas no banco (ver tests/concorrencia.py).
+    """
+    import socket
+    import threading
+    import time
+
+    import uvicorn
+
+    from app.main import app
+
+    with socket.socket() as sock:
+        sock.bind(('127.0.0.1', 0))
+        porta = sock.getsockname()[1]
+    servidor_uvicorn = uvicorn.Server(uvicorn.Config(app, host='127.0.0.1', port=porta, log_level='warning'))
+    thread = threading.Thread(target=servidor_uvicorn.run, daemon=True)
+    thread.start()
+    limite = time.monotonic() + 15
+    while not servidor_uvicorn.started:
+        if time.monotonic() > limite:
+            raise RuntimeError('O servidor de teste não subiu.')
+        time.sleep(0.05)
+    yield f'http://127.0.0.1:{porta}'
+    servidor_uvicorn.should_exit = True
+    thread.join(10)

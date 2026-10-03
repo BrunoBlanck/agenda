@@ -215,6 +215,33 @@ def test_sem_local_livre_nao_oferece_o_horario(cliente, clinica):
     assert avaliacao['09:00']['local']['nome'] == 'Sala 2'
 
 
+def test_horarios_de_um_local_escolhido(cliente, engine_dono, clinica):
+    admin = str(clinica.lt.admin.id)
+    # Profissional ocupa a Sala 1 às 09:00; o Admin continua livre, com o Online
+    cliente.post('/api/loja/agendamentos', json=clinica.dados(), headers=clinica.lt.h_admin)
+    qualquer = {
+        h['hora']: h
+        for h in horarios(cliente, servico_id=clinica.limpeza, funcionario_id=admin)[0]['horarios']
+    }
+    assert qualquer['09:00']['local']['nome'] == 'Online'
+    sala1 = horarios(cliente, servico_id=clinica.limpeza, funcionario_id=admin, local_id=clinica.sala1)[0]
+    assert all(h['local']['nome'] == 'Sala 1' for h in sala1['horarios'])
+    assert '09:00' not in [h['hora'] for h in sala1['horarios']]
+    assert '10:00' in [h['hora'] for h in sala1['horarios']]
+    # Local não permitido para o serviço
+    fora = cliente.get(
+        f'{SITE}/horarios',
+        params={'servico_id': clinica.limpeza, 'inicio': SEGUNDA, 'local_id': clinica.sala2},
+    )
+    assert fora.status_code == 422
+    assert fora.json()['detail'] == 'Local não encontrado para este serviço.'
+    # Sem o módulo Locais, o filtro é ignorado
+    mudar_modulo(engine_dono, clinica.lt.loja.id, 'locais', habilitado=False)
+    sem_modulo = horarios(cliente, servico_id=clinica.limpeza, local_id=clinica.sala2)[0]
+    assert sem_modulo['horarios']
+    assert all(h['local'] is None for h in sem_modulo['horarios'])
+
+
 def test_sem_modulo_locais_horario_sem_local(cliente, engine_dono, clinica):
     mudar_modulo(engine_dono, clinica.lt.loja.id, 'locais', habilitado=False)
     dia = horarios(cliente, servico_id=clinica.limpeza)[0]

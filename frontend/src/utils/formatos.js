@@ -1,4 +1,5 @@
 import dayjs from 'dayjs'
+import { lerData, lerDataHora } from '../data/api/conversao.js'
 
 export const soDigitos = (valor) => String(valor ?? '').replace(/\D/g, '')
 
@@ -48,8 +49,14 @@ export function cnpjValido(valor) {
   return n.endsWith(`${d1}${d2}`)
 }
 
-export const moeda = (valor) =>
-  valor != null ? valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : '—'
+const formatoMoeda = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' })
+
+// Aceita número ou texto numérico (a API manda número; nunca mostra "NaN")
+export const moeda = (valor) => {
+  if (valor === null || valor === undefined || valor === '') return '—'
+  const n = Number(valor)
+  return Number.isFinite(n) ? formatoMoeda.format(n) : '—'
+}
 
 // Cliente: nome e sobrenome ficam separados; nas listas aparece o nome completo
 export const nomeCompleto = (pessoa) => [pessoa?.nome, pessoa?.sobrenome].filter(Boolean).join(' ')
@@ -59,9 +66,18 @@ export const capitalizar = (texto = '') => texto.charAt(0).toUpperCase() + texto
 // "1 atendimento", "3 atendimentos"
 export const plural = (n, um, varios) => `${n} ${n === 1 ? um : varios}`
 
-export const dataBR = (data) => (data ? dayjs(data).format('DD/MM/YYYY') : '—')
+// Datas da API: "AAAA-MM-DD" ou ISO com fuso (mostradas na hora da loja, ver data/api/conversao.js);
+// dayjs também é aceito. Vazio ou inválido vira "—".
+const paraDayjs = (data) => {
+  if (!data) return null
+  if (typeof data === 'string') return data.length <= 10 ? lerData(data) : lerDataHora(data)
+  const d = dayjs(data)
+  return d.isValid() ? d : null
+}
 
-export const dataHoraBR = (data) => (data ? dayjs(data).format('DD/MM/YYYY [às] HH:mm') : '—')
+export const dataBR = (data) => paraDayjs(data)?.format('DD/MM/YYYY') ?? '—'
+
+export const dataHoraBR = (data) => paraDayjs(data)?.format('DD/MM/YYYY [às] HH:mm') ?? '—'
 
 // "09:00" -> "9h", "14:30" -> "14h30" (como a recepção fala e escreve na agenda)
 export function horaCurta(hora) {

@@ -23,7 +23,7 @@ def _registro(engine, lt, funcionario, entrada, saida=None):
 def test_registrar_entrada_e_saida_com_hora_do_servidor(cliente, lojas, engine_dono):
     a, _ = lojas
     antes = datetime.now(UTC).replace(microsecond=0)
-    entrada = cliente.post(f'{URL}/registrar', headers=a.h_prof)
+    entrada = cliente.post(f'{URL}/registrar', json={'acao': 'entrada'}, headers=a.h_prof)
     assert entrada.status_code == 200, entrada.json()
     assert entrada.json()['acao'] == 'entrada'
     registro = entrada.json()['registro']
@@ -32,7 +32,7 @@ def test_registrar_entrada_e_saida_com_hora_do_servidor(cliente, lojas, engine_d
     assert datetime.fromisoformat(registro['entrada']) >= antes
     assert cliente.get(f'{URL}/aberto', headers=a.h_prof).json()['id'] == registro['id']
 
-    saida = cliente.post(f'{URL}/registrar', json={}, headers=a.h_prof).json()
+    saida = cliente.post(f'{URL}/registrar', json={'acao': 'saida'}, headers=a.h_prof).json()
     assert saida['acao'] == 'saida'
     assert saida['registro']['id'] == registro['id']
     assert saida['registro']['minutos'] == 0
@@ -154,7 +154,9 @@ def test_um_registro_aberto_por_funcionario(cliente, lojas, engine_dono):
     assert em_aberto.status_code == 409
     assert em_aberto.json()['detail'] == 'Este funcionário já tem um registro de ponto em aberto.'
     # Registrar agora fecha o que estava aberto
-    assert cliente.post(f'{URL}/registrar', headers=a.h_prof).json()['acao'] == 'saida'
+    assert (
+        cliente.post(f'{URL}/registrar', json={'acao': 'saida'}, headers=a.h_prof).json()['acao'] == 'saida'
+    )
 
 
 def test_permissoes(cliente, lojas, engine_dono):
@@ -173,7 +175,9 @@ def test_permissoes(cliente, lojas, engine_dono):
         cliente.get(f'{URL}/aberto', params={'funcionario_id': str(a.admin.id)}, headers=a.h_prof).status_code
         == 403
     )
-    para_outro = cliente.post(f'{URL}/registrar', json={'funcionario_id': str(a.admin.id)}, headers=a.h_prof)
+    para_outro = cliente.post(
+        f'{URL}/registrar', json={'acao': 'entrada', 'funcionario_id': str(a.admin.id)}, headers=a.h_prof
+    )
     assert para_outro.status_code == 403
     assert para_outro.json()['detail'] == 'Você só pode registrar o seu próprio ponto.'
     correcao = cliente.put(
@@ -184,12 +188,12 @@ def test_permissoes(cliente, lojas, engine_dono):
     # Quem lê o ponto da equipe vê todos, mas não corrige
     leitor = usuario_com(engine_dono, a.loja, {'ponto_equipe': 'leitura'})
     assert len(cliente.get(URL, params={'inicio': dia}, headers=leitor).json()['registros']) == 2
-    assert cliente.post(f'{URL}/registrar', headers=leitor).status_code == 403
+    assert cliente.post(f'{URL}/registrar', json={'acao': 'entrada'}, headers=leitor).status_code == 403
     # Quem corrige pode registrar para outro funcionário
     assert (
-        cliente.post(f'{URL}/registrar', json={'funcionario_id': str(a.prof.id)}, headers=a.h_admin).json()[
-            'acao'
-        ]
+        cliente.post(
+            f'{URL}/registrar', json={'acao': 'entrada', 'funcionario_id': str(a.prof.id)}, headers=a.h_admin
+        ).json()['acao']
         == 'entrada'
     )
     # Sem nível em ponto
@@ -206,12 +210,14 @@ def test_permissoes(cliente, lojas, engine_dono):
         },
         headers=a.h_admin,
     )
-    inativo = cliente.post(f'{URL}/registrar', json={'funcionario_id': str(a.recepcao.id)}, headers=a.h_admin)
+    inativo = cliente.post(
+        f'{URL}/registrar', json={'acao': 'entrada', 'funcionario_id': str(a.recepcao.id)}, headers=a.h_admin
+    )
     assert inativo.json()['detail'] == 'Funcionário inativo não registra ponto.'
     # Módulo desligado
     mudar_modulo(engine_dono, a.loja.id, 'controle_tempo', habilitado=False)
     assert cliente.get(URL, headers=a.h_admin).status_code == 403
-    assert cliente.post(f'{URL}/registrar', headers=a.h_admin).status_code == 403
+    assert cliente.post(f'{URL}/registrar', json={'acao': 'entrada'}, headers=a.h_admin).status_code == 403
 
 
 def test_isolamento_entre_lojas(cliente, lojas, engine_dono):
@@ -225,7 +231,7 @@ def test_isolamento_entre_lojas(cliente, lojas, engine_dono):
     )
     assert corrigir.status_code == 404
     para_func_de_a = cliente.post(
-        f'{URL}/registrar', json={'funcionario_id': str(a.prof.id)}, headers=b.h_admin
+        f'{URL}/registrar', json={'acao': 'saida', 'funcionario_id': str(a.prof.id)}, headers=b.h_admin
     )
     assert para_func_de_a.status_code == 404
     manual = cliente.post(
@@ -241,3 +247,20 @@ def test_isolamento_entre_lojas(cliente, lojas, engine_dono):
     with engine_dono.connect() as conexao:
         saida = conexao.execute(select(RegistroPonto.saida).where(RegistroPonto.id == registro_a.id)).scalar()
     assert saida is None
+
+
+def test_funcionarios_do_ponto_da_equipe(cliente, lojas, engine_dono):
+    """GET /ponto/funcionarios: lista de apoio da loja (com inativos), só com Ponto da equipe."""
+    a, b = lojas
+    leitor = usuario_com(engine_dono, a.loja, {'ponto_equipe': 'leitura'}, nome='Leitor do ponto')
+    resposta = cliente.get(f'{URL}/funcionarios', headers=leitor)
+    assert resposta.status_code == 200, resposta.json()
+    nomes = [f['nome'] for f in resposta.json()]
+    assert {'Admin', 'Profissional', 'Recepção', 'Leitor do ponto'} <= set(nomes)
+    assert all(set(f) == {'id', 'nome', 'cor_agenda', 'ativo'} for f in resposta.json())
+    ids_b = {str(b.admin.id), str(b.prof.id), str(b.recepcao.id)}
+    assert not ids_b & {f['id'] for f in resposta.json()}
+
+    assert cliente.get(f'{URL}/funcionarios', headers=a.h_prof).status_code == 403
+    mudar_modulo(engine_dono, a.loja.id, 'controle_tempo', habilitado=False)
+    assert cliente.get(f'{URL}/funcionarios', headers=a.h_admin).status_code == 403

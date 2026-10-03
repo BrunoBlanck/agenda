@@ -828,6 +828,11 @@ body {
   margin: -8px 0 var(--espaco-3);
 }
 
+/* Logo da loja antes dos campos do formulário (SUPERADMIN, Dados gerais) */
+.bloco-logo {
+  margin-bottom: var(--espaco-5);
+}
+
 .loja-titulo {
   display: inline-flex;
   flex-wrap: wrap;
@@ -1041,4 +1046,29 @@ body {
 
 .ant-table-tbody > tr.linha-em-edicao > td:first-child {
   box-shadow: inset 3px 0 0 var(--cor-tinta);
+}
+
+/* Aviso de lista desatualizada (recarga falhou), entre os filtros e a tabela */
+.alerta-lista.ant-alert {
+  margin: 0 var(--espaco-4) var(--espaco-3);
+}
+
+/* Linhas cinza no lugar de uma lista enquanto os dados chegam (Início) */
+.carregando-linhas {
+  padding: var(--espaco-3) var(--espaco-4);
+}
+
+.secao-corpo:not(.rente) > .carregando-linhas {
+  padding: 0;
+}
+
+/* Opção de seleção que a pessoa não pode escolher, com o motivo à direita */
+.opcao-indisponivel {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--espaco-3);
+}
+
+.opcao-indisponivel .texto-apoio {
+  font-size: 12px;
 }

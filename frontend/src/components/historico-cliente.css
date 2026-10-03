@@ -215,3 +215,11 @@
     border-top: 0;
   }
 }
+
+/* Carregando (primeira busca, troca de filtro): o formato do conteúdo, sem spinner */
+.historico-carregando {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espaco-4);
+  padding: var(--espaco-4) var(--espaco-5);
+}

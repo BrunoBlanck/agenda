@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
 import { Tooltip } from 'antd'
 import dayjs from 'dayjs'
-import { statusAgendamento } from '../../data/mock.js'
-import { useNomes } from '../../data/useNomes.js'
+import { statusAgendamento } from '../../data/dominio.js'
+import { agoraNaLoja } from '../../data/api/conversao.js'
 import { horaCurta } from '../../utils/formatos.js'
-import { distribuir, ehHoje, fimDe, horaDe, inativo, mesmoDia, minutosDe, nomesDias } from './util.js'
+import { MINUTOS_DIA, corDe, distribuir, ehHoje, fimDe, horaDe, inativo, mesmoDia, minutosDe, nomesDias, passaDaMeiaNoite } from './util.js'
 
 const ALTURA_HORA = 60 // px por hora
 const PASSO = 30 // minutos ao clicar num horário vazio
@@ -24,18 +24,53 @@ const bloqueiosDoDia = (bloqueios, dia) =>
     return [{ ...b, ini: ini.hour() * 60 + ini.minute(), fim: fim.hour() * 60 + fim.minute() }]
   })
 
-function Resumo({ a, nomes }) {
+// Blocos cinza no lugar dos agendamentos enquanto a semana carrega: [início em horas a partir do topo, duração]
+const FANTASMAS = [
+  [[1, 1], [3.5, 1.5]],
+  [[0.5, 1.5], [4, 1]],
+  [[2, 1], [5, 1.5]],
+  [[1, 2]],
+  [[0.5, 1], [3, 1], [6, 1]],
+  [[2, 1.5]],
+  [[1.5, 1]],
+]
+
+// Agendamentos do dia na grade. Quem passa da meia-noite é cortado às 24h ("continua") e a sobra
+// aparece no topo do dia seguinte ("continuacao"), mesmo que comece antes da primeira hora da grade.
+function eventosDoDia(agendamentos, dia, minutoInicial) {
+  const chave = dia.format('YYYY-MM-DD')
+  const anterior = dia.subtract(1, 'day').format('YYYY-MM-DD')
+  const doDia = agendamentos
+    .filter((a) => a.data === chave)
+    .map((a) => {
+      const ini = minutosDe(a.hora)
+      return { a, chave: a.id, ini, fim: Math.min(MINUTOS_DIA, ini + (a.duracao ?? 0)), continua: passaDaMeiaNoite(a) }
+    })
+  const continuacoes = agendamentos
+    .filter((a) => a.data === anterior && passaDaMeiaNoite(a))
+    .map((a) => {
+      const fim = Math.min(MINUTOS_DIA, minutosDe(a.hora) + (a.duracao ?? 0) - MINUTOS_DIA)
+      // Termina antes da primeira hora da grade: fica um aviso compacto no topo
+      const ini = Math.min(Math.max(0, minutoInicial), fim)
+      const foraDaGrade = fim <= minutoInicial
+      return { a, chave: `${a.id}:continuacao`, ini: foraDaGrade ? minutoInicial : ini, fim: foraDaGrade ? minutoInicial + 22 : fim, continuacao: true }
+    })
+  return distribuir([...continuacoes, ...doDia])
+}
+
+function Resumo({ a }) {
   return (
     <>
       <strong>
         {horaCurta(a.hora)} às {horaCurta(fimDe(a))}
+        {passaDaMeiaNoite(a) && ' do dia seguinte'}
       </strong>
       <br />
-      {nomes.cliente(a.clienteId)}
+      {a.clienteNome ?? '—'}
       <br />
-      {nomes.servico(a.servicoId)}, com {nomes.profissional(a.funcionarioId)}
+      {a.servicoNome ?? 'Atendimento'}, com {a.funcionarioNome ?? '—'}
       <br />
-      {statusAgendamento[a.status]?.label}
+      {statusAgendamento[a.status]?.label ?? 'Situação desconhecida'}
     </>
   )
 }
@@ -43,12 +78,13 @@ function Resumo({ a, nomes }) {
 // Grade semanal: uma coluna por dia, horas na vertical, agendamentos posicionados pelo horário.
 // Clicar num horário vazio agenda nele (onNovo); sem permissão de criar, onNovo é null.
 // destaqueId: agendamento aberto no painel lateral (fica marcado na grade).
-export default function VisaoSemana({ dias, agendamentos, bloqueios, horaInicio, horaFim, diaSelecionado, onSelecionarDia, onAbrir, onNovo, destaqueId }) {
-  const nomes = useNomes()
+// carregando: a semana ainda não chegou (mostra blocos cinza no formato da grade, sem agendamentos).
+export default function VisaoSemana({ dias, agendamentos, bloqueios, horaInicio, horaFim, diaSelecionado, onSelecionarDia, onAbrir, onNovo, destaqueId, carregando = false }) {
   const grade = useRef(null)
-  const [agora, setAgora] = useState(dayjs())
+  // Linha do "agora" na hora da loja
+  const [agora, setAgora] = useState(agoraNaLoja)
   useEffect(() => {
-    const t = setInterval(() => setAgora(dayjs()), 60_000)
+    const t = setInterval(() => setAgora(agoraNaLoja()), 60_000)
     return () => clearInterval(t)
   }, [])
 
@@ -106,39 +142,58 @@ export default function VisaoSemana({ dias, agendamentos, bloqueios, horaInicio,
           ))}
         </div>
 
-        {dias.map((dia) => {
+        {dias.map((dia, indice) => {
           const chave = dia.format('YYYY-MM-DD')
-          const eventos = distribuir(
-            agendamentos
-              .filter((a) => a.data === chave)
-              .map((a) => ({ a, ini: minutosDe(a.hora), fim: minutosDe(a.hora) + (a.duracao ?? 0) })),
-          )
+          const eventos = carregando ? [] : eventosDoDia(agendamentos, dia, horaInicio * 60)
           return (
             <div
               key={chave}
               className={['agenda-semana-coluna', mesmoDia(dia, diaSelecionado) && 'selecionado'].filter(Boolean).join(' ')}
               style={{ '--altura-hora': `${ALTURA_HORA}px` }}
+              aria-busy={carregando || undefined}
               onClick={(e) => clicarHorario(dia, e)}
             >
-              {bloqueiosDoDia(bloqueios, dia).map((b) => (
-                <div
-                  key={b.id}
-                  className="agenda-bloqueio"
-                  style={{ top: Math.max(0, topo(b.ini)), height: Math.min(alturaTotal, topo(b.fim)) - Math.max(0, topo(b.ini)) }}
-                  title={b.motivo}
-                >
-                  {b.quem == null ? b.motivo : `${b.quem}: ${b.motivo}`}
-                </div>
-              ))}
+              {carregando &&
+                FANTASMAS[indice % FANTASMAS.length]
+                  .filter(([inicio]) => horaInicio + inicio < horaFim)
+                  .map(([inicio, duracao]) => (
+                    <div
+                      key={inicio}
+                      className="agenda-fantasma"
+                      aria-hidden="true"
+                      style={{ top: inicio * ALTURA_HORA + 1, height: Math.min(duracao, horaFim - horaInicio - inicio) * ALTURA_HORA - 2 }}
+                    />
+                  ))}
 
-              {eventos.map(({ a, ini, coluna, colunas }) => {
-                const cor = nomes.corDe(a.funcionarioId)
-                const altura = Math.max(22, ((a.duracao ?? 0) / 60) * ALTURA_HORA - 2)
+              {!carregando &&
+                bloqueiosDoDia(bloqueios, dia).map((b) => (
+                  <div
+                    key={b.id}
+                    className="agenda-bloqueio"
+                    style={{ top: Math.max(0, topo(b.ini)), height: Math.min(alturaTotal, topo(b.fim)) - Math.max(0, topo(b.ini)) }}
+                    title={b.motivo}
+                  >
+                    {b.quem == null ? b.motivo : `${b.quem}: ${b.motivo}`}
+                  </div>
+                ))}
+
+              {eventos.map(({ a, chave: chaveEvento, ini, fim, coluna, colunas, continua, continuacao }) => {
+                const cor = corDe(a)
+                const altura = Math.max(22, ((fim - ini) / 60) * ALTURA_HORA - 2)
+                // A continuação abre o agendamento no dia em que ele começa (é lá que o painel do dia o lista)
+                const diaDoAgendamento = continuacao ? dia.subtract(1, 'day') : dia
                 return (
-                  <Tooltip key={a.id} title={<Resumo a={a} nomes={nomes} />}>
+                  <Tooltip key={chaveEvento} title={<Resumo a={a} />}>
                     <button
                       type="button"
-                      className={['agenda-evento', inativo(a) && 'inativo', a.status === 'pendente' && 'pendente', a.id === destaqueId && 'em-edicao']
+                      className={[
+                        'agenda-evento',
+                        inativo(a) && 'inativo',
+                        a.status === 'pendente' && 'pendente',
+                        a.id === destaqueId && 'em-edicao',
+                        continua && 'continua',
+                        continuacao && 'continuacao',
+                      ]
                         .filter(Boolean)
                         .join(' ')}
                       style={{
@@ -153,12 +208,22 @@ export default function VisaoSemana({ dias, agendamentos, bloqueios, horaInicio,
                       }}
                       onClick={(e) => {
                         e.stopPropagation()
-                        onSelecionarDia(dia)
+                        onSelecionarDia(diaDoAgendamento)
                         onAbrir(a)
                       }}
                     >
-                      <strong>{horaCurta(a.hora)}</strong> {nomes.cliente(a.clienteId)}
-                      {altura > 40 && <span className="agenda-evento-servico">{nomes.servico(a.servicoId)}</span>}
+                      {continuacao ? (
+                        <>
+                          <span className="sr-only">Continuação do dia anterior: </span>
+                          <strong>até {horaCurta(fimDe(a))}</strong> {a.clienteNome ?? '—'}
+                        </>
+                      ) : (
+                        <>
+                          <strong>{horaCurta(a.hora)}</strong> {a.clienteNome ?? '—'}
+                          {altura > 40 && a.servicoNome && <span className="agenda-evento-servico">{a.servicoNome}</span>}
+                          {continua && <span className="agenda-evento-continua">continua amanhã até {horaCurta(fimDe(a))}</span>}
+                        </>
+                      )}
                     </button>
                   </Tooltip>
                 )

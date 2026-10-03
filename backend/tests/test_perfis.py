@@ -32,6 +32,11 @@ def test_catalogo_de_recursos_mostra_modulo_desligado(cliente, lojas, engine_don
     assert por_codigo['materiais']['modulo'] == 'materiais'
     assert por_codigo['materiais']['modulo_ativo'] is False
     assert por_codigo['clientes']['modulo_ativo'] is True
+    # O que cada nível permite vem separado (e a descrição antiga continua)
+    clientes = por_codigo['clientes']
+    assert (clientes['leitura'], clientes['escrita']) == ('Ver lista e ficha', 'Cadastrar, editar, inativar')
+    assert clientes['descricao'] == 'Leitura: Ver lista e ficha. Escrita: Cadastrar, editar, inativar.'
+    assert all(r['leitura'] and r['escrita'] for r in recursos)
 
 
 # --- Perfis --------------------------------------------------------------------------------------

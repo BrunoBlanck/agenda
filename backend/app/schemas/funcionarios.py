@@ -6,7 +6,7 @@ from uuid import UUID
 
 from pydantic import BeforeValidator, EmailStr, Field, StringConstraints
 
-from app.schemas.comum import Controle, Entrada, texto, texto_opcional, vazio_para_none
+from app.schemas.comum import Controle, Cpf, Entrada, TelefoneOpcional, texto, vazio_para_none
 
 CorAgenda = Annotated[
     Annotated[str, StringConstraints(pattern=r'^#[0-9a-fA-F]{6}$')] | None,
@@ -32,8 +32,8 @@ class FuncionarioEntrada(Entrada):
     email: EmailStr = Field(description='E-mail de login (único na loja)')
     perfil_id: UUID
     cargo_id: UUID | None = None
-    cpf: texto_opcional(14) = None
-    telefone: texto_opcional(20) = None
+    cpf: Cpf = None
+    telefone: TelefoneOpcional = None
     cor_agenda: CorAgenda = None
     ativo: bool = True
     senha: Senha | None = Field(

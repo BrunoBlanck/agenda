@@ -86,3 +86,33 @@ def calcular_acesso(db: Session, loja_id: UUID, perfil: Perfil) -> Acesso:
         else:
             niveis[codigo] = do_perfil.get(recurso_id, NivelAcesso.nenhum)
     return Acesso(modulos=modulos, niveis=niveis)
+
+
+# --- Sem escalada de acesso (ACE-19, SEG-05) ------------------------------------------------------
+
+
+def niveis_do_perfil(db: Session, loja_id: UUID, perfil: Perfil) -> dict[str, NivelAcesso]:
+    """Nível gravado no perfil para cada recurso do catálogo (Administrador = escrita em tudo).
+
+    Sem o efeito dos módulos: um módulo desligado vale para todos os perfis ao mesmo tempo, então
+    comparar os níveis gravados é o que impede alguém de conceder mais do que tem, hoje ou quando o
+    módulo for religado. Nos módulos ligados, é igual ao nível efetivo.
+    """
+    codigos = db.scalars(select(Recurso.codigo)).all()
+    if perfil.acesso_total:
+        return dict.fromkeys(codigos, NivelAcesso.escrita)
+    gravados = dict(
+        db.execute(
+            select(Recurso.codigo, PerfilAcesso.nivel)
+            .join(Recurso, Recurso.id == PerfilAcesso.recurso_id)
+            .where(PerfilAcesso.loja_id == loja_id, PerfilAcesso.perfil_id == perfil.id)
+        ).all()
+    )
+    return {codigo: gravados.get(codigo, NivelAcesso.nenhum) for codigo in codigos}
+
+
+def acima_do_teto(niveis: dict[str, NivelAcesso], teto: dict[str, NivelAcesso]) -> list[str]:
+    """Recursos (do catálogo) em que ``niveis`` passa do ``teto`` de quem está agindo."""
+    return sorted(
+        codigo for codigo, nivel in niveis.items() if codigo in teto and PESO[nivel] > PESO[teto[codigo]]
+    )

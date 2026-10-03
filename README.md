@@ -2,7 +2,7 @@
 
 Sistema web para gestão de uma clínica com vários funcionários: agenda de atendimentos, cadastro de clientes, funcionários, serviços e materiais, além do controle de ponto (entrada e saída) da equipe.
 
-> **Status:** há um back-end em [`backend/`](backend/README.md) (FastAPI + PostgreSQL) com o banco completo, dados de exemplo, login de funcionário e de superadmin, as regras de acesso e as rotas das três áreas: painel da loja, painel SUPERADMIN e site do consumidor. O front-end **ainda usa dados de exemplo em memória** (ao recarregar a página, os dados voltam ao estado inicial) e o próximo passo é ligá-lo à API.
+> **Status:** há um back-end em [`backend/`](backend/README.md) (FastAPI + PostgreSQL) com o banco completo, dados de exemplo, login de funcionário e de superadmin, as regras de acesso e as rotas das três áreas: painel da loja, painel SUPERADMIN e site do consumidor. O front-end está **ligado à API** nas três áreas, com login de verdade: rode o back-end antes do front (ver "Como rodar").
 
 ## Funcionalidades
 
@@ -24,12 +24,12 @@ Sistema web para gestão de uma clínica com vários funcionários: agenda de at
 
 - Cada funcionário tem um **perfil** (Administrador, Recepção, Profissional ou outros criados pela loja). O menu e os botões mostrados dependem do nível do perfil em cada área.
 - **Serviços, Materiais, Controle de Tempo e Locais** podem ser desativados por loja. Sem Serviços, o agendamento é feito sem serviço (duração e preço manuais). Sem Locais, o agendamento não pede local.
-- Como ainda não há login nem painel SUPERADMIN, o botão **Demonstração** (no topo) permite trocar o usuário logado, ligar/desligar módulos e mudar o tipo da loja.
+- Entre em `/painel/login` com um dos usuários do seed (lista em [`backend/README.md`](backend/README.md)) para ver o painel com os acessos de cada perfil; os módulos e o tipo da loja são definidos no SUPERADMIN.
 - Detalhes das regras em [`estrutura.md`](estrutura.md).
 
-### Prévia do painel SUPERADMIN
+### Painel SUPERADMIN
 
-Em `/superadmin` (ou pelo botão **Demonstração › Abrir prévia do painel SUPERADMIN**) há uma prévia navegável da área da plataforma:
+Em `/superadmin` (login de superadmin) fica a área da plataforma:
 
 | Menu | Descrição |
 |---|---|
@@ -41,7 +41,7 @@ Em `/superadmin` (ou pelo botão **Demonstração › Abrir prévia do painel SU
 
 O tipo da loja (Clínica, Barbearia, Escola) é uma constante do sistema: cada tipo terá o próprio site do consumidor. Nada é apagado de verdade: excluir marca a data/hora e quem excluiu, e tudo fica na auditoria.
 
-A "Clínica Sorriso" é a loja aberta no painel da loja: o que o superadmin muda nela (módulos, dados, funcionários) aparece no painel na hora.
+O que o superadmin muda numa loja (módulos, dados, funcionários) vale no painel daquela loja a partir da próxima ação do funcionário.
 
 ### Regras de agendamento
 
@@ -93,7 +93,7 @@ A API fica em http://localhost:8000 (documentação em http://localhost:8000/doc
 ### Front-end
 
 
-Pré-requisito: [Node.js](https://nodejs.org/) 20 ou superior.
+Pré-requisito: [Node.js](https://nodejs.org/) 20 ou superior e a API no ar (seção anterior, em http://localhost:8000).
 
 ```bash
 cd frontend
@@ -101,13 +101,13 @@ npm install
 npm run dev
 ```
 
-Abra o endereço exibido no terminal (por padrão http://localhost:5173).
+Abra o endereço exibido no terminal (por padrão http://localhost:5173). Em desenvolvimento o Vite encaminha `/api` para a API (`API_PROXY_ALVO`, padrão http://localhost:8000); em produção, `VITE_API_URL` aponta para a API (ver `frontend/.env.example`).
 
 | Endereço | O que é |
 |---|---|
-| `/` | Protótipo do site do consumidor final (será renderizado pelo back-end Python): escolhe o serviço, vê horários livres, faz um cadastro e solicita o agendamento |
-| `/painel` | Painel da loja (todos os menus ficam em `/painel/...`) |
-| `/superadmin` | Prévia do painel SUPERADMIN |
+| `/site/<slug>` | Protótipo do site do consumidor final (será renderizado pelo back-end Python), ex.: `/site/clinica-sorriso`: escolhe o serviço, vê horários livres, faz um cadastro e solicita o agendamento |
+| `/painel` | Painel da loja (login em `/painel/login`; todos os menus ficam em `/painel/...`) |
+| `/superadmin` | Painel SUPERADMIN (login em `/superadmin/login`) |
 
 ### Outros comandos
 
@@ -129,7 +129,8 @@ frontend/src/
 │   ├── Casca.jsx             # Estrutura comum aos dois painéis (menu lateral, topo, conteúdo)
 │   ├── AppLayout.jsx         # Painel da loja e bloqueio de telas sem acesso
 │   ├── navegacao.jsx         # Itens do menu e regra de acesso de cada tela
-│   └── PainelDemonstracao.jsx # Troca de usuário e módulos (provisório)
+│   ├── TelaLogin.jsx         # Login (painel da loja e SUPERADMIN)
+│   └── ExigirSessao.jsx      # Guarda das áreas logadas (sem sessão, vai ao login)
 ├── components/
 │   ├── base/                 # Peças de tela: Pagina, Secao, Tabela, BarraFiltros, EstadoVazio, Etiqueta...
 │   │                         # PainelLateral (consulta) e PainelFormulario (formulário): todo painel que abre por cima de uma tela
@@ -137,15 +138,68 @@ frontend/src/
 │   ├── AgendamentoPainel.jsx # Formulário de agendamento (painel lateral)
 │   └── CadastroTabela.jsx    # Tela de cadastro completa (cabeçalho, busca, tabela e formulário no painel lateral)
 ├── data/
-│   ├── mock.js               # Dados de exemplo
-│   ├── acesso.js             # Catálogos: módulos, recursos e níveis de acesso
-│   ├── useAcesso.js          # Regras de acesso do usuário logado
-│   └── DataContext.jsx       # Estado em memória compartilhado entre as telas
+│   ├── api/
+│   │   ├── cliente.js        # Único lugar que chama a API: token, tempo limite, erros (ErroApi)
+│   │   ├── conversao.js      # snake_case <-> camelCase, datas na hora da loja, dinheiro, paginação
+│   │   ├── useConsulta.js    # Hook de leitura (carregando, erro, recarregar, cancelamento)
+│   │   ├── useTratarErro.js  # Mostra cada erro (422 nos campos, 404, 409, 403, rede)
+│   │   └── <area>.js         # Funções de cada área (clientes, agendamentos, plataforma, site...)
+│   ├── sessao/               # Sessões do painel da loja e do SUPERADMIN (login, GET eu, sair)
+│   ├── use<Area>.js          # Hooks consumidos pelas telas
+│   ├── dominio.js            # Enums da API com rótulo e tom (status, canais, tipos)
+│   ├── acesso.js             # Nomes dos módulos e rótulos dos níveis de acesso
+│   └── useAcesso.js          # Acessos do usuário logado (de GET /api/loja/eu)
 └── pages/                    # Uma tela por menu
 ```
 
+## Agentes de desenvolvimento (Claude Code)
+
+O projeto é desenvolvido com um time de agentes em [`.claude/agents/`](.claude/agents/), que seguem as skills de [`.claude/skills/`](.claude/skills/):
+
+| Agente | Papel |
+|---|---|
+| `coordenador` | Conhece todas as regras de negócio, escreve a especificação de cada funcionalidade (com o contrato da API e o de tela) e conduz o fluxo |
+| `backend` | API Python: banco, rotas, regras e testes, com foco em segurança, correção lógica e performance |
+| `frontend-ui` | Telas no padrão visual e de componentes do projeto, com dados provisórios no formato do contrato |
+| `frontend-dev` | Liga as telas à API: tipos, datas, nulos, erros, paginação e sessão |
+| `revisor` | Revisão leve no front (nada quebra, tela no padrão) e rigorosa no back (segurança, lógica, cenários de falha) |
+
+Fluxo de uma funcionalidade nova:
+
+```
+coordenador (especificação em docs/funcionalidades/<slug>.md)
+   ├─► backend ─────┐   em paralelo
+   └─► frontend-ui ─┤
+                    ▼
+              frontend-dev
+                    ▼
+                revisor ──► reprovado: volta para o dono do achado e revisa de novo (até 3 rodadas)
+                    ▼ aprovado
+           commit na branch feat/<slug>
+```
+
+Para usar: abra o Claude Code na raiz do projeto como coordenador (`claude --agent coordenador`) e descreva a funcionalidade, ou, numa sessão comum, use `/nova-funcionalidade <descrição>`. O fluxo precisa rodar na conversa principal, porque um subagente não chama outros subagentes.
+
+| Skill | Usada por | Conteúdo |
+|---|---|---|
+| `regras-do-sistema` | todos | Catálogo das regras de negócio com códigos (`AGE-17`, `ACE-19`...), resumo do `estrutura.md` |
+| `especificar-funcionalidade` | coordenador, backend, frontend-ui, frontend-dev | Modelo da especificação e dos contratos |
+| `nova-funcionalidade` | coordenador | O fluxo passo a passo |
+| `backend-seguro` | backend, revisor | Checklist de segurança, lógica, performance e código limpo |
+| `padroes-ui` | frontend-ui, revisor | Checklist de telas, componentes e identidade visual |
+| `integracao-api` | frontend-dev, revisor | Checklist de integração com a API |
+| `diretrizes` | todos | Como registrar, seguir e verificar as diretrizes permanentes |
+
+### Memória do time: diretrizes permanentes
+
+Uma ordem que vale para sempre ("em todas as telas de cadastro coloque X", "padronize as mensagens de erro no back-end", "a partir de agora nunca…") vira uma **diretriz** em [`.claude/diretrizes/`](.claude/diretrizes/INDICE.md), com um ID (`DIR-003`), escopo, regra, forma de verificar e a lista do código existente onde ela ainda precisa ser aplicada.
+
+- O índice é carregado em toda sessão (pelo `CLAUDE.md`) e a skill `diretrizes` é pré-carregada em todos os agentes.
+- Antes de cada tarefa, o agente lê as diretrizes do seu escopo; o coordenador as cita na especificação e o revisor reprova se alguma for violada.
+- Um hook (`.claude/hooks/lembrar-diretriz.mjs`) percebe mensagens como "sempre", "em todas as telas" ou "padronize" e lembra o modelo de registrar a ordem antes de executar.
+- A memória privada de cada agente (`.claude/agent-memory/`) fica só para aprendizados técnicos dele; ordem do usuário nunca vai para lá.
+
 ## Próximos passos
 
-- Ligar o front-end à API (login real no lugar do botão Demonstração), no painel da loja, no SUPERADMIN e no site
 - Proteção contra abuso nas rotas públicas do site (limite de requisições, captcha)
 - Envio de e-mail (definir/redefinir senha) e notificações de agendamento

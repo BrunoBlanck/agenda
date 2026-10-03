@@ -6,18 +6,27 @@ from uuid import UUID
 from pydantic import Field, field_validator
 
 from app.models.enums import CanalCliente
-from app.schemas.comum import Controle, EmailOpcional, Entrada, texto, texto_opcional
+from app.schemas.comum import (
+    Controle,
+    Cpf,
+    DataNascimento,
+    EmailOpcional,
+    Entrada,
+    Telefone,
+    texto,
+    texto_opcional,
+)
 
 
 class ClienteEntrada(Entrada):
     nome: texto(60) = Field(description='Só o primeiro nome (como a loja chama o cliente)')
     sobrenome: texto(100)
-    cpf: texto_opcional(14) = None
-    telefone: texto(20)
+    cpf: Cpf = None
+    telefone: Telefone
     email: EmailOpcional = None
-    data_nascimento: date | None = None
+    data_nascimento: DataNascimento = None
     observacoes: texto_opcional() = None
-    canais: list[CanalCliente] = Field(default_factory=lambda: [CanalCliente.loja])
+    canais: list[CanalCliente] = Field(default_factory=lambda: [CanalCliente.loja], max_length=10)
     ativo: bool = True
 
     @field_validator('canais')

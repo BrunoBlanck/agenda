@@ -16,7 +16,7 @@ from sqlalchemy import or_, select
 from app.auth.dependencias import ContextoLoja, exigir
 from app.models import Agendamento, BloqueioAgenda, Funcionario, PerfilHorario
 from app.schemas.agendamentos import AgendamentoSaida
-from app.schemas.comum import Erro
+from app.schemas.comum import Data, Erro
 from app.schemas.perfis import BloqueioSaida, HorarioSaida
 from app.services import agendamentos as regras
 from app.services.comum import buscar, com_autor, fuso, intervalo_de_dias, invalido
@@ -48,8 +48,8 @@ class AgendaPeriodo(BaseModel):
 @router.get('/agenda', summary='Agendamentos, jornada e bloqueios de um período (semana, mês ou dia)')
 def agenda(
     ctx: Annotated[ContextoLoja, Depends(exigir(('agenda_propria', 'agenda_equipe')))],
-    inicio: Annotated[date, Query(description='Primeiro dia (no fuso da loja)')],
-    fim: Annotated[date | None, Query(description='Último dia, inclusive (padrão: o próprio início)')] = None,
+    inicio: Annotated[Data, Query(description='Primeiro dia (no fuso da loja)')],
+    fim: Annotated[Data | None, Query(description='Último dia, inclusive (padrão: o próprio início)')] = None,
     funcionario_id: Annotated[UUID | None, Query(description='Só este profissional')] = None,
 ) -> AgendaPeriodo:
     db = ctx.db
