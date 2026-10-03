@@ -1,4 +1,4 @@
-- [armadilhas-ambiente](armadilhas-ambiente.md) — Armadilhas confirmadas ao verificar a integração contra a API local (uvicorn --reload no Windows, curl com acentos no Git Bash, limites do site)
+- [armadilhas-ambiente](armadilhas-ambiente.md) — API local (uvicorn --reload no Windows, curl com acentos), porta 5173 ocupada, node órfão após TaskStop, Vite com base /_app/
 - [armadilhas-form-antd](armadilhas-form-antd.md) — Form.List dentro do PainelFormulario (preserve={false}) perde os valores quando os dados chegam depois da abertura; e como testar o painel no navegador sem login
 - [armadilhas-integracao](armadilhas-integracao.md) — Fuso das colunas de controle, CPFs do seed, Form com id, 409 no campo, useConsulta com dado antigo, ponto sem DELETE, route do Playwright
 - [datas-controle-utc](datas-controle-utc.md) — Fuso das datas da API — o back-end responde tudo no fuso da loja; o front usa a hora escrita na string e só converte UTC ("Z")

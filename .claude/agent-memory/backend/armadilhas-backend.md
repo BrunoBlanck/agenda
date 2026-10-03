@@ -26,4 +26,8 @@ Armadilhas confirmadas em 2026-10-02 (correção da revisão A1–A12):
 - **Bloqueio de login nunca é só por conta** (revisão rodada 2, A18): um terceiro que sabe o e-mail tranca a conta para sempre renovando o bloqueio. A chave é conta + IP; o ataque distribuído fica com o limite global por IP. Teste "bloqueio renovado por terceiro" em `tests/test_limites.py`.
   **Why:** reprovado como bloqueante. **How to apply:** qualquer trava de conta nova precisa de teste com dois IPs.
 
+- **Rota pega-tudo fora de /api (`/{slug}/{resto:path}`) muda o comportamento da API** (2026-10-03): `/api/x` inexistente viraria HTML, e `POST /api/x` viraria 405 (o Starlette prefere casamento parcial de caminho a 404). Solução em `app/routers/paginas.py`: conversor próprio (`register_url_convertor('segmento', ...)`, regex `(?!api(?:/|$))[^/]+`) e o router registrado por último. Teste em `tests/test_roteamento.py` com GET/POST/HEAD.
+- **uvicorn atrás de proxy:** `--proxy-headers` + `FORWARDED_ALLOW_IPS` (padrão do uvicorn sem a variável: `127.0.0.1,::1`). Host/porta saem de `UVICORN_HOST`/`UVICORN_PORT` (click auto_envvar) se não forem passados no CMD. Com `-p 127.0.0.1:8000:8000` no Docker o remetente é o gateway (172.17.0.1), não 127.0.0.1.
+- **Lista de constantes repetida em migração** (ex.: slugs reservados): teste compara com `pg_get_constraintdef` para não divergir.
+
 Relacionado: [[contratos-alterados-revisao-1]]

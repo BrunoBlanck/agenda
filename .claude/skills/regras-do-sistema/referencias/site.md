@@ -1,6 +1,6 @@
 # Site do consumidor (`SIT-*`)
 
-Fonte: `estrutura.md` 1.2, 2.13, 6.2 e o README. Rotas públicas em `/api/site/{slug}/...`. A versão final é **HTML renderizado pelo back-end Python** (um modelo por tipo de loja); `frontend/src/site/` é só protótipo de fluxo.
+Fonte: `estrutura.md` 1.2, 2.13, 6.2 e o README. Rotas públicas em `/api/site/{slug}/...`. A versão final é **HTML renderizado pelo back-end Python** (um modelo por tipo de loja) em `/{slug}` (GER-29). O protótipo React saiu do front (fica no histórico do git).
 
 - **SIT-01** Público, sem login, identificado pelo `slug`. Loja inexistente, excluída, suspensa ou cancelada: **404** em todas as rotas (não revela que existe).
 - **SIT-02** Expõe só o necessário: dados públicos da loja, serviços ativos com profissionais habilitados, locais ativos (id, nome, tipo; **sem link**), horários livres e o pedido de agendamento. Nada de dados de clientes.
@@ -12,3 +12,4 @@ Fonte: `estrutura.md` 1.2, 2.13, 6.2 e o README. Rotas públicas em `/api/site/{
 - **SIT-08** Sem o módulo Serviços: um "Atendimento" genérico de 30 min, sem preço, com os funcionários ativos que têm jornada.
 - **SIT-09** Cada tipo de loja tem identidade própria no site (tema por tokens); mobile first; poucos passos; funciona sem JS e JS só melhora.
 - **SIT-10** **Pendente:** proteção contra abuso (limite de requisições, captcha). Toda rota pública nova deve considerar isso.
+- **SIT-11** **Provisório:** até o site real existir, `GET /{slug}` devolve uma página HTML simples (nome, logo, contato e "Agendamento online em breve"); loja não visível (SIT-01) = página 404. `/{slug}/...` (menos `painel`) = 404 por enquanto.

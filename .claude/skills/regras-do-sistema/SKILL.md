@@ -33,8 +33,9 @@ Quando o usuário decide uma regra nova ou muda uma existente, atualize **no mes
 ## Regras transversais (`GER-*`): valem para todas as áreas
 
 ### O produto
-- **GER-01** SaaS multi-loja de agendamento para negócios de serviço: **clínica, barbearia, escola** (`tipo_loja`). Três áreas: **Painel da loja** (`/painel`, SPA React), **SUPERADMIN** (`/superadmin`, SPA React) e **Site do consumidor** (`/`, HTML renderizado pelo back-end Python; o que existe em `frontend/src/site/` é só protótipo).
+- **GER-01** SaaS multi-loja de agendamento para negócios de serviço: **clínica, barbearia, escola** (`tipo_loja`). Três áreas: **Painel da loja** (`/{slug}/painel`, SPA React), **SUPERADMIN** (`/superadmin`, SPA React) e **Site do consumidor** (`/{slug}`, HTML renderizado pelo back-end Python). Mapa de URLs em GER-29.
 - **GER-02** A **API do back-end é a única fonte da verdade** das regras de negócio. Regra no front é conveniência de UX (desabilitar botão, validar campo), nunca proteção.
+- **GER-29** **Mapa de URLs** (igual em dev e produção): `/{slug}` e `/{slug}/...` (menos `painel`) = site do consumidor (back-end); `/{slug}/painel/...` = painel da loja (SPA); `/superadmin/...` = SUPERADMIN (SPA); `/api/...` = API; `/_app/...` = arquivos do build do front; `/` e o resto = back-end (404). Em produção o nginx (`deploy/nginx/agenda.conf`) aplica a regra; em dev o Vite imita o nginx em `localhost:5173`. O slug da URL do painel só serve ao front (rota, login, chave da sessão): a API da loja continua tirando a loja do token (GER-05).
 - **GER-03** O tipo da loja **não muda nada no painel** (nem módulos, nem telas). Só muda o site do consumidor. Textos do painel que variam por loja vêm de `loja_configuracoes` (ex.: rótulo "Sala"/"Cadeira").
 
 ### Isolamento entre lojas

@@ -7,6 +7,7 @@ Fonte: `estrutura.md` seção 1 e 6.2. Rotas em `/api/superadmin/...` (só token
 - **PLA-02** Criar loja gera, no mesmo fluxo: os **perfis padrão** (ACE-16), uma linha de `loja_funcionalidades` por módulo opcional (habilitado conforme marcado), a linha de `loja_configuracoes` e o **primeiro funcionário** com perfil Administrador.
 - **PLA-03** Status `ativa`, `suspensa`, `cancelada`; qualquer troca é permitida (inclusive reativar cancelada). Suspensa: ninguém faz login, dados mantidos. Cancelada: dados mantidos.
 - **PLA-04** **Excluir** (lógica) só loja `cancelada`; o `slug` fica livre de novo. Loja excluída some do painel, do login e do site.
+- **PLA-16** **Slugs reservados** (viram o primeiro pedaço da URL, GER-29): `superadmin`, `api`, `painel`, `site`, `docs`, `redoc`, `openapi`, `admin`, `login`, `static`, `assets`, `app`, `www`, `saude`, `health`. Recusados com 422 no campo `slug` e por CHECK no banco.
 
 ## Módulos da loja
 - **PLA-05** Lojas › Módulos: liga/desliga cada módulo opcional, com observação e prazo (`expira_em`, sem fuso = fuso da loja). `PATCH` só muda os campos enviados. Recusa módulo não opcional. Ver ACE-06 a ACE-09.

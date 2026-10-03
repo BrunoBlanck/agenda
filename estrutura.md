@@ -1044,8 +1044,8 @@ CREATE TYPE origem_auditoria   AS ENUM ('painel', 'superadmin', 'site', 'sistema
 | Locais (nome definido pela loja) | `locais`, `servico_locais`, `loja_configuracoes` |
 | Materiais | `materiais`, `categorias_material`, `movimentacoes_estoque` |
 | Controle de Tempo | `registros_ponto` |
-| *(futuro)* Login da loja | `lojas` (slug), `funcionarios`, `perfis`, `perfil_acessos`, `recursos`, `loja_funcionalidades` |
-| Site do consumidor (`/`, exemplo) | `lojas` (`tipo` escolhe o site), `servicos`, `servico_funcionarios`, `servico_locais`, `locais`, `perfil_horarios`, `bloqueios_agenda`, `agendamentos`, `clientes` |
+| Login da loja (`/{slug}/painel/login`) | `lojas` (slug), `funcionarios`, `perfis`, `perfil_acessos`, `recursos`, `loja_funcionalidades` |
+| Site do consumidor (`/{slug}`) | `lojas` (`tipo` escolhe o site), `servicos`, `servico_funcionarios`, `servico_locais`, `locais`, `perfil_horarios`, `bloqueios_agenda`, `agendamentos`, `clientes` |
 | Configurações › Perfis e horários | `perfis`, `perfil_acessos`, `recursos`, `perfil_horarios`, `bloqueios_agenda` |
 | *(futuro)* Configurações | `lojas` (campos editáveis pela loja, ver 2.18) |
 | Painel SUPERADMIN (prévia) | `lojas`, `loja_funcionalidades`, `funcionarios`, `planos`, `superadmin_usuarios`, `auditoria` |
@@ -1157,3 +1157,14 @@ Decisões tomadas ao implementar `/api/superadmin/...` e `/api/site/{slug}/...` 
 - **Validação de entrada:** datas e horários informados entre 2000 e 2100; `pagina` até 10.000; textos livres até 2.000 caracteres; listas até 200 itens; uma movimentação de estoque até 1.000.000 e saldo conferido antes de gravar (cabe em `numeric(10,2)`). CPF e telefone de clientes e funcionários no formato canônico (a migração 0003 normalizou o que dava; CPF que colidiria com outro cadastro ativo ficou como estava). Busca de clientes acha telefone e CPF com ou sem máscara.
 - **Serviços:** serviço ativo precisa de pelo menos um profissional **ativo** (SER-02). Serviço com agendamentos ativos (`pendente`, `agendado`, `confirmado`) que ainda não terminaram não é excluído (409). Um agendamento mantém o serviço que já tinha mesmo que ele tenha sido excluído depois.
 - **Ponto:** `POST /ponto/registrar` recebe `acao` (`entrada` ou `saida`) e responde 409 se não bater com a situação (ex.: clique duplo). Lançamento manual e correção não podem sobrepor outro registro do funcionário.
+
+## 6.4 Roteamento por URL e deploy (nginx)
+
+Especificação: `docs/funcionalidades/roteamento-url.md`.
+
+- **Mapa de URLs (GER-29):** `/{slug}` = site do consumidor (back-end), `/{slug}/painel/...` = painel da loja (SPA), `/superadmin/...` = SUPERADMIN (SPA), `/api/...` = API, `/_app/...` = arquivos do build (Vite `base: '/_app/'`; `_app` nunca é slug, porque o slug não aceita `_`). `/` e o resto vão para o back-end (404). O funcionário entra pelo endereço da loja e só digita e-mail e senha; o slug da URL não escolhe a loja na API (GER-05).
+- **Produção:** nginx na frente (`deploy/nginx/agenda.conf`, passo a passo em `deploy/README.md`): `superadmin` e `/{slug}/painel` servem o `index.html` do build, `/_app/` os arquivos com cache longo, o resto vai para o uvicorn. O uvicorn roda com `--proxy-headers` e `FORWARDED_ALLOW_IPS`, senão o limite de login por IP veria todos como o IP do nginx.
+- **Dev:** o Vite imita o nginx em `localhost:5173` (o que não é app vai por proxy para a API), então dev e produção têm as mesmas URLs.
+- **Slugs reservados (PLA-16):** validação (422) + CHECK `ck_lojas_slug_reservado`.
+- **Sessão do painel por loja:** o token fica no `sessionStorage` com a chave da loja; duas lojas em abas diferentes não se misturam, e um token de outra loja na URL volta ao login.
+- **Provisória (SIT-11):** `/{slug}` é uma página simples com os dados públicos da loja até o site real; o protótipo React do site saiu.
