@@ -27,6 +27,8 @@ import { useTratarErro } from '../data/api/useTratarErro.js'
 // acoesEdicao(item, fechar): ações no cabeçalho do painel (ex.: atalho para o histórico).
 // destaqueId: outra linha a destacar, aberta pela própria tela (ex.: histórico do cliente).
 // larguraPainel: só quando os campos pedirem mais que os 480 px padrão.
+// campos: os Form.Item do painel, ou uma função (registro) => campos quando eles dependem do registro aberto
+// (ex.: avisos comparando o que foi marcado com o que já estava salvo). Registro novo = {}.
 //
 // lista (dados da API, hook da área):
 //   itens, carregando, atualizando, erro, recarregar()
@@ -274,7 +276,7 @@ export default function CadastroTabela({
         onSalvar={salvar}
         rodape={<UltimaAlteracao item={editando} />}
       >
-        {campos}
+        {typeof campos === 'function' ? campos(editando ?? {}) : campos}
       </PainelFormulario>
     </Pagina>
   )

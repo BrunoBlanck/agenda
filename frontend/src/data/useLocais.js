@@ -5,6 +5,7 @@ import {
   listarAgendamentosDoLocal,
   listarLocais,
   obterLocal,
+  obterOpcoesLocal,
   obterRotulosLocal,
   salvarLocal,
   salvarRotulosLocal,
@@ -70,6 +71,24 @@ export function useRotulosLocal() {
     erro: consulta.erro,
     recarregar: consulta.recarregar,
     salvar,
+  }
+}
+
+// --- Opções do campo "Serviços que acontecem aqui" ------------------------------------------------
+
+/**
+ * Serviços para o formulário do local (só quem tem escrita em Locais). Busca só com ativo = true
+ * (painel aberto, módulo Serviços ligado e escrita em Locais).
+ * Retorna { servicos: { id, nome, ativo, locaisVinculados }[] | null, carregando, erro, recarregar }.
+ * servicos = null enquanto não carregou, sem busca ou com o módulo Serviços desligado.
+ */
+export function useOpcoesLocal({ ativo = true } = {}) {
+  const consulta = useConsulta((sinal) => obterOpcoesLocal(sinal), ['locais-opcoes'], { ativo })
+  return {
+    servicos: consulta.dados?.servicos ?? null,
+    carregando: consulta.carregando,
+    erro: consulta.erro,
+    recarregar: consulta.recarregar,
   }
 }
 

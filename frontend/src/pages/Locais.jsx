@@ -6,6 +6,7 @@ import Secao from '../components/base/Secao.jsx'
 import Tabela from '../components/base/Tabela.jsx'
 import Etiqueta from '../components/base/Etiqueta.jsx'
 import EstadoVazio from '../components/base/EstadoVazio.jsx'
+import CampoServicosDoLocal from '../components/CampoServicosDoLocal.jsx'
 import { EtiquetaSituacao, EtiquetaStatus, EtiquetaTipoLocal } from '../components/Etiquetas.jsx'
 import { useAcesso } from '../data/useAcesso.js'
 import { useAgendamentosDoLocal, useLocais, useRotulosLocal } from '../data/useLocais.js'
@@ -77,6 +78,11 @@ function RotuloLocais({ somenteLeitura }) {
     </Secao>
   )
 }
+
+// Valor inicial do campo de serviços: servicoIds do contrato; enquanto a API não o trouxer, sai de servicos
+const comServicoIds = (local) => ({ ...local, servicoIds: local.servicoIds ?? (local.servicos ?? []).map((s) => s.id) })
+
+const nomeServico = (s) => (s.ativo === false ? `${s.nome} (inativo)` : s.nome)
 
 // Agendamentos de hoje em diante no local (linha expandida); só os que o usuário pode ver na agenda
 function AgendamentosDoLocal({ localId, comServicos }) {
@@ -152,7 +158,8 @@ export default function Locais() {
     comServicos && {
       title: 'Serviços vinculados',
       dataIndex: 'servicos',
-      render: (lista = []) => (lista.length ? lista.map((s) => s.nome).join(', ') : <span className="texto-apoio">Só os sem vínculo</span>),
+      render: (lista = []) =>
+        lista.length ? lista.map(nomeServico).join(', ') : <span className="texto-apoio">Só os sem vínculo</span>,
     },
     {
       title: 'Próximos',
@@ -174,7 +181,7 @@ export default function Locais() {
       item={singular.toLowerCase()}
       textoNovo={`Adicionar ${singular.toLowerCase()}`}
       textoSalvo="Salvo."
-      lista={locais}
+      lista={{ ...locais, carregarRegistro: async (registro) => comServicoIds(await locais.carregarRegistro(registro)) }}
       colunas={colunas}
       somenteLeitura={somenteLeitura}
       permitirExcluir={false}
@@ -185,9 +192,9 @@ export default function Locais() {
           ? { expandedRowRender: (l) => <AgendamentosDoLocal localId={l.id} comServicos={comServicos} /> }
           : undefined
       }
-      valoresNovo={{ tipo: 'presencial', ativo: true }}
+      valoresNovo={{ tipo: 'presencial', ativo: true, servicoIds: [] }}
       iconeRegistro={(l) => (l.tipo === 'online' ? <VideoCameraOutlined /> : <EnvironmentOutlined />)}
-      campos={
+      campos={(registro) => (
         <>
           <Form.Item name="nome" label="Nome" rules={[{ required: true, whitespace: true, message: 'Informe o nome' }]}>
             <Input placeholder="Ex.: Sala 101, Cadeira 2, Zoom Prof. Ana" maxLength={80} />
@@ -213,6 +220,7 @@ export default function Locais() {
               )
             }
           </Form.Item>
+          {comServicos && <CampoServicosDoLocal registro={registro} somenteLeitura={somenteLeitura} singular={singular} />}
           <Form.Item
             name="ativo"
             label="Ativo"
@@ -222,7 +230,7 @@ export default function Locais() {
             <Switch />
           </Form.Item>
         </>
-      }
+      )}
     />
   )
 }
