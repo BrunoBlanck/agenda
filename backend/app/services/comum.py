@@ -67,6 +67,18 @@ def excluir(db: Session, obj: Any) -> None:
     db.flush()
 
 
+def conferir_ids(db: Session, modelo: type, loja_id: UUID, ids: list[UUID], mensagem: str) -> None:
+    """Todos os ids existem na loja (e não foram excluídos)? Senão, 422 com ``mensagem``.
+
+    Id de outra loja conta como não encontrado (não revela que existe).
+    """
+    if not ids:
+        return
+    encontrados = set(db.scalars(select(modelo.id).where(modelo.loja_id == loja_id, modelo.id.in_(ids))))
+    if len(encontrados) != len(set(ids)):
+        raise invalido(mensagem)
+
+
 def sincronizar_vinculos(
     db: Session,
     modelo: type,

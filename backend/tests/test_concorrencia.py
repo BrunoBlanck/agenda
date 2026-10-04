@@ -324,3 +324,23 @@ def test_excluir_servico_e_agendar_com_ele_ao_mesmo_tempo(cliente, clinica, engi
             s=servico,
         )
         assert orfaos == 0
+
+
+# --- LOC-06: vínculos de serviços pela tela de Locais --------------------------------------------
+
+
+def test_vincular_servicos_ao_mesmo_tempo_no_mesmo_local(clinica, engine_dono, servidor):
+    """Duas telas salvando o mesmo local com os mesmos serviços: sem o FOR UPDATE do local, as duas
+    tentavam inserir o mesmo vínculo e uma recebia 409 de chave duplicada."""
+    c, h = clinica, clinica.lt.h_admin
+    corpo = {'nome': 'Sala 2', 'servico_ids': [c.limpeza, c.avaliacao]}
+
+    respostas = rajada(servidor, [('PUT', f'{API}/locais/{c.sala2}', corpo, h)] * N)
+
+    assert {r.status_code for r in respostas} == {200}, [r.text for r in respostas]
+    vinculos = _um(
+        engine_dono,
+        'SELECT count(*) FROM servico_locais WHERE local_id = :l AND excluido_em IS NULL',
+        l=c.sala2,
+    )
+    assert vinculos == 2
