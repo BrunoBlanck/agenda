@@ -1,6 +1,6 @@
 import { api } from './cliente.js'
 import { lerDataHora, lerNumero, lerPagina, textoOuNulo } from './conversao.js'
-import { conflitoNoCampo, lerControle } from './registro.js'
+import { apontarCampo, conflitoNoCampo, lerControle } from './registro.js'
 
 // Locais (/api/loja/locais) e como a loja os chama (/api/loja/locais/rotulos). Recurso: locais (módulo Locais).
 // Local não é excluído: é inativado (PUT com ativo = false).
@@ -14,19 +14,23 @@ export const converterLocal = (l, fuso) => ({
   linkPadrao: l.link_padrao ?? null,
   descricao: l.descricao ?? null,
   ativo: l.ativo !== false,
-  // Serviços que citam o local (vazio com o módulo Serviços desligado)
-  servicos: lista(l.servicos).map((s) => ({ id: s.id, nome: s.nome ?? '—' })),
+  // Serviços vinculados ao local, por nome (vazio com o módulo Serviços desligado). LOC-06
+  servicos: lista(l.servicos).map((s) => ({ id: s.id, nome: s.nome ?? '—', ativo: s.ativo !== false })),
+  servicoIds: lista(l.servicos).map((s) => s.id),
   proximosAgendamentos: lerNumero(l.proximos_agendamentos) ?? 0,
   ...lerControle(l, fuso),
 })
 
-// A API apaga o link de local presencial; a descrição só aparece no formulário do presencial
+// A API apaga o link de local presencial; a descrição só aparece no formulário do presencial.
+// servico_ids só vai quando o campo está no formulário (opções carregadas, módulo Serviços ligado):
+// ausente, a API não mexe nos vínculos. [] remove todos.
 const corpoLocal = (v) => ({
   nome: (v.nome ?? '').trim(),
   tipo: v.tipo ?? 'presencial',
   link_padrao: v.tipo === 'online' ? textoOuNulo(v.linkPadrao) : null,
   descricao: textoOuNulo(v.descricao),
   ativo: v.ativo ?? true,
+  ...(Array.isArray(v.servicoIds) && { servico_ids: [...new Set(v.servicoIds.filter(Boolean))] }),
 })
 
 export const listarLocais = async (fuso, sinal) => lista(await api.loja.get('/locais', { sinal })).map((l) => converterLocal(l, fuso))
@@ -36,13 +40,47 @@ export const obterLocal = async (id, fuso, sinal) => converterLocal(await api.lo
 // 409 de unicidade (backend/app/erros.py, locais_nome_uk): ao lado do campo
 const CONFLITOS = [['local com este nome', 'nome']]
 
+// 422 de regra sem erros[] ("Serviço não encontrado.": de outra loja, inexistente ou excluído)
+const CAMPOS_DAS_REGRAS = [[/serviço/i, 'servico_ids']]
+
+// 422 com erros[] por item da lista (servico_ids.0, servico_ids.3...) vai para o campo inteiro, sem repetir a mensagem
+function errosNaLista(erro) {
+  if (erro?.status !== 422 || !erro.campos?.length) return erro
+  const vistos = new Set()
+  erro.campos = erro.campos
+    .map((c) => (/^servico_ids\.\d+$/.test(String(c?.campo)) ? { ...c, campo: 'servico_ids' } : c))
+    .filter((c) => {
+      const chave = `${c?.campo}|${c?.mensagem}`
+      if (vistos.has(chave)) return false
+      vistos.add(chave)
+      return true
+    })
+  return erro
+}
+
 export async function salvarLocal(valores, id, fuso) {
   const corpo = corpoLocal(valores)
   try {
     const dados = id ? await api.loja.put(`/locais/${id}`, corpo) : await api.loja.post('/locais', corpo)
     return converterLocal(dados, fuso)
   } catch (erro) {
-    throw conflitoNoCampo(erro, CONFLITOS)
+    throw apontarCampo(errosNaLista(conflitoNoCampo(erro, CONFLITOS)), CAMPOS_DAS_REGRAS)
+  }
+}
+
+/** Serviços para o formulário do local (ativos e inativos). servicos = null com o módulo Serviços desligado. */
+export async function obterOpcoesLocal(sinal) {
+  const d = await api.loja.get('/locais/opcoes', { sinal })
+  return {
+    servicos:
+      d?.servicos == null
+        ? null
+        : lista(d.servicos).map((s) => ({
+            id: s.id,
+            nome: s.nome ?? '—',
+            ativo: s.ativo !== false,
+            locaisVinculados: lerNumero(s.locais_vinculados) ?? 0,
+          })),
   }
 }
 

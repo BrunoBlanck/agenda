@@ -2,10 +2,10 @@
 
 from uuid import UUID
 
-from pydantic import Field, field_validator, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from app.models.enums import TipoLocal
-from app.schemas.comum import Controle, Entrada, Referencia, regra, texto, texto_opcional
+from app.schemas.comum import LISTA_MAX, Controle, Entrada, Referencia, regra, texto, texto_opcional
 
 
 def validar_link(link: str | None) -> str | None:
@@ -20,8 +20,19 @@ class LocalEntrada(Entrada):
     link_padrao: texto_opcional(500) = Field(default=None, description='Só para local online: link fixo')
     descricao: texto_opcional() = None
     ativo: bool = True
+    servico_ids: list[UUID] | None = Field(
+        default=None,
+        max_length=LISTA_MAX,
+        description='Serviços que acontecem aqui ([] = nenhum). Nulo = não muda. '
+        'Ignorado com o módulo Serviços desligado.',
+    )
 
     _link = field_validator('link_padrao')(validar_link)
+
+    @field_validator('servico_ids')
+    @classmethod
+    def _sem_repetidos(cls, ids: list[UUID] | None) -> list[UUID] | None:
+        return None if ids is None else list(dict.fromkeys(ids))
 
     @model_validator(mode='after')
     def _link_so_online(self) -> 'LocalEntrada':
@@ -31,6 +42,10 @@ class LocalEntrada(Entrada):
         return self
 
 
+class ServicoDoLocal(Referencia):
+    ativo: bool
+
+
 class LocalSaida(Controle):
     id: UUID
     nome: str
@@ -38,11 +53,22 @@ class LocalSaida(Controle):
     link_padrao: str | None
     descricao: str | None
     ativo: bool
-    servicos: list[Referencia] = Field(
+    servicos: list[ServicoDoLocal] = Field(
         default_factory=list,
-        description='Serviços que citam este local (os sem vínculo aceitam qualquer local)',
+        description='Serviços vinculados a este local (os sem vínculo aceitam qualquer local). '
+        'Vazio com o módulo Serviços desligado.',
     )
     proximos_agendamentos: int = Field(default=0, description='Agendamentos ativos de hoje em diante')
+
+
+class ServicoOpcaoLocal(ServicoDoLocal):
+    locais_vinculados: int = Field(ge=0, description='Locais vinculados ao serviço hoje (0 = qualquer local)')
+
+
+class OpcoesLocal(BaseModel):
+    """Lista do formulário de local, sem exigir acesso a Serviços."""
+
+    servicos: list[ServicoOpcaoLocal] | None = Field(description='Nulo = módulo Serviços desligado')
 
 
 class RotulosEntrada(Entrada):

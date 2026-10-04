@@ -33,7 +33,14 @@ from app.schemas.servicos import (
     ServicoSaida,
 )
 from app.services.agendamentos import ATIVOS
-from app.services.comum import buscar, conflito, excluir, invalido, sincronizar_vinculos
+from app.services.comum import (
+    buscar,
+    conferir_ids,
+    conflito,
+    excluir,
+    invalido,
+    sincronizar_vinculos,
+)
 from app.services.servicos import descrever_servicos
 
 ERROS = {403: {'model': Erro}, 404: {'model': Erro}, 409: {'model': Erro}}
@@ -56,14 +63,7 @@ def _saida(ctx: ContextoLoja, servicos: list[Servico]) -> list[ServicoSaida]:
 
 
 def _conferir_ids(ctx: ContextoLoja, modelo: type, ids: list[UUID], mensagem: str) -> None:
-    """Todos os ids existem na loja do token? (de outra loja = não encontrado)."""
-    if not ids:
-        return
-    encontrados = set(
-        ctx.db.scalars(select(modelo.id).where(modelo.loja_id == ctx.loja_id, modelo.id.in_(ids)))
-    )
-    if len(encontrados) != len(set(ids)):
-        raise invalido(mensagem)
+    conferir_ids(ctx.db, modelo, ctx.loja_id, ids, mensagem)
 
 
 def _gravar_vinculos(ctx: ContextoLoja, servico: Servico, dados: ServicoEntrada) -> None:

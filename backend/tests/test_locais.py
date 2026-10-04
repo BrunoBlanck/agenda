@@ -77,7 +77,7 @@ def test_servicos_vinculados_e_proximos_agendamentos(cliente, lojas, engine_dono
             ),
         )
     obtido = cliente.get(f'{URL}/{sala["id"]}', headers=a.h_admin).json()
-    assert obtido['servicos'] == [{'id': str(servico.id), 'nome': 'Limpeza'}]
+    assert obtido['servicos'] == [{'id': str(servico.id), 'nome': 'Limpeza', 'ativo': True}]
     assert obtido['proximos_agendamentos'] == 1  # cancelado e passado não contam
     # Sem o módulo Serviços, a lista de serviços não aparece
     mudar_modulo(engine_dono, a.loja.id, 'servicos', habilitado=False)

@@ -90,6 +90,10 @@ export const slugValido = (valor) => PADRAO_SLUG.test(valor ?? '') && !SLUGS_RES
 // "1 atendimento", "3 atendimentos"
 export const plural = (n, um, varios) => `${n} ${n === 1 ? um : varios}`
 
+// "Limpeza", "Limpeza e Clareamento", "Avaliação, Limpeza e Clareamento"
+const formatoLista = new Intl.ListFormat('pt-BR', { style: 'long', type: 'conjunction' })
+export const listaEmTexto = (nomes) => formatoLista.format(nomes)
+
 // Datas da API: "AAAA-MM-DD" ou ISO com fuso (mostradas na hora da loja, ver data/api/conversao.js);
 // dayjs também é aceito. Vazio ou inválido vira "—".
 const paraDayjs = (data) => {
