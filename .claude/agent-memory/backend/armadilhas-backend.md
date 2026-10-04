@@ -7,7 +7,7 @@ metadata:
 
 Armadilhas confirmadas em 2026-10-02 (correção da revisão A1–A12):
 
-- **Teste de corrida precisa de servidor real.** O TestClient serializa; use a fixture de sessão `servidor` (uvicorn numa thread, `tests/conftest.py`) + `tests/concorrencia.py::rajada` (barreira + um httpx.Client por thread). Para provar que o teste pega o defeito, desligue a trava temporariamente num script no scratchpad (copia .bak, roda o teste, restaura) — não use git stash (proibido).
+- **Teste de corrida precisa de servidor real.** O TestClient serializa; use a fixture de sessão `servidor` (uvicorn numa thread, `tests/conftest.py`) + `tests/concorrencia.py::rajada` (barreira + um httpx.Client por thread). Para provar que o teste pega o defeito sem tocar em `app/` (editar lá dispara o --reload da API do usuário): o uvicorn da fixture roda no mesmo processo do pytest, então um teste temporário em `tests/` com `monkeypatch.setattr(modulo_da_rota, 'buscar', ...)` desliga a trava; rode, confira que falha, apague o arquivo. Nunca git stash (proibido).
   **Why:** o revisor exige corrida real (LOG-02) e um teste que passa com e sem a trava não prova nada.
   **How to apply:** toda regra "verificar e gravar" nova ganha um teste em `tests/test_concorrencia.py`.
 

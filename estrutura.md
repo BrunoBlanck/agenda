@@ -992,7 +992,9 @@ Em quais locais cada serviço pode acontecer.
 | Aula de violão | nenhum | Qualquer sala ativa, inclusive salas criadas depois |
 | Aula online | Online · Prof. Pedro, Online · Prof. Ana | Só nos locais online |
 
-📌 Os vínculos são editados na tela de **Serviços** (escrita em *Serviços*).
+📌 Os vínculos são editados na tela de **Serviços** (escrita em *Serviços*) e também na tela de **Locais** (escrita em *Locais*, só com o módulo Serviços ativo): ao abrir um local, escolhe-se quais serviços acontecem nele (LOC-06). São as mesmas linhas desta tabela.
+
+📌 O vínculo **restringe o serviço, não o local**: um serviço sem nenhum vínculo continua podendo usar um local que tem serviços vinculados. Vincular pela tela de Locais um serviço que hoje aceita qualquer local faz ele passar a usar só os locais marcados; tirar o último local de um serviço faz ele voltar a aceitar qualquer local. A tela avisa nos dois casos. Agendamentos já marcados não mudam. (Decisão de 2026-10-04: a alternativa "local exclusivo" foi recusada.)
 
 ## 2.21 `loja_configuracoes`
 

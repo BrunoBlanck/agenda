@@ -6,3 +6,4 @@ Uma especificação por funcionalidade (`<slug>.md`), escrita pelo agente `coord
 |---|---|---|
 | [Roteamento por URL e nginx](roteamento-url.md) | aprovada | feat/roteamento-url |
 | [Acessar loja pelo SUPERADMIN](acessar-loja.md) | aprovada | feat/acessar-loja |
+| [Vincular serviços pela tela de Locais](locais-servicos.md) | aprovada | feat/locais-servicos |

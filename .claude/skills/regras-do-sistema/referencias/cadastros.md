@@ -20,7 +20,7 @@ Fonte: `estrutura.md` 2.3, 2.4, 2.7 a 2.12, 2.15, 2.16, 2.18 a 2.21 e 6.1.
 ## Serviços (`SER-*`) — módulo Serviços
 - **SER-01** Nome único na loja; duração em minutos `> 0`; preço não negativo (opcional).
 - **SER-02** Serviço **ativo** precisa de **pelo menos um** profissional vinculado.
-- **SER-03** Vínculos editados na tela de Serviços: profissionais (`servico_funcionarios`), locais (`servico_locais`, só com módulo Locais) e materiais por atendimento (`servico_materiais`, quantidade `> 0`, só com módulo Materiais).
+- **SER-03** Vínculos editados na tela de Serviços (os de locais também na tela de Locais, LOC-06): profissionais (`servico_funcionarios`), locais (`servico_locais`, só com módulo Locais) e materiais por atendimento (`servico_materiais`, quantidade `> 0`, só com módulo Materiais).
 - **SER-04** Serviço sem locais vinculados = qualquer local ativo (AGE-12).
 
 ## Locais (`LOC-*`) — módulo Locais
@@ -29,6 +29,7 @@ Fonte: `estrutura.md` 2.3, 2.4, 2.7 a 2.12, 2.15, 2.16, 2.18 a 2.21 e 6.1.
 - **LOC-03** Cada link que pode ser usado ao mesmo tempo que outro é um local separado (o conflito é por local).
 - **LOC-04** Rótulos (`rotulo_local`, `rotulo_local_plural`, padrão "Local"/"Locais") ficam em `loja_configuracoes`, editados na tela de Locais com escrita em *Locais*. Mudam os textos do **painel** (menu, títulos, campos).
 - **LOC-05** A lista de locais traz a contagem de próximos agendamentos; a lista em si vem de `/agendamentos?local_id=`.
+- **LOC-06** Na tela de Locais, quem tem **escrita em Locais** escolhe os serviços vinculados ao local (`servico_ids` em `POST/PUT /locais`, ausente = não mexe; só com módulo **Serviços** ativo; opções em `GET /locais/opcoes`). O vínculo **restringe o serviço, não o local** (SER-04 continua): serviço sem vínculo pode usar este local. Vincular serviço que aceitava qualquer local o restringe aos marcados; tirar o último local o libera para qualquer um. A tela avisa nos dois casos; agendamentos já marcados não mudam.
 
 ## Materiais e estoque (`MAT-*`) — módulo Materiais
 - **MAT-01** Nome único na loja; unidade obrigatória; categoria opcional; estoque mínimo não negativo.
