@@ -34,4 +34,7 @@ Armadilhas confirmadas em 2026-10-02 (correção da revisão A1–A12):
 - **Formulário HTML que trata erro do banco e continua respondendo** (2026-10-04): depois de um flush que falhou (23P01), a transação da requisição fica abortada e o commit de `app.db.sessao` vira 500. Rode a gravação dentro de `db.begin_nested()` (savepoint): a falha desfaz só o pedido e a sessão segue para a consulta de "pedido repetido" e o redirecionamento (`app/routers/site/paginas.py`).
 - **Nada de `git rm`/`git add` para apagar arquivo**: mexe no índice (proibido ao agente). Use `rm`; se tocar no índice sem querer, `git restore --staged <arquivo>` volta ao estado anterior.
 
+- **Coluna nova num modelo quebra teste de migração antiga** (2026-10-05): o ORM manda todas as colunas no INSERT (NULL nas não preenchidas), então `criar_loja` (ORM) num banco em `0002`/`0004` falha com UndefinedColumn. Padrão: criar os dados em `head` e `command.downgrade` até a revisão antiga (feito em `test_0003...` e `test_migracao_para_se_alguma_loja_usa_slug_reservado`).
+- **Teste flaky ≠ culpa da mudança:** para ter a linha de base sem git stash, `git archive HEAD backend | tar -x -C <scratch>` + copiar `.env` + `uv sync` e rodar o teste lá (mesmo banco de teste; apagar a cópia no fim).
+
 Relacionado: [[contratos-alterados-revisao-1]]
