@@ -29,4 +29,6 @@ Testes exploratórios ficam no scratchpad (fora do repo) e reaproveitam `backend
 - Abas abertas por `window.open` sem `noopener` copiam o `sessionStorage` de quem abriu; o opener consegue gravar no `sessionStorage` da aba `about:blank` antes de navegá-la (entrega de token sem URL).
 - No dev, o uvicorn confia em X-Forwarded-For vindo de 127.0.0.1 por padrão e o proxy do Vite repassa o cabeçalho do cliente: dá para forjar IP via :5173 (só dev).
 
+- **Site do consumidor em HTML (2026-10-04):** importar ajudantes/fixtures direto de `tests.test_site_paginas` (`site`, `formulario_direto`, `enviar`, `ocultos`, `parametros`, `alterar_loja`) no arquivo exploratório; fuzz de GET/POST com `TestClient(raise_server_exceptions=False)` checando status >= 500 **e** `content-type` JSON (página HTML não pode cair no tratador JSON). Corrida de duplo envio: fixture `servidor` + `threading.Barrier`, repetir em várias horas e também com `site_pendentes_por_telefone=1` (limite na fronteira). Navegador: Chrome do sistema + `javaScriptEnabled: false` no contexto para provar "funciona sem JS"; interceptar só o POST com `page.route`.
+
 Relacionado: [[defeitos-recorrentes]].

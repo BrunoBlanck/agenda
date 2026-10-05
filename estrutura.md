@@ -1169,7 +1169,7 @@ Especificação: `docs/funcionalidades/roteamento-url.md`.
 - **Dev:** o Vite imita o nginx em `localhost:5173` (o que não é app vai por proxy para a API), então dev e produção têm as mesmas URLs.
 - **Slugs reservados (PLA-16):** validação (422) + CHECK `ck_lojas_slug_reservado`.
 - **Sessão do painel por loja:** o token fica no `sessionStorage` com a chave da loja; duas lojas em abas diferentes não se misturam, e um token de outra loja na URL volta ao login.
-- **Provisória (SIT-11):** `/{slug}` é uma página simples com os dados públicos da loja até o site real; o protótipo React do site saiu.
+- **Site do consumidor (SIT-12, substitui a SIT-11 em 2026-10-04):** `/{slug}` é o fluxo de agendamento online renderizado pelo back-end (serviço → horário → dados → pronto), com as mesmas regras de `/api/site`. Detalhes em `docs/funcionalidades/site-agendamento.md`.
 
 ## 6.5 Acessar loja pelo SUPERADMIN
 

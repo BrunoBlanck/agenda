@@ -31,5 +31,7 @@ Armadilhas confirmadas em 2026-10-02 (correção da revisão A1–A12):
 - **Lista de constantes repetida em migração** (ex.: slugs reservados): teste compara com `pg_get_constraintdef` para não divergir.
 - **Teste que depende da ordem por `criado_em`** (2026-10-03): o trigger de controle reescreve `criado_em` em todo UPDATE. Para fixar a data num teste, use `engine_dono` com `SET LOCAL session_replication_role = replica` na mesma transação (ver `tests/test_acessar_loja.py::mudar_criado_em`).
 - **Comparar `expira_em` com o `exp` do JWT:** o JWT guarda segundos inteiros; `criar_token` já trunca `agora` para os dois baterem. Não compare com `datetime.now()` com microssegundos.
+- **Formulário HTML que trata erro do banco e continua respondendo** (2026-10-04): depois de um flush que falhou (23P01), a transação da requisição fica abortada e o commit de `app.db.sessao` vira 500. Rode a gravação dentro de `db.begin_nested()` (savepoint): a falha desfaz só o pedido e a sessão segue para a consulta de "pedido repetido" e o redirecionamento (`app/routers/site/paginas.py`).
+- **Nada de `git rm`/`git add` para apagar arquivo**: mexe no índice (proibido ao agente). Use `rm`; se tocar no índice sem querer, `git restore --staged <arquivo>` volta ao estado anterior.
 
 Relacionado: [[contratos-alterados-revisao-1]]
