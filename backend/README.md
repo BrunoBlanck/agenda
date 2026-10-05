@@ -152,25 +152,63 @@ Saúde: `GET /api/saude`. Arquivos públicos: `GET /api/arquivos/logos/{loja_id}
 
 Mapa de URLs (GER-29), igual no nginx de produção ([`deploy/nginx/agenda.conf`](../deploy/nginx/agenda.conf))
 e no servidor de dev do front: `/superadmin...` e `/<slug>/painel...` são do front (SPA); `/_app/...`
-são os arquivos do build; `/api/...`, `/<slug>` e o resto chegam aqui. As páginas ficam em
-`app/routers/paginas.py` (Jinja2 com autoescape, templates em `app/templates/`), registradas depois de
-todos os routers `/api` e da documentação, e fora do OpenAPI.
+são os arquivos do build; `/api/...`, `/<slug>`, `/static/site/...` e o resto chegam aqui (nenhuma
+mudança no nginx nem no Vite foi necessária). Jinja2 com autoescape, templates em `app/templates/`,
+fora do OpenAPI, registradas depois de todos os routers `/api` e da documentação:
 
-| Rota (GET e HEAD) | Resposta |
+- `app/routers/paginas.py`: `/`, `/painel`, arquivos do site, `/{slug}/` e o 404 do resto;
+- `app/routers/site/paginas.py`: o site do consumidor (SIT-12), com as regras de
+  `app/services/agendamento_site.py` (as mesmas da API `/api/site/{slug}`);
+- `app/routers/html.py`: ambiente Jinja, cabeçalhos, CSP e `RespostaPronta` (interrompe a página com
+  um 404, 429 ou redirecionamento; tratador registrado em `app/main.py`).
+
+| Rota | Resposta |
 |---|---|
-| `/` | 404 HTML "Página não encontrada" |
-| `/painel`, `/painel/...` | 404 HTML com a orientação de usar `/nome-da-loja/painel` |
-| `/{slug}` | 200, página provisória da loja (SIT-11: logo, nome, telefone, e-mail, endereço, "Agendamento online em breve"); loja inexistente, excluída, suspensa ou cancelada, slug inválido ou reservado: 404 HTML "Loja não encontrada" |
-| `/{slug}/` | 308 para `/{slug}` (slug inválido ou reservado: 404) |
-| `/{slug}/...` | 404 HTML (futuras páginas do site) |
+| `GET /` | 404 HTML "Página não encontrada" |
+| `GET /painel`, `/painel/...` | 404 HTML com a orientação de usar `/nome-da-loja/painel` |
+| `GET /{slug}` | Passo 1: serviços (sem o módulo Serviços, já o passo 2 do "Atendimento", SIT-08) |
+| `GET /{slug}/agendar?servico=&profissional=&dia=` | Passo 2: profissional, faixa de 31 dias a partir de hoje (fuso da loja) e horários do dia |
+| `GET /{slug}/agendar/dados?servico=&profissional=&inicio=&local=` | Passo 3: resumo e formulário (`inicio` = `AAAA-MM-DDTHH:MM±HH:MM`) |
+| `POST /{slug}/agendar` | Envia o pedido (`application/x-www-form-urlencoded`); 303 para o passo 4 |
+| `GET /{slug}/agendar/pronto?c=<código>` | Passo 4: confirmação (código assinado, 24 h, preso à loja) |
+| `GET /static/site/site.css`, `site.js` | CSS e JS do site (lista fechada; com `?v=<versão>` vai com cache de 1 ano) |
+| `GET /{slug}/` | 308 para `/{slug}` (slug inválido ou reservado: 404) |
+| `/{slug}/...` (outros) | 404 HTML |
 
-- Só os dados que `GET /api/site/{slug}` já expõe (`LojaPublica`); a regra de visibilidade é a mesma
-  (`app/services/site.py`, usada pelas duas).
-- Cabeçalhos: `Content-Security-Policy: default-src 'none'; img-src 'self'; style-src 'unsafe-inline';
-  base-uri 'none'; form-action 'none'; frame-ancestors 'none'`, `X-Content-Type-Options: nosniff`,
-  `Referrer-Policy: same-origin`, `X-Frame-Options: DENY`, `Cache-Control: no-cache`. Sem JavaScript.
-- `/{slug}` conta no mesmo limite por IP do site (`LIMITE_SITE_POR_IP`); passou: 429 HTML com
-  `Retry-After`. Endereço inválido ou reservado responde 404 sem consultar o banco e sem contar.
+Todas as páginas aceitam `GET` e `HEAD` (o envio, só `POST`). Loja inexistente, excluída, suspensa ou
+cancelada, slug inválido ou reservado: 404 HTML "Loja não encontrada" em todas as páginas do fluxo.
+
+- **Parâmetros:** lidos à mão, nunca 422 em JSON nem 500. Serviço ausente, inválido, inativo ou de
+  outra loja: 303 para `/{slug}` (`?aviso=servico` quando veio um serviço). Profissional inválido no
+  passo 2: mostra "qualquer profissional" com aviso. Dia fora da faixa: marca o primeiro dia com
+  horários. Horário inválido: 303 ao passo 2 do dia (`aviso=horario`); horário que não está mais livre:
+  303 ao passo 2 do dia com `aviso=ocupado`. `aviso` é um código com texto fixo (nada é refletido).
+- **Envio:** `Origin`/`Referer` de outro host (ou `Origin: null`) = 403 HTML, nada gravado. Campo
+  escondido `zx_conferencia` (`display: none`, nome que nenhum autopreenchimento reconhece) preenchido
+  (robô) = 303 para uma confirmação genérica, nada gravado. O limite de pedidos por IP é conferido antes
+  de tudo.
+  Validação igual a `SolicitacaoEntrada`: erro = 200 com o formulário, os valores e as mensagens
+  (resumo no topo). Limite de pedidos por IP (`LIMITE_SITE_PEDIDOS_*`) = 429 com o formulário; limite de
+  pendentes por telefone = 409 com o formulário. O pedido roda num savepoint: a recusa do banco (corrida,
+  23P01) volta ao passo 2 com `aviso=ocupado`. O mesmo formulário enviado de novo, inteiro válido e
+  igual (telefone, profissional, início, nome, sobrenome e e-mail sem diferenciar maiúsculas,
+  observações; cliente cadastrado por aquele pedido; pendente, últimos 10 min), leva à confirmação do
+  pedido já gravado (LOG-07), inclusive quando o segundo envio simultâneo cai no limite de pendentes.
+  Telefone de cliente que já era da loja nunca conta como repetição (SIT-07).
+- **Confirmação:** mostra serviço, dia, hora, profissional, local (nome), preço e a situação; nada do
+  cliente (nem o nome cadastrado, SIT-07). Código adulterado, expirado ou de outra loja: 404.
+- **Cabeçalhos:** `Cache-Control: no-store`, `X-Content-Type-Options: nosniff`, `Referrer-Policy:
+  same-origin`, `X-Frame-Options: DENY`. CSP do site: `default-src 'none'; img-src 'self'; style-src
+  'self'; script-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'` (sem estilo
+  ou script embutido). Páginas de erro: `style-src 'unsafe-inline'`, `form-action 'none'`, sem script.
+  `noindex` do passo 2 em diante (a página inicial da loja pode ser indexada).
+- **Limites:** todas as páginas contam no limite por IP do site (`LIMITE_SITE_POR_IP`, o mesmo da API);
+  passou: 429 HTML com `Retry-After`. Endereço inválido ou reservado responde 404 sem consultar o banco
+  e sem contar.
+- **Visual:** tokens por tipo de loja em `app/static/site/site.css` (`.tipo-clinica`, `.tipo-barbearia`,
+  `.tipo-escola`, com versão escura), mobile first. Sem JavaScript tudo funciona; `site.js` só troca o
+  profissional sem clicar em "Atualizar", rola a faixa até o dia marcado, desabilita o envio depois do
+  clique e leva o foco ao resumo dos erros.
 - `/api` e `/api/...` nunca caem nessas rotas: o que não existe na API continua 404 em JSON.
 
 ### Slugs reservados (PLA-16)

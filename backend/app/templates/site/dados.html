@@ -1,0 +1,64 @@
+{% extends 'site/base.html' %}
+{% block titulo %}Seus dados · {{ loja.nome_fantasia }}{% endblock %}
+{% macro campo(id, rotulo, valores, erros, tipo='text', obrigatorio=True, maximo=None, completar=None, teclado=None) %}
+        <div class="campo{% if erros[id] %} com-erro{% endif %}">
+          <label for="campo-{{ id }}">{{ rotulo }}{% if obrigatorio %} <span class="obrigatorio" aria-hidden="true">*</span>{% else %} <span class="opcional">(opcional)</span>{% endif %}</label>
+          {% if tipo == 'textarea' %}
+          <textarea id="campo-{{ id }}" name="{{ id }}" rows="3"{% if maximo %} maxlength="{{ maximo }}"{% endif %}{% if erros[id] %} aria-invalid="true" aria-describedby="erro-{{ id }}"{% endif %}>{{ valores[id] }}</textarea>
+          {% else %}
+          <input id="campo-{{ id }}" name="{{ id }}" type="{{ tipo }}" value="{{ valores[id] }}"{% if obrigatorio %} required{% endif %}{% if maximo %} maxlength="{{ maximo }}"{% endif %}{% if completar %} autocomplete="{{ completar }}"{% endif %}{% if teclado %} inputmode="{{ teclado }}"{% endif %}{% if erros[id] %} aria-invalid="true" aria-describedby="erro-{{ id }}"{% endif %}>
+          {% endif %}
+          {% if erros[id] %}
+          <p class="erro-campo" id="erro-{{ id }}">{{ erros[id] }}</p>
+          {% endif %}
+        </div>
+{% endmacro %}
+{% block conteudo %}
+      <h2 class="titulo">Seus dados</h2>
+      {% if mensagem %}
+      <p class="aviso" role="alert">{{ mensagem }}</p>
+      {% endif %}
+      {% if resumo_erros %}
+      <div class="erros" id="resumo-erros" role="alert" tabindex="-1">
+        <p>Confira {{ 'o campo' if resumo_erros | length == 1 else 'os campos' }} abaixo:</p>
+        <ul>
+          {% for e in resumo_erros %}
+          <li><a href="#campo-{{ e.campo }}">{{ e.rotulo }}: {{ e.mensagem }}</a></li>
+          {% endfor %}
+        </ul>
+      </div>
+      {% endif %}
+      <div class="resumo">
+        <p class="resumo-titulo">{{ servico_nome }}</p>
+        <ul class="resumo-lista">
+          <li><svg class="icone" aria-hidden="true" viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 10h16M9 3v4M15 3v4"/></svg>{{ dia_extenso }}</li>
+          <li><svg class="icone" aria-hidden="true" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>{{ hora }} · {{ duracao }} min</li>
+          <li><svg class="icone" aria-hidden="true" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>{{ profissional }}</li>
+          {% if local %}
+          <li><svg class="icone" aria-hidden="true" viewBox="0 0 24 24"><path d="M12 22s7-6.1 7-12a7 7 0 1 0-14 0c0 5.9 7 12 7 12Z"/><circle cx="12" cy="10" r="2.5"/></svg>{{ rotulo_local }}: {{ local }}</li>
+          {% endif %}
+          {% if preco %}
+          <li class="preco">{{ preco }}</li>
+          {% endif %}
+        </ul>
+        <a class="trocar" href="{{ trocar }}">Trocar horário</a>
+      </div>
+      <form class="formulario" method="post" action="{{ acao }}" data-enviar>
+        {% for nome, valor in ocultos.items() %}
+        <input type="hidden" name="{{ nome }}" value="{{ valor }}">
+        {% endfor %}
+        <div class="campos-nome">
+{{ campo('nome', 'Nome', valores, erros, maximo=60, completar='given-name') }}
+{{ campo('sobrenome', 'Sobrenome', valores, erros, maximo=100, completar='family-name') }}
+        </div>
+{{ campo('telefone', 'WhatsApp com DDD', valores, erros, tipo='tel', maximo=20, completar='tel', teclado='tel') }}
+{{ campo('email', 'E-mail', valores, erros, tipo='email', obrigatorio=False, maximo=254, completar='email') }}
+{{ campo('observacoes', 'Observações', valores, erros, tipo='textarea', obrigatorio=False, maximo=500) }}
+        <div class="armadilha" aria-hidden="true">
+          <label for="campo-{{ armadilha }}">Deixe este campo em branco</label>
+          <input id="campo-{{ armadilha }}" name="{{ armadilha }}" type="text" tabindex="-1" autocomplete="off">
+        </div>
+        <p class="nota">A {{ loja.nome_fantasia }} vai confirmar seu horário pelo WhatsApp.</p>
+        <button type="submit" class="botao botao-largo" data-enviando="Enviando…">Pedir agendamento</button>
+      </form>
+{% endblock %}

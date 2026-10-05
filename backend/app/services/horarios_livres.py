@@ -1,4 +1,4 @@
-"""Horários livres para o site do consumidor (frontend/src/site/horariosLivres.js e estrutura.md, 2.13).
+"""Horários livres para o site do consumidor (estrutura.md, 2.13): API pública e páginas HTML do site.
 
 Mesmas regras do agendamento pelo painel (app.services.agendamentos e app.services.disponibilidade):
 - dentro da jornada do perfil do profissional, inteiro numa faixa do dia (fuso da loja);
@@ -44,23 +44,46 @@ class Livre:
     local_id: UUID | None
 
 
-def profissionais(db: Session, loja_id: UUID, servico: Servico | None) -> list[Funcionario]:
-    """Quem pode ser agendado: ativos habilitados no serviço; sem o módulo Serviços, ativos com jornada."""
-    consulta = select(Funcionario).where(Funcionario.loja_id == loja_id, Funcionario.ativo)
-    if servico is not None:
-        consulta = consulta.join(
+def profissionais_por_servico(
+    db: Session, loja_id: UUID, servico_ids: list[UUID]
+) -> dict[UUID, list[Funcionario]]:
+    """Profissionais ativos habilitados em cada serviço, numa consulta só (em ordem alfabética)."""
+    equipes: dict[UUID, list[Funcionario]] = defaultdict(list)
+    if not servico_ids:
+        return equipes
+    linhas = db.execute(
+        select(ServicoFuncionario.servico_id, Funcionario)
+        .join(
             ServicoFuncionario,
             (ServicoFuncionario.funcionario_id == Funcionario.id)
             & (ServicoFuncionario.loja_id == Funcionario.loja_id),
-        ).where(ServicoFuncionario.servico_id == servico.id, ServicoFuncionario.excluido_em.is_(None))
-    else:
-        consulta = consulta.where(
-            exists().where(
-                PerfilHorario.loja_id == Funcionario.loja_id,
-                PerfilHorario.perfil_id == Funcionario.perfil_id,
-                PerfilHorario.excluido_em.is_(None),
-            )
         )
+        .where(
+            Funcionario.loja_id == loja_id,
+            Funcionario.ativo,
+            ServicoFuncionario.servico_id.in_(servico_ids),
+            ServicoFuncionario.excluido_em.is_(None),
+        )
+        .order_by(Funcionario.nome, Funcionario.id)
+    ).all()
+    for servico_id, funcionario in linhas:
+        equipes[servico_id].append(funcionario)
+    return equipes
+
+
+def profissionais(db: Session, loja_id: UUID, servico: Servico | None) -> list[Funcionario]:
+    """Quem pode ser agendado: ativos habilitados no serviço; sem o módulo Serviços, ativos com jornada."""
+    if servico is not None:
+        return profissionais_por_servico(db, loja_id, [servico.id]).get(servico.id, [])
+    consulta = select(Funcionario).where(
+        Funcionario.loja_id == loja_id,
+        Funcionario.ativo,
+        exists().where(
+            PerfilHorario.loja_id == Funcionario.loja_id,
+            PerfilHorario.perfil_id == Funcionario.perfil_id,
+            PerfilHorario.excluido_em.is_(None),
+        ),
+    )
     return list(db.scalars(consulta.order_by(Funcionario.nome, Funcionario.id)))
 
 

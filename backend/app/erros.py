@@ -63,7 +63,7 @@ MENSAGENS_VALIDACAO = {
 }
 
 
-def _mensagem_validacao(erro: dict) -> str:
+def mensagem_de_validacao(erro: dict) -> str:
     tipo = erro.get('type', '')
     if tipo == 'regra':  # app.schemas.comum.regra: mensagem já em português
         return str(erro.get('msg', ''))
@@ -142,7 +142,7 @@ def registrar_tratadores(app: FastAPI) -> None:
     @app.exception_handler(RequestValidationError)
     async def validacao(_: Request, exc: RequestValidationError) -> JSONResponse:
         erros = [
-            {'campo': _campo(e.get('loc', ())), 'mensagem': _mensagem_validacao(e)} for e in exc.errors()
+            {'campo': _campo(e.get('loc', ())), 'mensagem': mensagem_de_validacao(e)} for e in exc.errors()
         ]
         return JSONResponse(
             {'detail': MENSAGENS_HTTP[422], 'erros': erros}, status_code=status.HTTP_422_UNPROCESSABLE_CONTENT

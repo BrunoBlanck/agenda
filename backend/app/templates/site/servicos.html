@@ -1,0 +1,34 @@
+{% extends 'site/base.html' %}
+{% block conteudo %}
+      <h2 class="titulo">Escolha o serviço</h2>
+      {% if aviso %}
+      <p class="aviso" role="alert">{{ aviso }}</p>
+      {% endif %}
+      {% if servicos %}
+      <ul class="servicos">
+        {% for s in servicos %}
+        <li>
+          <a class="servico" href="{{ s.url }}">
+            <span class="servico-nome">{{ s.nome }}</span>
+            {% if s.descricao %}
+            <span class="servico-descricao">{{ s.descricao }}</span>
+            {% endif %}
+            <span class="servico-info">
+              <span><svg class="icone" aria-hidden="true" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>{{ s.duracao }} min</span>
+              {% if s.preco %}
+              <span class="preco">{{ s.preco }}</span>
+              {% endif %}
+            </span>
+          </a>
+        </li>
+        {% endfor %}
+      </ul>
+      {% else %}
+      <div class="vazio">
+        <p>No momento não há horários para agendar online.</p>
+        {% if loja.telefone %}
+        <p>Fale com a {{ loja.nome_fantasia }} pelo telefone {% if telefone_link %}<a href="{{ telefone_link }}">{{ loja.telefone }}</a>{% else %}{{ loja.telefone }}{% endif %}.</p>
+        {% endif %}
+      </div>
+      {% endif %}
+{% endblock %}
