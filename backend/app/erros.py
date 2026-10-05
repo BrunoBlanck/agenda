@@ -12,6 +12,7 @@ from fastapi.responses import JSONResponse
 from sqlalchemy.exc import DBAPIError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
+from app.services.cores_site import MSG_FORMATO_COR
 from app.services.slugs import MSG_SLUG_RESERVADO
 
 log = logging.getLogger('app.erros')
@@ -63,7 +64,7 @@ MENSAGENS_VALIDACAO = {
 }
 
 
-def _mensagem_validacao(erro: dict) -> str:
+def mensagem_de_validacao(erro: dict) -> str:
     tipo = erro.get('type', '')
     if tipo == 'regra':  # app.schemas.comum.regra: mensagem já em português
         return str(erro.get('msg', ''))
@@ -124,6 +125,8 @@ MENSAGENS_CONSTRAINT = {
     'superadmin_usuarios_email_uk': 'Já existe um usuário admin com este e-mail.',
     'registros_ponto_um_aberto': 'Este funcionário já tem um registro de ponto em aberto.',
     'registros_ponto_sem_sobreposicao': 'Este funcionário já tem um registro de ponto nesse período.',
+    'ck_loja_configuracoes_cor_site_topo': MSG_FORMATO_COR,
+    'ck_loja_configuracoes_cor_site_destaque': MSG_FORMATO_COR,
 }
 
 
@@ -142,7 +145,7 @@ def registrar_tratadores(app: FastAPI) -> None:
     @app.exception_handler(RequestValidationError)
     async def validacao(_: Request, exc: RequestValidationError) -> JSONResponse:
         erros = [
-            {'campo': _campo(e.get('loc', ())), 'mensagem': _mensagem_validacao(e)} for e in exc.errors()
+            {'campo': _campo(e.get('loc', ())), 'mensagem': mensagem_de_validacao(e)} for e in exc.errors()
         ]
         return JSONResponse(
             {'detail': MENSAGENS_HTTP[422], 'erros': erros}, status_code=status.HTTP_422_UNPROCESSABLE_CONTENT

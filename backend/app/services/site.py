@@ -27,9 +27,19 @@ def carregar_loja_publica(db: Session, slug: str, ip: str | None) -> Loja | None
     return loja
 
 
-def dados_publicos(db: Session, loja: Loja, modulos: dict[str, bool]) -> LojaPublica:
-    """Só o que o consumidor pode ver da loja (contato, endereço e o que muda o site)."""
-    configuracao = db.scalar(select(LojaConfiguracao).where(LojaConfiguracao.loja_id == loja.id))
+def configuracao_publica(db: Session, loja: Loja) -> LojaConfiguracao | None:
+    """Configurações da loja que mudam o site (rótulo do local, cores), sem criar a linha se faltar."""
+    return db.scalar(select(LojaConfiguracao).where(LojaConfiguracao.loja_id == loja.id))
+
+
+def dados_publicos(
+    db: Session, loja: Loja, modulos: dict[str, bool], configuracao: LojaConfiguracao | None = None
+) -> LojaPublica:
+    """Só o que o consumidor pode ver da loja (contato, endereço e o que muda o site).
+
+    configuracao: a já lida por quem chama (``configuracao_publica``); se faltar, é lida aqui.
+    """
+    configuracao = configuracao or configuracao_publica(db, loja)
     return LojaPublica(
         tipo=loja.tipo,
         slug=loja.slug,

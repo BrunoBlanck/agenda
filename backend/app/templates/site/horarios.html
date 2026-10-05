@@ -1,0 +1,79 @@
+{% extends 'site/base.html' %}
+{% block titulo %}{{ servico_nome }} · {{ loja.nome_fantasia }}{% endblock %}
+{% block conteudo %}
+      <div class="titulo-linha">
+        {% if voltar %}
+        <a class="voltar" href="{{ voltar }}"><svg class="icone" aria-hidden="true" viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg>Voltar</a>
+        {% endif %}
+        <h2 class="titulo">{{ servico_nome }} · {{ duracao }} min</h2>
+      </div>
+      {% if aviso %}
+      <p class="aviso" role="alert">{{ aviso }}</p>
+      {% endif %}
+      <form class="filtro" method="get" action="{{ acao }}" data-auto>
+        {% if servico_id %}
+        <input type="hidden" name="servico" value="{{ servico_id }}">
+        {% endif %}
+        {% if dia_escolhido %}
+        <input type="hidden" name="dia" value="{{ dia_escolhido }}">
+        {% endif %}
+        <label for="profissional">Profissional</label>
+        <div class="filtro-linha">
+          <select id="profissional" name="profissional">
+            <option value="">Qualquer profissional</option>
+            {% for p in equipe %}
+            <option value="{{ p.id }}"{% if p.escolhido %} selected{% endif %}>{{ p.nome }}</option>
+            {% endfor %}
+          </select>
+          <button type="submit" class="botao botao-secundario" data-atualizar>Atualizar</button>
+        </div>
+      </form>
+      {% if nenhum_horario %}
+      <div class="vazio">
+        <p>Nenhum horário livre nos próximos 31 dias.</p>
+        {% if loja.telefone %}
+        <p>Fale com a {{ loja.nome_fantasia }} pelo telefone {% if telefone_link %}<a href="{{ telefone_link }}">{{ loja.telefone }}</a>{% else %}{{ loja.telefone }}{% endif %}.</p>
+        {% endif %}
+      </div>
+      {% else %}
+      <h3 class="rotulo" id="dias-titulo">Escolha o dia</h3>
+      <ul class="dias" aria-labelledby="dias-titulo" data-dias>
+        {% for d in dias %}
+        <li>
+          {% if d.total %}
+          <a class="dia" href="{{ d.url }}" aria-label="{{ d.extenso }}, {{ d.total }} {{ 'horário' if d.total == 1 else 'horários' }}"{% if d.atual %} aria-current="date"{% endif %}>
+            <span class="dia-semana">{{ d.semana }}</span>
+            <strong class="dia-data">{{ d.data }}</strong>
+            <small>{{ d.total }} {{ 'horário' if d.total == 1 else 'horários' }}</small>
+          </a>
+          {% else %}
+          <span class="dia sem" aria-disabled="true" aria-label="{{ d.extenso }}, sem horários"{% if d.atual %} aria-current="date"{% endif %}>
+            <span class="dia-semana">{{ d.semana }}</span>
+            <strong class="dia-data">{{ d.data }}</strong>
+            <small>Sem horários</small>
+          </span>
+          {% endif %}
+        </li>
+        {% endfor %}
+      </ul>
+      <section id="horarios" class="secao-horarios" aria-labelledby="horarios-titulo">
+        <h3 class="rotulo" id="horarios-titulo">Horários livres{% if dia_extenso %}: {{ dia_extenso }}{% endif %}</h3>
+        {% if horarios %}
+        <ul class="horarios">
+          {% for h in horarios %}
+          <li>
+            <a class="horario" href="{{ h.url }}">
+              <strong>{{ h.hora }}</strong>
+              {% if h.profissional %}
+              <span>{{ h.profissional }}</span>
+              {% endif %}
+            </a>
+          </li>
+          {% endfor %}
+        </ul>
+        {% else %}
+        <p class="vazio">Nenhum horário livre neste dia. Escolha outro dia.</p>
+        {% endif %}
+      </section>
+      {% endif %}
+{% endblock %}

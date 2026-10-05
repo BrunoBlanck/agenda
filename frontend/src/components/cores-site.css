@@ -1,0 +1,265 @@
+/* Cores do site (CoresSite.jsx). Fora da miniatura, só tokens do painel (DIR-002): as cores da loja
+   chegam como variáveis dinâmicas (--previa-topo, --previa-destaque, --amostra) e ficam só na miniatura e na amostra. */
+
+.cores-site-area {
+  container-type: inline-size;
+}
+
+.cores-site {
+  display: grid;
+  /* A miniatura não estica além do tamanho de um site de celular aberto no computador */
+  grid-template-columns: minmax(240px, 340px) minmax(0, 520px);
+  gap: var(--espaco-4) var(--espaco-6);
+  align-items: start;
+  margin-bottom: var(--espaco-4);
+}
+
+@container (max-width: 640px) {
+  .cores-site {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.cores-site-campos > .texto-ajuda {
+  margin-bottom: var(--espaco-4);
+}
+
+/* ---------- Campo: amostra + código + voltar ao padrão ---------- */
+
+.campo-cor {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--espaco-2);
+}
+
+.campo-cor-amostra {
+  flex: none;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border: 1px solid var(--cor-linha);
+  border-radius: var(--raio-controle);
+  background: var(--amostra);
+  box-shadow: inset 0 0 0 2px var(--cor-superficie);
+  cursor: pointer;
+}
+
+.campo-cor-amostra:hover:not(:disabled) {
+  border-color: var(--cor-tinta);
+}
+
+/* Sem cor escolhida: a amostra mostra a cor padrão, esmaecida */
+.campo-cor-amostra.padrao {
+  opacity: 0.45;
+}
+
+.campo-cor-amostra:disabled {
+  cursor: not-allowed;
+}
+
+.campo-cor-hex.ant-input {
+  width: 112px;
+  font-variant-numeric: tabular-nums;
+  text-transform: uppercase;
+}
+
+.campo-cor-padrao.ant-btn {
+  height: auto;
+  padding-inline: 0;
+}
+
+/* ---------- Miniatura do site ---------- */
+
+.cores-site-previa-cabecalho {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--espaco-1) var(--espaco-4);
+  margin-bottom: var(--espaco-2);
+}
+
+.cores-site-previa-cabecalho .grupo-formulario {
+  margin: 0;
+}
+
+.cores-site-previa-cabecalho a {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--espaco-1);
+  font-size: 13px;
+}
+
+.previa-site {
+  overflow: hidden;
+  border: 1px solid var(--cor-linha);
+  border-radius: var(--raio-conteiner);
+  background: var(--cor-papel);
+  color: var(--cor-texto);
+  font-size: 12px;
+  line-height: 1.4;
+  user-select: none;
+}
+
+.previa-site-topo {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  padding: var(--espaco-3) var(--espaco-4) var(--espaco-6);
+  background: var(--previa-topo);
+  color: var(--cor-sobre-escuro);
+}
+
+.previa-site-nome,
+.previa-site-frase {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.previa-site-nome {
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.previa-site-frase {
+  opacity: 0.9;
+}
+
+.previa-site-cartao {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espaco-2);
+  margin: calc(-1 * var(--espaco-5)) var(--espaco-3) var(--espaco-3);
+  padding: var(--espaco-3);
+  border: 1px solid var(--cor-linha);
+  border-radius: var(--raio-conteiner);
+  background: var(--cor-superficie);
+}
+
+.previa-site-passos {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--espaco-1) var(--espaco-3);
+  margin: 0 0 var(--espaco-1);
+  padding: 0;
+  list-style: none;
+  font-size: 11px;
+  color: var(--cor-texto-secundario);
+}
+
+.previa-site-passos li {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--espaco-1);
+}
+
+.previa-site-passos span {
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border: 2px solid var(--cor-linha);
+  border-radius: 50%;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.previa-site-passos .feito {
+  color: var(--cor-texto);
+}
+
+.previa-site-passos .feito span {
+  border-color: var(--previa-destaque);
+  color: var(--previa-destaque);
+}
+
+.previa-site-passos .atual {
+  color: var(--cor-texto);
+  font-weight: 700;
+}
+
+.previa-site-passos .atual span {
+  border-color: var(--previa-destaque);
+  background: var(--previa-destaque);
+  color: var(--cor-sobre-escuro);
+}
+
+.previa-site-titulo {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.previa-site-dias,
+.previa-site-horarios {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+  font-variant-numeric: tabular-nums;
+}
+
+.previa-site-dia,
+.previa-site-horario {
+  border-radius: var(--raio-controle);
+  text-align: center;
+}
+
+.previa-site-dia {
+  display: flex;
+  flex-direction: column;
+  padding: var(--espaco-1);
+  border: 1px solid var(--cor-linha);
+}
+
+.previa-site-dia small {
+  font-size: 10px;
+}
+
+.previa-site-horario {
+  padding: 5px var(--espaco-1);
+  border: 1px solid var(--previa-destaque);
+  color: var(--previa-destaque);
+  font-weight: 700;
+}
+
+.previa-site-dia.atual,
+.previa-site-horario.atual,
+.previa-site-botao {
+  border-color: var(--previa-destaque);
+  background: var(--previa-destaque);
+  color: var(--cor-sobre-escuro);
+}
+
+.previa-site-botao {
+  margin-top: var(--espaco-1);
+  padding: 7px var(--espaco-3);
+  border-radius: var(--raio-controle);
+  font-weight: 700;
+  text-align: center;
+}
+
+/* ---------- Carregando ---------- */
+
+.cores-site-fantasma-campo {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espaco-2);
+  margin-bottom: var(--espaco-5);
+}
+
+.cores-site .cores-site-fantasma-previa.ant-skeleton.ant-skeleton-element,
+.cores-site .cores-site-fantasma-previa.ant-skeleton.ant-skeleton-element .ant-skeleton-node {
+  width: 100%;
+}
+
+.cores-site .cores-site-fantasma-previa.ant-skeleton.ant-skeleton-element .ant-skeleton-node {
+  height: 232px;
+}
+
+/* Aviso de contraste: o laranja padrão do antd não passa de 4,5:1 em texto pequeno */
+.cores-site .ant-form-item-explain-warning {
+  color: var(--tom-atencao);
+}

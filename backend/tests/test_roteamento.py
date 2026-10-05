@@ -1,4 +1,7 @@
-"""Roteamento por URL (GER-29, PLA-16, SIT-11): slugs reservados e páginas HTML fora de /api."""
+"""Roteamento por URL (GER-29, PLA-16, SIT-12): slugs reservados e páginas HTML fora de /api.
+
+O fluxo de agendamento do site (/{slug}, /{slug}/agendar...) tem os testes em test_site_paginas.py.
+"""
 
 import re
 from pathlib import Path
@@ -17,6 +20,7 @@ from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 from app.auth.dependencias import ip_da_requisicao
 from app.config import get_settings
 from app.models.enums import StatusLoja
+from app.routers.html import CSP_SITE
 from app.services.slugs import MSG_SLUG_RESERVADO, SLUGS_RESERVADOS, endereco_de_loja
 from tests.conftest import URL_DONO, config_alembic, recriar_banco
 from tests.fabricas import cabecalho_superadmin, criar_loja, criar_plano, criar_superadmin
@@ -61,10 +65,11 @@ def alterar_loja(engine, slug_atual: str, /, **campos) -> None:
         )
 
 
-def eh_html(resposta, status: int) -> None:
+def eh_html(resposta, status: int, csp: str = CSP) -> None:
     assert resposta.status_code == status
     assert resposta.headers['content-type'] == 'text/html; charset=utf-8'
-    assert resposta.headers['content-security-policy'] == CSP
+    assert resposta.headers['content-security-policy'] == csp
+    assert resposta.headers['cache-control'] == 'no-store'
     assert resposta.headers['x-content-type-options'] == 'nosniff'
     assert resposta.headers['referrer-policy'] == 'same-origin'
 
@@ -149,9 +154,15 @@ def test_migracao_para_se_alguma_loja_usa_slug_reservado():
     config = config_alembic(url)
     engine = create_engine(url)
     try:
-        command.upgrade(config, '0004')
-        criar_loja(engine, 'admin')
-        criar_loja(engine, 'painel')
+        # As lojas nascem pelo ORM (modelos da versão atual); na 0004 ganham os slugs reservados
+        command.upgrade(config, 'head')
+        criar_loja(engine, 'loja-admin')
+        criar_loja(engine, 'loja-painel')
+        command.downgrade(config, '0004')
+        with engine.begin() as conexao:
+            conexao.execute(
+                text("UPDATE lojas SET slug = substr(slug, 6), nome = 'Loja ' || substr(slug, 6)")
+            )
         alterar_loja(engine, 'admin', excluido_em='2026-01-01T00:00:00Z')
         with pytest.raises(RuntimeError) as erro:
             command.upgrade(config, 'head')
@@ -222,30 +233,29 @@ def test_pagina_da_loja_ativa_com_dados_publicos(cliente, engine_dono):
         logo_url='/api/arquivos/logos/x/logo.png',
     )
     resposta = cliente.get('/loja-a')
-    eh_html(resposta, 200)
+    eh_html(resposta, 200, CSP_SITE)
     html = resposta.text
     assert '<title>Clínica Sorriso</title>' in html
-    assert '<h1>Clínica Sorriso</h1>' in html
-    assert 'Agendamento online em breve.' in html
-    assert '<p class="rotulo">Clínica</p>' in html  # tipo da loja
+    assert '<h1 class="nome">Clínica Sorriso</h1>' in html
+    assert 'Agendamento online em breve.' not in html  # a página provisória (SIT-11) saiu
+    assert '<p class="tipo">Clínica</p>' in html  # tipo da loja
     assert '<a href="tel:11988881111">(11) 98888-1111</a>' in html
-    assert '<a href="mailto:contato@sorriso.com">contato@sorriso.com</a>' in html
-    assert 'Rua das Flores, 120 - Sala 3<br>Centro · Campinas/SP' in html
+    assert 'Rua das Flores, 120 - Sala 3 · Centro · Campinas/SP' in html
     assert '<img class="logo" src="/api/arquivos/logos/x/logo.png"' in html
     # Só o que LojaPublica expõe: nada de razão social nem CNPJ
     assert 'LTDA' not in html
     assert '11.222.333' not in html
-    assert '<script' not in html
+    assert '<script>' not in html  # só o script da própria origem (/static/site/site.js)
 
 
 def test_pagina_da_loja_sem_dados_opcionais(cliente, engine_dono):
     criar_loja(engine_dono, 'loja-a')
     alterar_loja(engine_dono, 'loja-a', nome_fantasia=None)
     resposta = cliente.get('/loja-a')
-    eh_html(resposta, 200)
-    assert '<h1>Loja loja-a</h1>' in resposta.text  # sem nome fantasia: o nome
+    eh_html(resposta, 200, CSP_SITE)
+    assert '<h1 class="nome">Loja loja-a</h1>' in resposta.text  # sem nome fantasia: o nome
     assert '<img' not in resposta.text
-    assert '<dl>' not in resposta.text
+    assert 'class="contato"' not in resposta.text
 
 
 def test_pagina_da_loja_nao_leva_ao_painel_nem_ao_login(cliente, engine_dono):
@@ -263,7 +273,7 @@ def test_pagina_da_loja_nao_leva_ao_painel_nem_ao_login(cliente, engine_dono):
     )
     for caminho in ('/loja-a', '/loja-a/'):
         resposta = cliente.get(caminho, follow_redirects=True)
-        eh_html(resposta, 200)
+        eh_html(resposta, 200, CSP_SITE)
         html = resposta.text.lower()
         for proibido in ('painel', 'superadmin', 'login'):  # 'painel' cobre /painel e /{slug}/painel
             assert proibido not in html, proibido
@@ -335,7 +345,7 @@ def test_head_responde_como_o_get(cliente, engine_dono, caminho):
     get, head = cliente.get(caminho), cliente.head(caminho)
     assert head.status_code == get.status_code
     assert head.headers['content-type'] == get.headers['content-type']
-    assert head.headers['content-security-policy'] == CSP
+    assert head.headers['content-security-policy'] == get.headers['content-security-policy']
 
 
 def test_head_no_servidor_real_vem_sem_corpo(servidor, engine_dono):
@@ -404,14 +414,14 @@ def test_pagina_da_loja_usa_o_limite_do_site(engine_dono, monkeypatch):
     with TestClient(app, client=('198.51.100.20', 50000)) as c:
         for _ in range(3):  # endereço inválido ou reservado não consulta o banco e não conta
             eh_html(c.get('/admin'), 404)
-        eh_html(c.get('/loja-a'), 200)
+        eh_html(c.get('/loja-a'), 200, CSP_SITE)
         assert c.get('/api/site/loja-a').status_code == 200  # mesmo contador da API do site
         excesso = c.get('/loja-a')
         eh_html(excesso, 429)
         assert 'Muitas requisições' in excesso.text
         assert 1 <= int(excesso.headers['retry-after']) <= 60
     with TestClient(app, client=('198.51.100.21', 50000)) as outro:
-        eh_html(outro.get('/loja-a'), 200)
+        eh_html(outro.get('/loja-a'), 200, CSP_SITE)
 
 
 # --- Atrás do proxy (uvicorn --proxy-headers) ------------------------------------------------------

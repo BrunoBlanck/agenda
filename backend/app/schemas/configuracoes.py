@@ -3,10 +3,11 @@
 import re
 from typing import Annotated, Any
 
-from pydantic import BeforeValidator, Field, field_validator
+from pydantic import BaseModel, BeforeValidator, Field, field_validator
 
 from app.models.enums import StatusLoja, TipoLoja
 from app.schemas.comum import Controle, EmailOpcional, Entrada, regra, texto, texto_opcional
+from app.services.cores_site import MSG_CONTRASTE_COR, MSG_FORMATO_COR, legivel_com_branco, normalizar_cor
 
 
 def cnpj_valido(digitos: str) -> bool:
@@ -100,3 +101,47 @@ class DadosLoja(Controle):
     status: StatusLoja
     fuso_horario: str
     modulos: dict[str, bool] = Field(description='Módulos opcionais: ativo ou não')
+
+
+# --- Cores do site (SIT-13, SIT-14) ----------------------------------------------------------------
+
+
+def _cor_do_site(valor: Any) -> Any:
+    """null (ou vazio) = cor padrão do tipo; senão #RRGGBB (vira minúsculas) legível com texto branco."""
+    if valor is None or (isinstance(valor, str) and not valor.strip()):
+        return None
+    cor = normalizar_cor(valor) if isinstance(valor, str) else None
+    if cor is None:
+        raise regra(MSG_FORMATO_COR)
+    if not legivel_com_branco(cor):
+        raise regra(MSG_CONTRASTE_COR)
+    return cor
+
+
+CorDoSite = Annotated[
+    str | None,
+    BeforeValidator(_cor_do_site),
+    Field(description='#RRGGBB (sai em minúsculas), contraste de 4,5:1 com o branco; null = padrão do tipo'),
+]
+
+
+class CoresSiteEntrada(Entrada):
+    """As duas cores são obrigatórias no corpo (null = voltar ao padrão)."""
+
+    cor_topo: CorDoSite
+    cor_destaque: CorDoSite
+
+
+class CoresPadrao(BaseModel):
+    cor_topo: str
+    cor_destaque: str
+
+
+class CoresSite(Controle):
+    """Cores do site do consumidor. atualizado_por / atualizado_por_nome: o funcionário que alterou por
+    último; nulos quando foi o superadmin ou o sistema (GER-13)."""
+
+    cor_topo: str | None = Field(description='null = cor padrão do tipo (padrao.cor_topo)')
+    cor_destaque: str | None = Field(description='null = cor padrão do tipo (padrao.cor_destaque)')
+    padrao: CoresPadrao = Field(description='Paleta do tipo da loja (voltar ao padrão e pré-visualização)')
+    tipo: TipoLoja

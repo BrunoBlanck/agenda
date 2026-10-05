@@ -1,0 +1,28 @@
+{% extends 'site/base.html' %}
+{% block titulo %}Pedido enviado · {{ loja.nome_fantasia }}{% endblock %}
+{% block conteudo %}
+      <div class="pronto">
+        <svg class="pronto-icone" aria-hidden="true" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M7.5 12.5l3 3 6-6.5"/></svg>
+        <h2 class="titulo">Pedido enviado!</h2>
+        {% if resumo %}
+        <ul class="resumo-lista resumo-pronto">
+          <li><strong>{{ resumo.servico }}</strong></li>
+          <li>{{ resumo.dia }}, às {{ resumo.hora }}</li>
+          <li>Com {{ resumo.profissional }}</li>
+          {% if resumo.local %}
+          <li>{{ rotulo_local }}: {{ resumo.local }}</li>
+          {% endif %}
+          {% if resumo.preco %}
+          <li class="preco">{{ resumo.preco }}</li>
+          {% endif %}
+        </ul>
+        <p class="nota">{{ situacao }}</p>
+        {% else %}
+        <p class="nota">A {{ loja.nome_fantasia }} vai confirmar seu horário pelo WhatsApp.</p>
+        {% endif %}
+        {% if loja.telefone %}
+        <p>Dúvidas? Fale com a loja: {% if telefone_link %}<a href="{{ telefone_link }}">{{ loja.telefone }}</a>{% else %}{{ loja.telefone }}{% endif %}</p>
+        {% endif %}
+        <a class="botao botao-secundario" href="{{ inicio }}">Fazer outro agendamento</a>
+      </div>
+{% endblock %}

@@ -1,3 +1,4 @@
 - [Armadilhas do back-end](armadilhas-backend.md) — corrida com servidor real, FOR UPDATE, IP do TestClient, rota pega-tudo x /api, proxy-headers
 - [Armadilhas: reload e fuso da sessão](armadilhas-ambiente-e-fuso.md) — uvicorn --reload trava no Windows; TimeZone da transação = fuso da loja (casts de data, JSON da auditoria)
 - [Armadilhas do ambiente](armadilhas-ambiente.md) — sed -i e CRLF, heredoc come barra invertida, pytest -q, Docker desligado, nginx -t via docker
+- [Site no navegador](verificacao-navegador-site.md) — banco agenda_navegador + uvicorn 8011 + playwright-core com o Chrome, com e sem JS

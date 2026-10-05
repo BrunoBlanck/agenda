@@ -1,6 +1,7 @@
 import { api, ErroApi, urlDaApi } from './cliente.js'
 import { enviarDataHora, enviarNumero, lerNumero, lerPagina, paraCamel, textoOuNulo } from './conversao.js'
 import { conflitoNoCampo } from './registro.js'
+import { corpoCoresSite, lerCoresSite } from './configuracoes.js'
 
 // Plataforma (SUPERADMIN): lojas, módulos, funcionários pelo suporte, planos, usuários admin, auditoria
 // e visão geral. Funções puras: chamam a API e convertem com mapeamento explícito por campo (INT-09).
@@ -177,6 +178,13 @@ export async function definirModuloLoja(lojaId, codigo, campos) {
   if ('expiraEm' in campos) corpo.expira_em = enviarDataHora(campos.expiraEm)
   return lerModulo(await sa.patch(`/lojas/${id(lojaId)}/modulos/${id(codigo)}`, corpo))
 }
+
+// --- Cores do site da loja (PLA-20, SIT-13): mesmo CoresSite do painel, datas já no fuso da loja ----
+
+export const obterCoresSiteLoja = async (lojaId, sinal) => lerCoresSite(await sa.get(`/lojas/${id(lojaId)}/site`, { sinal }))
+
+export const salvarCoresSiteLoja = async (lojaId, valores) =>
+  lerCoresSite(await sa.put(`/lojas/${id(lojaId)}/site`, corpoCoresSite(valores)))
 
 // --- Funcionários pelo suporte -------------------------------------------------------------------
 
