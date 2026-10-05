@@ -34,5 +34,7 @@ Fonte: `estrutura.md` seção 1 e 6.2. Rotas em `/api/superadmin/...` (só token
 - **PLA-13** Cada item mostra quando, quem (nome resolvido), operação, `rotulo` do registro e `mudancas` (campo, antes, depois) vindas do servidor; o navegador não compara `antes`/`depois`. Paginada.
 - **PLA-14** Ações sem alteração de linha (entrar como a loja, enviar link de senha) também entram na auditoria (`registrar_acao`).
 
+- **PLA-20** O SUPERADMIN edita as cores do site da loja (SIT-13/14) na aba **Site** do detalhe da loja (`GET/PUT /api/superadmin/lojas/{id}/site`). A alteração fica com `atualizado_por` NULL e a auditoria guarda o `superadmin_id` (origem `superadmin`).
+
 ## Catálogos fixos
 - **PLA-15** Tipo da loja, módulos e recursos mudam **só por migração**, junto com o código. Não há tela de cadastro para eles.

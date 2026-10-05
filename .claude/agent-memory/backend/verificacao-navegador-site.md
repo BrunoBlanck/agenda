@@ -20,6 +20,8 @@ Receita usada em 2026-10-04 (funcionalidade site-agendamento):
    `document.documentElement.scrollWidth > innerWidth`. Caminho de saída: `fileURLToPath(new URL('.',
    import.meta.url))` (o nome do usuário tem acento e `pathname` vem com %C3%A1).
 
+O scratchpad é compartilhado com o agente de front (que usa `agenda_navegador`/8011): use banco e porta próprios (ex.: `agenda_cores_back`, 8013) numa subpasta; o `node_modules` com playwright-core da raiz do scratchpad é achado por scripts em subpastas.
+
 O único erro de console esperado é o 404 do `/favicon.ico` (o back-end não serve favicon).
 
 Relacionado: [[armadilhas-ambiente-e-fuso]]

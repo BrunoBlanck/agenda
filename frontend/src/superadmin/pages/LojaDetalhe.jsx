@@ -8,6 +8,7 @@ import { useTratarErro } from '../../data/api/useTratarErro.js'
 import { mascaraTelefone } from '../../utils/formatos.js'
 import UltimaAlteracao from '../../components/UltimaAlteracao.jsx'
 import EnvioLogo from '../../components/EnvioLogo.jsx'
+import CoresSite from '../../components/CoresSite.jsx'
 import { CamposEmpresa, CamposEndereco } from '../../components/CamposLoja.jsx'
 import Pagina from '../../components/base/Pagina.jsx'
 import Secao from '../../components/base/Secao.jsx'
@@ -18,7 +19,7 @@ import EstadoVazio from '../../components/base/EstadoVazio.jsx'
 import PainelFormulario from '../../components/base/PainelFormulario.jsx'
 import { usePainel } from '../../components/base/usePainel.js'
 import { EtiquetaLoja, EtiquetaSituacao } from '../../components/Etiquetas.jsx'
-import { useFuncionariosLoja, useLoja, useModulosLoja, usePerfisLoja, usePlanos, useSenhaDaLojaNova } from '../usePlataforma.js'
+import { useCoresSiteLoja, useFuncionariosLoja, useLoja, useModulosLoja, usePerfisLoja, usePlanos, useSenhaDaLojaNova } from '../usePlataforma.js'
 import { erroNoCampo } from '../erroNoCampo.js'
 import CampoEnderecoLoja from '../CampoEnderecoLoja.jsx'
 import { caminhoPainel, caminhoSite } from '../../layout/caminhos.js'
@@ -123,6 +124,16 @@ function DadosGerais({ loja, salvar, enviarLogo, removerLogo, aoNaoEncontrado })
         </div>
       </Form>
     </>
+  )
+}
+
+function Site({ loja, aoNaoEncontrado }) {
+  const coresSite = useCoresSiteLoja(loja.id)
+  return (
+    <div className="pilha">
+      <p className="texto-ajuda">Cores do site de agendamento dos clientes. A própria loja também pode alterá-las em Configurações.</p>
+      <CoresSite estado={coresSite} nomeLoja={loja.nomeFantasia} slug={loja.slug} aoNaoEncontrado={aoNaoEncontrado} />
+    </div>
   )
 }
 
@@ -621,6 +632,11 @@ function Detalhe({ id }) {
                   aoNaoEncontrado={() => navigate('/superadmin/lojas')}
                 />
               ),
+            },
+            {
+              key: 'site',
+              label: 'Site',
+              children: <Site loja={loja} aoNaoEncontrado={() => navigate('/superadmin/lojas')} />,
             },
             { key: 'modulos', label: 'Módulos', children: <Modulos lojaId={loja.id} /> },
             { key: 'funcionarios', label: 'Funcionários', children: <Funcionarios lojaId={loja.id} /> },

@@ -6,10 +6,12 @@ Usadas pelas páginas gerais (``app/routers/paginas.py``: /, /painel, 404) e pel
 Duas políticas de conteúdo (CSP), cada página com o mínimo de que precisa:
 - ``CSP_SIMPLES`` (páginas de erro): sem script, sem formulário, estilo embutido;
 - ``CSP_SITE`` (fluxo de agendamento): estilo e script só da própria origem (``/static/site/...``),
-  formulários só para a própria origem, imagens (logo) da própria origem.
+  formulários só para a própria origem, imagens (logo) da própria origem. Loja com cores próprias
+  (SIT-13): ``csp_site(nonce)`` libera, além disso, só o ``<style>`` com o nonce daquela resposta.
 """
 
 import hashlib
+import secrets
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
@@ -43,10 +45,23 @@ CSP_SIMPLES = (
     "default-src 'none'; img-src 'self'; style-src 'unsafe-inline'; "
     "base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
 )
-CSP_SITE = (
-    "default-src 'none'; img-src 'self'; style-src 'self'; script-src 'self'; "
-    "base-uri 'none'; form-action 'self'; frame-ancestors 'none'"
-)
+
+
+def csp_site(nonce_estilo: str | None = None) -> str:
+    """CSP do site; com ``nonce_estilo``, aceita também o ``<style nonce="...">`` daquela resposta."""
+    estilo = f"'self' 'nonce-{nonce_estilo}'" if nonce_estilo else "'self'"
+    return (
+        f"default-src 'none'; img-src 'self'; style-src {estilo}; script-src 'self'; "
+        "base-uri 'none'; form-action 'self'; frame-ancestors 'none'"
+    )
+
+
+def novo_nonce() -> str:
+    """Valor imprevisível e novo a cada resposta (128 bits, base64url)."""
+    return secrets.token_urlsafe(16)
+
+
+CSP_SITE = csp_site()
 
 CABECALHOS = {
     'X-Content-Type-Options': 'nosniff',

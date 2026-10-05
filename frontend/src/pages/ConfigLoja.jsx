@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { App, Button, Descriptions, Flex, Form } from 'antd'
 import { DisconnectOutlined, EyeOutlined } from '@ant-design/icons'
 import { useAcesso } from '../data/useAcesso.js'
-import { useConfigLoja } from '../data/useConfigLoja.js'
+import { useConfigLoja, useCoresSite } from '../data/useConfigLoja.js'
 import { useTratarErro } from '../data/api/useTratarErro.js'
 import { modulos } from '../data/acesso.js'
 import { tiposLoja } from '../data/dominio.js'
@@ -15,6 +15,7 @@ import { EtiquetaLoja } from '../components/Etiquetas.jsx'
 import { CamposEmpresa, CamposEndereco } from '../components/CamposLoja.jsx'
 import UltimaAlteracao from '../components/UltimaAlteracao.jsx'
 import EnvioLogo from '../components/EnvioLogo.jsx'
+import CoresSite from '../components/CoresSite.jsx'
 
 const titulo = 'Dados da loja'
 const descricao = 'Aparecem no site de agendamento e nos avisos enviados aos clientes.'
@@ -26,6 +27,7 @@ export default function ConfigLoja() {
   const tratarErro = useTratarErro()
   const [form] = Form.useForm()
   const config = useConfigLoja()
+  const coresSite = useCoresSite()
   const [salvando, setSalvando] = useState(false)
   const [gravacoes, setGravacoes] = useState(0)
   const somenteLeitura = !pode('config_loja', 'escrita')
@@ -76,30 +78,36 @@ export default function ConfigLoja() {
       }
     >
       <div className="grade-principal">
-        <Secao titulo="Identificação e contato">
-          <Form
-            // Depois de salvar, o formulário volta a mostrar o que ficou gravado (CNPJ e CEP formatados pela API).
-            // Enviar ou remover a logo não recria o formulário (não perde o que está sendo digitado).
-            key={gravacoes}
-            form={form}
-            layout="vertical"
-            initialValues={dados}
-            disabled={somenteLeitura || salvando}
-            onFinish={salvar}
-          >
-            <CamposEmpresa />
-            <h3 className="grupo-formulario">Endereço</h3>
-            <CamposEndereco somenteLeitura={somenteLeitura} />
-            <div className="rodape-formulario">
-              <UltimaAlteracao item={dados} />
-              {!somenteLeitura && (
-                <Button type="primary" htmlType="submit" loading={salvando}>
-                  Salvar dados
-                </Button>
-              )}
-            </div>
-          </Form>
-        </Secao>
+        <div className="pilha">
+          <Secao titulo="Identificação e contato">
+            <Form
+              // Depois de salvar, o formulário volta a mostrar o que ficou gravado (CNPJ e CEP formatados pela API).
+              // Enviar ou remover a logo não recria o formulário (não perde o que está sendo digitado).
+              key={gravacoes}
+              form={form}
+              layout="vertical"
+              initialValues={dados}
+              disabled={somenteLeitura || salvando}
+              onFinish={salvar}
+            >
+              <CamposEmpresa />
+              <h3 className="grupo-formulario">Endereço</h3>
+              <CamposEndereco somenteLeitura={somenteLeitura} />
+              <div className="rodape-formulario">
+                <UltimaAlteracao item={dados} />
+                {!somenteLeitura && (
+                  <Button type="primary" htmlType="submit" loading={salvando}>
+                    Salvar dados
+                  </Button>
+                )}
+              </div>
+            </Form>
+          </Secao>
+
+          <Secao titulo="Cores do site" descricao="Usadas no site de agendamento dos clientes.">
+            <CoresSite estado={coresSite} nomeLoja={dados.nomeFantasia} slug={dados.slug} somenteLeitura={somenteLeitura} />
+          </Secao>
+        </div>
 
         <div className="pilha">
           <Secao titulo="Logo" descricao="Aparece no menu e no site da loja.">

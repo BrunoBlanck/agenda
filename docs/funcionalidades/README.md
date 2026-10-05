@@ -8,3 +8,4 @@ Uma especificação por funcionalidade (`<slug>.md`), escrita pelo agente `coord
 | [Acessar loja pelo SUPERADMIN](acessar-loja.md) | aprovada | feat/acessar-loja |
 | [Vincular serviços pela tela de Locais](locais-servicos.md) | aprovada | feat/locais-servicos |
 | [Site do consumidor: agendamento online](site-agendamento.md) | em desenvolvimento | feat/site-agendamento |
+| [Cores do site escolhidas pela loja](cores-site.md) | aprovada | feat/cores-site |

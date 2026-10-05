@@ -12,6 +12,7 @@ from fastapi.responses import JSONResponse
 from sqlalchemy.exc import DBAPIError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
+from app.services.cores_site import MSG_FORMATO_COR
 from app.services.slugs import MSG_SLUG_RESERVADO
 
 log = logging.getLogger('app.erros')
@@ -124,6 +125,8 @@ MENSAGENS_CONSTRAINT = {
     'superadmin_usuarios_email_uk': 'Já existe um usuário admin com este e-mail.',
     'registros_ponto_um_aberto': 'Este funcionário já tem um registro de ponto em aberto.',
     'registros_ponto_sem_sobreposicao': 'Este funcionário já tem um registro de ponto nesse período.',
+    'ck_loja_configuracoes_cor_site_topo': MSG_FORMATO_COR,
+    'ck_loja_configuracoes_cor_site_destaque': MSG_FORMATO_COR,
 }
 
 

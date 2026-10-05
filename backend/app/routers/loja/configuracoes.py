@@ -1,7 +1,8 @@
-"""Configurações › Dados da loja (/api/loja/configuracoes/loja). Recurso: config_loja.
+"""Configurações › Dados da loja (/api/loja/configuracoes/loja e /configuracoes/site). Recurso: config_loja.
 
 Grava direto em lojas (estrutura.md, 2.18). O trigger preenche atualizado_por_funcionario.
 A logo é um arquivo (app/services/arquivos.py): enviada por PUT .../logo (multipart, campo ``arquivo``).
+As cores do site do consumidor (SIT-13, SIT-14) ficam em loja_configuracoes (app/services/configuracoes.py).
 """
 
 from typing import Annotated
@@ -13,14 +14,20 @@ from app.auth.catalogo import MODULOS
 from app.auth.dependencias import ContextoLoja, exigir
 from app.models import Plano
 from app.schemas.comum import Erro
-from app.schemas.configuracoes import DadosLoja, DadosLojaEntrada
+from app.schemas.configuracoes import CoresSite, CoresSiteEntrada, DadosLoja, DadosLojaEntrada
 from app.services.arquivos import remover_logo, trocar_logo
+from app.services.configuracoes import cores_do_site, salvar_cores_do_site
 from app.services.plataforma import ultima_alteracao_loja
 
 router = APIRouter(
     prefix='/configuracoes/loja',
     tags=['Loja: configurações'],
     responses={403: {'model': Erro}, 409: {'model': Erro}},
+)
+router_site = APIRouter(
+    prefix='/configuracoes/site',
+    tags=['Loja: configurações'],
+    responses={403: {'model': Erro}, 422: {'model': Erro}},
 )
 
 Leitura = Annotated[ContextoLoja, Depends(exigir('config_loja'))]
@@ -77,3 +84,16 @@ def enviar_logo(
 @router.delete('/logo', status_code=status.HTTP_204_NO_CONTENT, summary='Remover a logo (apaga o arquivo)')
 def excluir_logo(ctx: Escrita) -> None:
     remover_logo(ctx.db, ctx.loja_id)
+
+
+# --- Cores do site do consumidor -----------------------------------------------------------------
+
+
+@router_site.get('', summary='Cores do site de agendamento (null = padrão do tipo da loja)')
+def obter_cores_site(ctx: Leitura) -> CoresSite:
+    return cores_do_site(ctx.db, ctx.loja)
+
+
+@router_site.put('', summary='Escolher as cores do site de agendamento (topo e destaque; null = padrão)')
+def definir_cores_site(dados: CoresSiteEntrada, ctx: Escrita) -> CoresSite:
+    return salvar_cores_do_site(ctx.db, ctx.loja, dados)

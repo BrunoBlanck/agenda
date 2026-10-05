@@ -12,5 +12,7 @@ metadata:
 - Perfil com nível diferente sem mexer no banco: `page.route('**/api/loja/eu')` e alterar `acessos.<recurso>` na resposta (só a interface; a API continua decidindo).
 - Recepção do seed (juliana@clinica.com) tem `config_loja = nenhum` (não `leitura`): a tela Dados da loja mostra "Sem acesso".
 - O proxy do Vite (localhost:5173/api) aceita multipart normalmente; logo servida em `/api/arquivos/logos/...` passa pelo mesmo proxy.
+- Erro **real** da API sem estragar dados (2026-10-05): 401 = `route.continue({ headers: { ...req.headers(), authorization: 'Bearer invalido' } })` só na rota testada (o resto da sessão segue válido e a tela vai ao login); 404 do SUPERADMIN = `route.continue({ url: 'http://localhost:8000/api/superadmin/lojas/<uuid zero>/...' })` (trocar de origem funciona).
+- Avisos `[api] <status> ...` no console vêm do próprio `useConsulta`/cliente em DEV quando o teste provoca o erro: esperados, não são defeito.
 
 Relacionado: [[integracao-logo]]

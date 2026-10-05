@@ -1005,11 +1005,15 @@ Opções da loja que não são dados cadastrais (ver 2.18). Uma linha por loja, 
 | loja_id | uuid | PK, FK → lojas |
 | rotulo_local | varchar(40) | NOT NULL DEFAULT `'Local'`. Como a loja chama um local (Sala, Cadeira, Maca, Consultório...) |
 | rotulo_local_plural | varchar(40) | NOT NULL DEFAULT `'Locais'`. Usado no menu e nos títulos |
+| cor_site_topo | varchar(7) | NULL = cor padrão do tipo da loja. `CHECK (~ '^#[0-9a-f]{6}$')`. Cor do cabeçalho do site do consumidor (SIT-13) |
+| cor_site_destaque | varchar(7) | NULL = padrão do tipo. Mesmo CHECK. Botões, dia/horário escolhidos e links do site |
 | criado_em | timestamptz | NOT NULL DEFAULT now() |
 | atualizado_em | timestamptz | NOT NULL DEFAULT now(). Atualizado automaticamente em todo UPDATE (trigger) |
 | atualizado_por | uuid | FK (loja_id, atualizado_por) → funcionarios. Funcionário que fez a última alteração na linha |
 | excluido_em | timestamptz | NULL = não excluído. Hora exata da exclusão |
 | excluido_por | uuid | FK (loja_id, excluido_por) → funcionarios. Quem excluiu |
+
+📌 **Cores do site (SIT-13 a SIT-15, migração 0006):** editadas em *Configurações › Dados da loja* (escrita em `config_loja`) e pelo SUPERADMIN na aba *Site* do detalhe da loja (PLA-20). Cada cor precisa de contraste ≥ 4,5:1 com texto branco; no modo escuro o destaque é clareado automaticamente. O site aplica as cores com `<style nonce>` (a CSP continua sem `unsafe-inline`). Paleta padrão por tipo num só lugar: `backend/app/services/cores_site.py` (igual ao `site.css`).
 
 📌 Os rótulos são editados na própria tela de Locais, por quem tem **escrita** em *Locais*. Diferente do tipo da loja (1.2), que só muda os textos do site do consumidor, o rótulo muda os textos do **painel**.
 

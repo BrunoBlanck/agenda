@@ -13,7 +13,7 @@ from fastapi import APIRouter, Depends, status
 from sqlalchemy import func, select
 
 from app.auth.dependencias import ContextoLoja, exigir
-from app.models import Agendamento, Local, LojaConfiguracao, Servico, ServicoLocal
+from app.models import Agendamento, Local, Servico, ServicoLocal
 from app.models.enums import StatusAgendamento
 from app.schemas.comum import Erro
 from app.schemas.locais import (
@@ -34,6 +34,7 @@ from app.services.comum import (
     inicio_do_dia,
     sincronizar_vinculos,
 )
+from app.services.configuracoes import configuracao_da_loja
 
 ERROS = {403: {'model': Erro}, 404: {'model': Erro}, 409: {'model': Erro}}
 router = APIRouter(prefix='/locais', tags=['Loja: locais'], responses=ERROS)
@@ -98,23 +99,15 @@ def _gravar_servicos(ctx: ContextoLoja, local: Local, servico_ids: list[UUID] | 
 # --- Rótulos (antes de /{local_id}) -------------------------------------------------------------
 
 
-def _configuracao(ctx: ContextoLoja) -> LojaConfiguracao:
-    configuracao = ctx.db.scalar(select(LojaConfiguracao).where(LojaConfiguracao.loja_id == ctx.loja_id))
-    if configuracao is None:  # toda loja nasce com uma; recria se faltar
-        configuracao = LojaConfiguracao(loja_id=ctx.loja_id)
-        ctx.db.add(configuracao)
-        ctx.db.flush()
-    return configuracao
-
-
 @router.get('/rotulos', summary='Como a loja chama os locais (Sala, Cadeira...)')
 def obter_rotulos(ctx: Leitura) -> RotulosSaida:
-    return com_autor(ctx.db, ctx.loja_id, [RotulosSaida.model_validate(_configuracao(ctx))])[0]
+    configuracao = configuracao_da_loja(ctx.db, ctx.loja_id)
+    return com_autor(ctx.db, ctx.loja_id, [RotulosSaida.model_validate(configuracao)])[0]
 
 
 @router.put('/rotulos', summary='Definir como a loja chama os locais (muda o menu e os textos do painel)')
 def definir_rotulos(dados: RotulosEntrada, ctx: Escrita) -> RotulosSaida:
-    configuracao = _configuracao(ctx)
+    configuracao = configuracao_da_loja(ctx.db, ctx.loja_id)
     configuracao.rotulo_local = dados.rotulo_local
     configuracao.rotulo_local_plural = dados.rotulo_local_plural
     ctx.db.flush()

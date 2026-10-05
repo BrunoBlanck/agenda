@@ -29,6 +29,7 @@ from app.models import (
 )
 from app.models.enums import StatusLoja, TipoLoja
 from app.schemas.comum import Erro, Pagina, Paginacao, paginacao
+from app.schemas.configuracoes import CoresSite, CoresSiteEntrada
 from app.schemas.superadmin import (
     MSG_FUSO,
     AcessoLoja,
@@ -62,6 +63,7 @@ from app.services.comum import (
     no_fuso,
     paginar,
 )
+from app.services.configuracoes import cores_do_site, salvar_cores_do_site
 from app.services.funcionarios import MSG_ULTIMO_ADMIN, deixa_loja_sem_admin
 from app.services.lojas import provisionar_loja
 from app.services.plataforma import (
@@ -287,6 +289,19 @@ def acessar(loja_id: UUID, request: Request, ctx: ContextoSuperadminDep) -> Aces
         slug=loja.slug,
         funcionario_nome=acesso.funcionario.nome,
     )
+
+
+# --- Cores do site (PLA-20, SIT-13) -------------------------------------------------------------
+
+
+@router.get('/{loja_id}/site', summary='Cores do site de agendamento da loja (null = padrão do tipo)')
+def obter_cores_site(loja_id: UUID, ctx: ContextoSuperadminDep) -> CoresSite:
+    return cores_do_site(ctx.db, buscar_loja(ctx.db, loja_id))
+
+
+@router.put('/{loja_id}/site', summary='Escolher as cores do site de agendamento da loja (null = padrão)')
+def definir_cores_site(loja_id: UUID, dados: CoresSiteEntrada, ctx: ContextoSuperadminDep) -> CoresSite:
+    return salvar_cores_do_site(ctx.db, buscar_loja(ctx.db, loja_id), dados)
 
 
 # --- Módulos -------------------------------------------------------------------------------------
