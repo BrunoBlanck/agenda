@@ -166,9 +166,11 @@ def test_0003_normaliza_cpf_e_telefone_e_exige_ponto_sem_sobreposicao():
     config = config_alembic(url)
     engine = create_engine(url)
     try:
-        command.upgrade(config, '0002')
+        # A loja nasce pelo ORM (modelos da versão atual) e o banco volta à 0002 com ela
+        command.upgrade(config, 'head')
         loja, perfis = criar_loja(engine, 'loja-x')
         funcionario = criar_funcionario(engine, loja, perfis['Profissional'], 'p@x.com')
+        command.downgrade(config, '0002')
         with sessao(engine) as db:
             for nome, cpf, telefone in (
                 ('sem_mascara', '52998224725', '11988881111'),

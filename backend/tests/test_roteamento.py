@@ -154,9 +154,15 @@ def test_migracao_para_se_alguma_loja_usa_slug_reservado():
     config = config_alembic(url)
     engine = create_engine(url)
     try:
-        command.upgrade(config, '0004')
-        criar_loja(engine, 'admin')
-        criar_loja(engine, 'painel')
+        # As lojas nascem pelo ORM (modelos da versão atual); na 0004 ganham os slugs reservados
+        command.upgrade(config, 'head')
+        criar_loja(engine, 'loja-admin')
+        criar_loja(engine, 'loja-painel')
+        command.downgrade(config, '0004')
+        with engine.begin() as conexao:
+            conexao.execute(
+                text("UPDATE lojas SET slug = substr(slug, 6), nome = 'Loja ' || substr(slug, 6)")
+            )
         alterar_loja(engine, 'admin', excluido_em='2026-01-01T00:00:00Z')
         with pytest.raises(RuntimeError) as erro:
             command.upgrade(config, 'head')

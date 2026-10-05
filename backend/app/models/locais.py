@@ -27,4 +27,7 @@ class LojaConfiguracao(ControleMixin, Base):
     loja_id: Mapped[uuid.UUID] = mapped_column(primary_key=True)
     rotulo_local: Mapped[str] = mapped_column(String(40), server_default='Local')
     rotulo_local_plural: Mapped[str] = mapped_column(String(40), server_default='Locais')
+    # Cores do site do consumidor (#rrggbb); NULL = paleta do tipo da loja (SIT-13)
+    cor_site_topo: Mapped[str | None] = mapped_column(String(7))
+    cor_site_destaque: Mapped[str | None] = mapped_column(String(7))
     atualizado_por: Mapped[uuid.UUID | None] = gerado_pelo_banco()

@@ -8,9 +8,12 @@
   {% endif %}
   <title>{% block titulo %}{{ loja.nome_fantasia }}{% endblock %}</title>
   <link rel="stylesheet" href="{{ css }}">
+  {% if estilo %}
+  <style nonce="{{ nonce }}">{{ estilo }}</style>
+  {% endif %}
   <script src="{{ js }}" defer></script>
 </head>
-<body class="tipo-{{ loja.tipo }}">
+<body class="tipo-{{ loja.tipo }}{% if estilo %} {{ classe_cores }}{% endif %}">
   <header class="capa">
     <div class="largura marca">
       {% if loja.logo_url %}

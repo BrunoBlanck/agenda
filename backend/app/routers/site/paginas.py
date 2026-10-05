@@ -13,6 +13,10 @@ mão (nunca 422 em JSON nem 500): o que não vale volta ao passo anterior válid
 (``aviso=<código>``, texto fixo, nada do usuário é refletido) ou responde 404 quando não há para onde
 voltar. Loja inexistente, excluída, suspensa ou cancelada: 404 em todas as páginas (SIT-01).
 DIR-003: nenhuma página leva ao painel da loja.
+
+Cores escolhidas pela loja (SIT-13 a SIT-15): um ``<style>`` com as variáveis CSS, reescritas a partir
+do hex validado (``app/services/cores_site.py``), liberado na CSP só pelo nonce daquela resposta. Sem
+cores escolhidas, a página e a CSP são as de sempre (só ``/static/site/site.css``).
 """
 
 import re
@@ -39,8 +43,10 @@ from app.routers.html import (
     CSP_SITE,
     MSG_LOJA_404,
     RespostaPronta,
+    csp_site,
     muitas_requisicoes,
     nao_encontrada,
+    novo_nonce,
     pagina,
     redirecionar,
     url_estatica,
@@ -65,8 +71,9 @@ from app.services.agendamento_site import (
     solicitar,
 )
 from app.services.comum import hoje, no_fuso
+from app.services.cores_site import CLASSE_CORES, css_da_loja
 from app.services.horarios_livres import DIAS_MAXIMOS, Livre, profissionais
-from app.services.site import dados_publicos
+from app.services.site import configuracao_publica, dados_publicos
 from app.services.slugs import endereco_de_loja
 
 router = APIRouter(include_in_schema=False, default_response_class=HTMLResponse)
@@ -172,10 +179,11 @@ def ler_momento(texto: str | None) -> datetime | None:
 
 @dataclass
 class Pagina:
-    """O site aberto: regras (``ctx``) e dados públicos da loja (cabeçalho)."""
+    """O site aberto: regras (``ctx``), dados públicos da loja (cabeçalho) e o CSS das cores da loja."""
 
     ctx: ContextoSite
     loja: LojaPublica
+    estilo: str | None = None
 
     @property
     def slug(self) -> str:
@@ -204,11 +212,15 @@ class Pagina:
     ) -> HTMLResponse:
         telefone = re.sub(r'\D', '', self.loja.telefone or '')
         passos = PASSOS if self.ctx.usa_servicos else PASSOS[1:]
+        nonce = novo_nonce() if self.estilo else None
         return pagina(
             modelo,
             codigo,
-            csp=CSP_SITE,
+            csp=csp_site(nonce) if nonce else CSP_SITE,
             extras=extras,
+            estilo=self.estilo,
+            nonce=nonce,
+            classe_cores=CLASSE_CORES,
             loja=self.loja,
             tipo=TIPOS.get(self.loja.tipo, ''),
             frase=FRASES.get(self.loja.tipo, FRASES['clinica']),
@@ -245,7 +257,13 @@ def abrir(request: Request, db: DbDep, slug: str) -> Pagina:
     ctx = abrir_site(db, slug, ip_da_requisicao(request))
     if ctx is None:
         raise RespostaPronta(nao_encontrada(MSG_LOJA_404))
-    return Pagina(ctx=ctx, loja=dados_publicos(db, ctx.loja, ctx.modulos))
+    configuracao = configuracao_publica(db, ctx.loja)
+    estilo = (
+        css_da_loja(ctx.loja.tipo, configuracao.cor_site_topo, configuracao.cor_site_destaque)
+        if configuracao
+        else None
+    )
+    return Pagina(ctx=ctx, loja=dados_publicos(db, ctx.loja, ctx.modulos, configuracao), estilo=estilo)
 
 
 def _ir(url: str) -> RespostaPronta:
@@ -547,7 +565,14 @@ def enviar_pedido(
         repetido = pedido_repetido(site.ctx, dados)
         if repetido is not None:  # o mesmo formulário de novo: a confirmação do pedido já gravado
             return _pronto(site, repetido)
-    escolha = _escolha(site, formulario)
+    try:
+        escolha = _escolha(site, formulario)
+    except RespostaPronta:
+        # O horário pode ter sido ocupado agora pelo mesmo formulário, enviado junto (LOG-07)
+        repetido = pedido_repetido(site.ctx, dados) if dados is not None else None
+        if repetido is not None:
+            return _pronto(site, repetido)
+        raise
     if dados is None:
         return _pagina_dados(site, escolha, valores=formulario, erros=erros)
     dados = dados.model_copy(update={'servico_id': escolha.servico_id})
