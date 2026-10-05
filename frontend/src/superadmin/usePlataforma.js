@@ -18,19 +18,21 @@ import {
   listarTabelasAuditoria,
   listarUsuarios,
   mudarStatusLoja,
+  obterCoresSiteLoja,
   obterLoja,
   obterPlano,
   obterUsuario,
   obterVisaoGeral,
   redefinirSenhaFuncionario,
   removerLogoDaLoja,
+  salvarCoresSiteLoja,
   salvarFuncionarioLoja,
   salvarLoja,
   salvarPlano,
   salvarUsuario,
 } from '../data/api/plataforma.js'
 
-// Hooks do SUPERADMIN, todos ligados à API (/api/superadmin). Cada um expõe carregando/erro/recarregar
+// Hooks do SUPERADMIN, ligados à API (/api/superadmin). Cada um expõe carregando/erro/recarregar
 // para os estados da tela; as ações devolvem Promise e rejeitam com ErroApi { status, mensagem, campos }.
 
 const VAZIO = []
@@ -187,6 +189,30 @@ export function useModulosLoja(lojaId) {
     recarregar: consulta.recarregar,
     definir,
   }
+}
+
+/**
+ * Cores do site da loja (SIT-13, PLA-20), GET/PUT /api/superadmin/lojas/{loja_id}/site: o mesmo formato de useCoresSite().
+ * Retorna { cores: CoresSite | null, carregando, erro, recarregar, salvar({ corTopo, corDestaque }) => Promise<CoresSite> }.
+ * salvar rejeita com ErroApi { status, mensagem, campos: [{ campo: 'cor_topo' | 'cor_destaque', mensagem }] }; 404 = loja excluída.
+ */
+export function useCoresSiteLoja(lojaId) {
+  const consulta = useConsulta((sinal) => obterCoresSiteLoja(lojaId, sinal), ['cores-site', lojaId], {
+    ativo: !!lojaId,
+  })
+  const { definirDados } = consulta
+
+  // Alteração do SUPERADMIN: a API devolve atualizado_por(_nome) null (quem foi fica na auditoria, GER-13)
+  const salvar = useCallback(
+    async (valores) => {
+      const cores = await salvarCoresSiteLoja(lojaId, valores)
+      definirDados(cores)
+      return cores
+    },
+    [lojaId, definirDados],
+  )
+
+  return { cores: consulta.dados, carregando: consulta.carregando, erro: consulta.erro, recarregar: consulta.recarregar, salvar }
 }
 
 export function usePerfisLoja(lojaId) {

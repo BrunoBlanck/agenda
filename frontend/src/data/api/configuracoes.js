@@ -59,3 +59,29 @@ export async function enviarLogoLoja(arquivo, fuso) {
 }
 
 export const removerLogoLoja = () => api.loja.delete('/configuracoes/loja/logo')
+
+// --- Cores do site do consumidor (SIT-13, SIT-14) ------------------------------------------------
+// Mesmo objeto CoresSite no painel da loja (/api/loja/configuracoes/site) e no SUPERADMIN
+// (/api/superadmin/lojas/{id}/site, em plataforma.js). Cor null = padrão do tipo da loja.
+
+const corOuNulo = (v) => (typeof v === 'string' && v.trim() ? v.trim() : null)
+
+/** CoresSite da API -> tela. padrao é sempre objeto (a tela lê padrao.corTopo sem checar). */
+export const lerCoresSite = (d, fuso) => ({
+  corTopo: corOuNulo(d?.cor_topo),
+  corDestaque: corOuNulo(d?.cor_destaque),
+  padrao: { corTopo: corOuNulo(d?.padrao?.cor_topo), corDestaque: corOuNulo(d?.padrao?.cor_destaque) },
+  tipo: d?.tipo ?? null,
+  ...lerControle(d, fuso),
+})
+
+/** As duas cores vão sempre no corpo (CoresSiteEntrada): vazio/null = voltar ao padrão. */
+export const corpoCoresSite = ({ corTopo, corDestaque } = {}) => ({
+  cor_topo: textoOuNulo(corTopo),
+  cor_destaque: textoOuNulo(corDestaque),
+})
+
+export const obterCoresSite = async (fuso, sinal) => lerCoresSite(await api.loja.get('/configuracoes/site', { sinal }), fuso)
+
+export const salvarCoresSite = async (valores, fuso) =>
+  lerCoresSite(await api.loja.put('/configuracoes/site', corpoCoresSite(valores)), fuso)
