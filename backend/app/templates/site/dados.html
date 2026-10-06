@@ -1,33 +1,12 @@
 {% extends 'site/base.html' %}
+{% from 'site/_campos.html' import campo, resumo %}
 {% block titulo %}Seus dados · {{ loja.nome_fantasia }}{% endblock %}
-{% macro campo(id, rotulo, valores, erros, tipo='text', obrigatorio=True, maximo=None, completar=None, teclado=None) %}
-        <div class="campo{% if erros[id] %} com-erro{% endif %}">
-          <label for="campo-{{ id }}">{{ rotulo }}{% if obrigatorio %} <span class="obrigatorio" aria-hidden="true">*</span>{% else %} <span class="opcional">(opcional)</span>{% endif %}</label>
-          {% if tipo == 'textarea' %}
-          <textarea id="campo-{{ id }}" name="{{ id }}" rows="3"{% if maximo %} maxlength="{{ maximo }}"{% endif %}{% if erros[id] %} aria-invalid="true" aria-describedby="erro-{{ id }}"{% endif %}>{{ valores[id] }}</textarea>
-          {% else %}
-          <input id="campo-{{ id }}" name="{{ id }}" type="{{ tipo }}" value="{{ valores[id] }}"{% if obrigatorio %} required{% endif %}{% if maximo %} maxlength="{{ maximo }}"{% endif %}{% if completar %} autocomplete="{{ completar }}"{% endif %}{% if teclado %} inputmode="{{ teclado }}"{% endif %}{% if erros[id] %} aria-invalid="true" aria-describedby="erro-{{ id }}"{% endif %}>
-          {% endif %}
-          {% if erros[id] %}
-          <p class="erro-campo" id="erro-{{ id }}">{{ erros[id] }}</p>
-          {% endif %}
-        </div>
-{% endmacro %}
 {% block conteudo %}
       <h2 class="titulo">Seus dados</h2>
       {% if mensagem %}
       <p class="aviso" role="alert">{{ mensagem }}</p>
       {% endif %}
-      {% if resumo_erros %}
-      <div class="erros" id="resumo-erros" role="alert" tabindex="-1">
-        <p>Confira {{ 'o campo' if resumo_erros | length == 1 else 'os campos' }} abaixo:</p>
-        <ul>
-          {% for e in resumo_erros %}
-          <li><a href="#campo-{{ e.campo }}">{{ e.rotulo }}: {{ e.mensagem }}</a></li>
-          {% endfor %}
-        </ul>
-      </div>
-      {% endif %}
+{{ resumo(resumo_erros) }}
       <div class="resumo">
         <p class="resumo-titulo">{{ servico_nome }}</p>
         <ul class="resumo-lista">
@@ -43,16 +22,27 @@
         </ul>
         <a class="trocar" href="{{ trocar }}">Trocar horário</a>
       </div>
+      {% if entrar %}
+      <p class="ja-tem-conta">Já tem conta? <a href="{{ entrar }}">Entrar</a></p>
+      {% elif telefone_conta %}
+      <p class="agendando-como">{% if agendando_como %}Agendando como <strong>{{ agendando_como }}</strong> · {% endif %}{{ telefone_conta }}</p>
+      {% endif %}
       <form class="formulario" method="post" action="{{ acao }}" data-enviar>
         {% for nome, valor in ocultos.items() %}
         <input type="hidden" name="{{ nome }}" value="{{ valor }}">
         {% endfor %}
+        {% if 'nome' in campos %}
         <div class="campos-nome">
 {{ campo('nome', 'Nome', valores, erros, maximo=60, completar='given-name') }}
 {{ campo('sobrenome', 'Sobrenome', valores, erros, maximo=100, completar='family-name') }}
         </div>
+        {% endif %}
+        {% if 'telefone' in campos %}
 {{ campo('telefone', 'WhatsApp com DDD', valores, erros, tipo='tel', maximo=20, completar='tel', teclado='tel') }}
+        {% endif %}
+        {% if 'email' in campos %}
 {{ campo('email', 'E-mail', valores, erros, tipo='email', obrigatorio=False, maximo=254, completar='email') }}
+        {% endif %}
 {{ campo('observacoes', 'Observações', valores, erros, tipo='textarea', obrigatorio=False, maximo=500) }}
         <div class="armadilha" aria-hidden="true">
           <label for="campo-{{ armadilha }}">Deixe este campo em branco</label>

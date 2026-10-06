@@ -1,0 +1,23 @@
+{% extends 'site/base.html' %}
+{% from 'site/_campos.html' import campo, resumo %}
+{% block titulo %}{{ titulo_pagina }} · {{ loja.nome_fantasia }}{% endblock %}
+{% block conteudo %}
+      <h2 class="titulo">{{ titulo_pagina }}</h2>
+      <p class="nota">Telefone confirmado: <strong>{{ telefone }}</strong>.{% if tem_conta %} Ao salvar, você sai da conta nos outros aparelhos.{% endif %}</p>
+{{ resumo(resumo_erros) }}
+      <form class="formulario" method="post" action="{{ acao }}" data-enviar>
+        <input type="hidden" name="v" value="{{ v }}">
+        {% if voltar %}
+        <input type="hidden" name="voltar" value="{{ voltar }}">
+        {% endif %}
+        {% if pede_nome %}
+        <div class="campos-nome">
+{{ campo('nome', 'Nome', valores, erros, maximo=60, completar='given-name') }}
+{{ campo('sobrenome', 'Sobrenome', valores, erros, maximo=100, completar='family-name') }}
+        </div>
+        {% endif %}
+{{ campo('senha', 'Senha', valores, erros, tipo='password', minimo=senha_minima, maximo=senha_maxima, completar='new-password', dica='De ' ~ senha_minima ~ ' a ' ~ senha_maxima ~ ' caracteres. Não use o seu telefone.') }}
+{{ campo('repetir', 'Repetir senha', valores, erros, tipo='password', minimo=senha_minima, maximo=senha_maxima, completar='new-password') }}
+        <button type="submit" class="botao botao-largo" data-enviando="Salvando…">Salvar senha</button>
+      </form>
+{% endblock %}

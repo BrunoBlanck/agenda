@@ -8,7 +8,7 @@ from app.models import Cliente
 from app.schemas.comum import so_digitos
 
 # Termo que parece telefone ou CPF: só dígitos e sinais de máscara
-_PARECE_NUMERO = re.compile(r'[\d\s().\-/+]+')
+_PARECE_NUMERO = re.compile(r'[\d\s().\-/+]+', re.ASCII)
 
 
 def _digitos_da_coluna(coluna: ColumnElement[str]) -> ColumnElement[str]:

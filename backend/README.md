@@ -81,6 +81,7 @@ e vice-versa (401). Loja suspensa ou cancelada recebe 403 (menos na sessão de s
 | Acesso | `POST auth/login`, `GET eu`, `GET recursos` | — |
 | Início | `GET inicio` (cada bloco conforme o acesso) | — |
 | Clientes | `GET/POST clientes`, `GET/PUT/DELETE clientes/{id}`, `GET clientes/{id}/historico` | `clientes` |
+| Acesso do cliente ao site | `GET clientes/codigos-site`, `GET/DELETE clientes/{id}/conta-site` (ver "Conta do cliente no site") | escrita em `clientes` |
 | Funcionários | `GET/POST funcionarios`, `GET/PUT funcionarios/{id}`, `GET/POST cargos`, `PUT/DELETE cargos/{id}` | `funcionarios` |
 | Perfis | `GET/POST perfis`, `GET/PUT/DELETE perfis/{id}`, `PUT perfis/{id}/acessos` | `perfis_acesso` (lista também com `config_agendamentos` ou `funcionarios`) |
 | Catálogo de recursos | `GET recursos` (`codigo`, `nome`, `leitura`, `escrita`, `descricao`, `modulo`, `modulo_ativo`, `ordem`) | — (só login) |
@@ -171,6 +172,8 @@ fora do OpenAPI, registradas depois de todos os routers `/api` e da documentaç�
 | `GET /{slug}/agendar/dados?servico=&profissional=&inicio=&local=` | Passo 3: resumo e formulário (`inicio` = `AAAA-MM-DDTHH:MM±HH:MM`) |
 | `POST /{slug}/agendar` | Envia o pedido (`application/x-www-form-urlencoded`); 303 para o passo 4 |
 | `GET /{slug}/agendar/pronto?c=<código>` | Passo 4: confirmação (código assinado, 24 h, preso à loja) |
+| `GET/POST /{slug}/conta/entrar`, `POST /{slug}/conta/sair`, `GET/POST /{slug}/conta/criar`, `.../conta/codigo?t=`, `.../conta/senha?v=`, `GET /{slug}/conta?pagina=` | Conta do cliente (ver "Conta do cliente no site") |
+| `GET/POST /{slug}/conta/agendamentos/{id}/cancelar`, `GET .../remarcar?profissional=&dia=`, `GET/POST .../remarcar/confirmar?profissional=&inicio=&local=` | Cancelar e remarcar pela conta (SIT-23, SIT-24) |
 | `GET /static/site/site.css`, `site.js` | CSS e JS do site (lista fechada; com `?v=<versão>` vai com cache de 1 ano) |
 | `GET /{slug}/` | 308 para `/{slug}` (slug inválido ou reservado: 404) |
 | `/{slug}/...` (outros) | 404 HTML |
@@ -394,6 +397,89 @@ Convenções das rotas da loja:
   `atualizado_por_nome` (componente `UltimaAlteracao` do front).
 - **Erros** em português: `{"detail": "..."}`; validação (422) traz também `erros: [{campo, mensagem}]`.
 
+### Conta do cliente no site (SIT-16 a SIT-22, CLI-06)
+
+Especificação: [`docs/funcionalidades/conta-cliente.md`](../docs/funcionalidades/conta-cliente.md)
+(Fase A: conta, código, entrar, Minha conta, agendar com a conta e a seção do painel; Fase B: cancelar e
+remarcar). Regras em `app/services/conta_cliente.py` e `app/services/conta_agendamentos.py`; páginas em
+`app/routers/site/conta.py` e `app/routers/site/conta_agendamentos.py`; cookie e `voltar` em
+`app/routers/site/sessao.py`. Tabelas `cliente_contas` e `cliente_codigos` (migração 0007).
+
+- **Conta por telefone** (SIT-16): uma por (loja, telefone só com dígitos). Enxerga os agendamentos de
+  todos os clientes da loja com aquele telefone (comparação por dígitos na hora: trocar o telefone de um
+  cliente no painel muda de conta os agendamentos dele).
+- **Criar conta e esqueci a senha** (SIT-17, SIT-18): `/conta/criar` (telefone) → `/conta/codigo?t=`
+  (código de 6 dígitos, 15 min; com um pendente válido, pedir de novo devolve o mesmo, sem gerar
+  outro nem invalidar; erros: 5 por código e IP, 20 no total) → `/conta/senha?v=`
+  (senha; nome e sobrenome só se não houver cliente com o telefone, que é cadastrado com canal `site`).
+  `t` e `v` são o id do código assinado (HMAC, preso à loja e ao passo, 15 min); `v` é de uso único (o
+  código é consumido ao salvar a senha). Antes do código certo nenhuma página diz se o telefone tem
+  cadastro ou conta. Envio do código por provedor trocável (`EnvioCodigo`); o atual, `painel`, só grava
+  e a loja vê o código no painel.
+- **Entrar** (SIT-19): telefone (com ou sem máscara) + senha; erro único "Telefone ou senha incorretos.";
+  `limite_login` por IP e bloqueio progressivo `BloqueioLogin('site', slug, telefone)` por IP (429 com o
+  formulário). Senha de 8 a 128 caracteres, diferente do telefone (Argon2). Entrar grava
+  `ultimo_acesso_em` fora do histórico (como o login do painel).
+- **Sessão** (SIT-20): cookie `sessao_cliente`, `HttpOnly`, `SameSite=Lax`, `Path=/{slug}`, `Secure`
+  fora de `AMBIENTE=desenvolvimento`, validade `SITE_SESSAO_DIAS` (30). O valor é um JWT do tipo
+  `cliente` (conta, loja, versão) assinado com uma chave derivada do `JWT_SECRET` e audiência própria:
+  nunca vale nas rotas `/api/loja` e `/api/superadmin` (401), e um token do painel nunca vale como
+  sessão. Trocar a senha ou o painel remover o acesso incrementa `sessao_versao` e derruba todas as
+  sessões. Cookie que não vale mais: a página que exige conta manda para `/conta/entrar?aviso=sessao` e
+  apaga o cookie.
+- **Minha conta** (SIT-21): "Próximos" (`pendente`/`agendado`/`confirmado` que não terminaram, até 50)
+  e "Histórico" (20 por página, `?pagina=`). Serviço (ou "Atendimento"), dia, hora, profissional, local
+  (só o nome), preço e situação; nunca o motivo de cancelamento/recusa. Sem sessão: 303 para
+  `/conta/entrar?voltar=...`.
+- **Agendar com a conta** (SIT-22): o passo 3 só pede Observações ("Agendando como <nome>") e leva o
+  campo oculto `conta=1`; o pedido usa o telefone da conta e o cliente mais antigo com ele, com os mesmos
+  limites. Sessão vencida no envio: volta ao passo 3 completo com aviso. Sem conta: o fluxo de sempre,
+  com "Já tem conta? Entrar" voltando ao mesmo passo; o passo 4 convida a criar a senha (ou, na conta,
+  "Ver meus agendamentos"). O cabeçalho de todas as páginas da loja mostra "Entrar" ou "Minha conta".
+- **Cancelar e remarcar** (SIT-23, SIT-24, AGE-25): nos "Próximos" de Minha conta, "Remarcar" e
+  "Cancelar" aparecem enquanto o agendamento está `pendente`/`agendado`/`confirmado` e falta pelo menos
+  `ANTECEDENCIA_CLIENTE` (2 h, provisória); depois disso, "Para alterar, fale com a loja: <telefone>".
+  Páginas em `/{slug}/conta/agendamentos/{id}/...`, todas com sessão (sem ela, 303 para entrar voltando à
+  mesma página). Agendamento de outro telefone, de outra loja, de cliente excluído, inexistente ou
+  excluído: 404. Situação final ou menos de 2 h: 409 "Este agendamento não pode mais ser alterado pelo
+  site. Fale com a loja: <telefone>.". Os `POST` travam a linha (`FOR UPDATE`, a mesma trava do painel) e
+  conferem dono, situação e prazo de novo.
+  - **Cancelar:** `GET` mostra o resumo e "Cancelar este agendamento?"; `POST` vira `cancelado` na hora
+    (sem aceite), motivo "Cancelado pelo cliente pelo site.", 303 para `/conta?aviso=cancelado`. O mesmo
+    envio de novo (já cancelado pelo site) volta a Minha conta sem alterar nada.
+  - **Remarcar:** a escolha é o passo 2 (`escolha_de_horario` de `app/routers/site/paginas.py`, faixa de
+    31 dias, filtro de profissional) com a duração atual (`fim - inicio`) e o próprio agendamento fora da
+    ocupação (`Agenda(..., ignorar=id)`, `dias_livres`/`horario_oferecido(..., duracao=, ignorar=)`). A
+    confirmação mostra "De … Para …"; o `POST` muda profissional, início, fim e local (escolhido pelo
+    servidor como no pedido; sem o módulo Locais, o local sai) e volta a `pendente`, mantendo serviço e
+    preço; 303 para `/conta?aviso=remarcado`. Horário que não é mais oferecido, local ocupado ou corrida
+    recusada pelo banco (23P01, num savepoint): 303 de volta à escolha com `aviso=ocupado`; parâmetro
+    ilegível, profissional que não faz o serviço ou local de outro serviço: `aviso=horario`; o mesmo
+    horário de agora (mesmo profissional e início): `aviso=mesmo`. Com o módulo Serviços, serviço inativo
+    ou removido, ninguém ativo habilitado ou nenhum local possível: 409 "Para remarcar este horário, fale
+    com a loja: <telefone>." com o link para cancelar. Sem o módulo Serviços: os profissionais do SIT-08.
+  - **AGE-25:** `agendado`/`confirmado` → `pendente` e `pendente` → `pendente` só por aqui
+    (`TRANSICOES_DO_CLIENTE`); o `TRANSICOES` do painel não muda (o painel continua sem voltar nada a
+    `pendente`). Auditoria com origem `site` e `atualizado_por` NULL.
+- **Travas e conflitos:** tudo que mexe em códigos ou na conta de um telefone trava primeiro o telefone
+  (advisory lock) e só depois as linhas (`FOR UPDATE`); o Argon2 é calculado antes das travas. Erro de
+  banco numa página HTML (ex.: impasse 40P01) responde a página de erro em HTML (`app/erros.py`), nunca
+  JSON. Telefone, código, página e datas da URL só aceitam dígitos ASCII (0-9).
+- **Segurança das páginas:** todo `POST` confere `mesma_origem` (403 HTML); `voltar` só aceita páginas
+  do próprio site (regex fechada: `/{slug}`, `/agendar[/dados|/pronto]`, `/conta` e as páginas da Fase
+  B; nunca `//`, esquema, barra invertida, outro slug nem as páginas de entrar/criar); `noindex`;
+  limite por IP do site; loja indisponível = 404. DIR-003: nenhum template fala em painel ou login.
+- **Painel** (CLI-06, escrita em `clientes`; leitura = 403 "Você só tem permissão de leitura aqui."):
+  - `GET /api/loja/clientes/codigos-site` → `[{telefone, codigo, expira_em, criado_em, clientes:
+    [{id, nome}]}]`: códigos pendentes, mais novo primeiro, até 100; `clientes` = cadastros com o
+    telefone (`nome` = nome + sobrenome; vazia sem cadastro).
+  - `GET /api/loja/clientes/{id}/conta-site` → `{possui_conta, criada_em, ultimo_acesso_em,
+    codigo_pendente: {codigo, expira_em} | null}` pelo telefone atual do cliente.
+  - `DELETE /api/loja/clientes/{id}/conta-site` → 204 (exclusão lógica da conta, versão +1, códigos do
+    telefone invalidados). 404 "Cliente não encontrado." (outra loja, inexistente ou excluído) ou
+    "Este cliente não tem acesso ao site.".
+- **Auditoria:** `senha_hash` e `cliente_codigos.codigo` nunca vão para `antes`/`depois`.
+
 ## Limite de requisições
 
 `app/limites.py` (decisão provisória para ABE-23; sem captcha). Valores no `.env` (padrões em
@@ -407,6 +493,12 @@ Convenções das rotas da loja:
 | Site, todas as rotas, por IP | `LIMITE_SITE_POR_IP`, `LIMITE_SITE_JANELA` | 120 / 60 s |
 | Site, pedidos por IP em cada loja | `LIMITE_SITE_PEDIDOS_POR_IP`, `LIMITE_SITE_PEDIDOS_JANELA` | 10 / 1 h |
 | Site, pedidos aguardando aceite por telefone em cada loja | `SITE_PENDENTES_POR_TELEFONE` | 3 |
+| Site, entrar na conta do cliente | os valores do login por IP (`LIMITE_LOGIN_*`), num contador próprio (esgotar o do site não afeta o painel e vice-versa), e bloqueio por telefone + IP | acima |
+| Site, pedidos de código: intervalo por telefone e IP (em cada loja) | `LIMITE_CODIGO_INTERVALO` | 1 a cada 60 s |
+| Site, códigos **gerados** por telefone (em cada loja; pedido com um pendente válido devolve o mesmo e não conta) | `LIMITE_CODIGOS_POR_TELEFONE`, `LIMITE_CODIGOS_POR_TELEFONE_JANELA` | 5 / 1 h |
+| Site, pedidos de código por IP | `LIMITE_CODIGOS_POR_IP`, `LIMITE_CODIGOS_POR_IP_JANELA` | 10 / 1 h |
+| Site, erros no mesmo código por IP (o código segue valendo para os outros IPs; 20 erros no total esgotam o código) | `LIMITE_CODIGO_TENTATIVAS_POR_IP` | 5 |
+| Site, validade da sessão do cliente (cookie) | `SITE_SESSAO_DIAS` | 30 dias |
 
 - O estado fica no Postgres (schema `limites`, migração 0003): vale para todos os processos e réplicas.
   Cada contador grava numa conexão própria em autocommit (conta mesmo quando a requisição falha). As chaves
@@ -436,13 +528,15 @@ Convenções das rotas da loja:
   rota. Sem loja (superadmin, rotinas), UTC. Volta sozinho ao fim da transação. Fuso que o Postgres
   não conhece (dado antigo, base de fusos atualizada) não derruba a requisição: vale `America/Sao_Paulo`
   e o problema vai para o log (`app.db`). O superadmin só grava fuso que o Python e o Postgres conhecem.
-- **Login fora do histórico** (migração 0004). O login marca a transação (`app.login`); nela, o UPDATE
-  que só muda `ultimo_login_em` e `senha_hash` (novo hash da mesma senha, quando o Argon2 pede) não
+- **Login fora do histórico** (migração 0004; 0007 inclui `ultimo_acesso_em` da conta do cliente). O
+  login marca a transação (`app.login`); nela, o UPDATE que só muda `ultimo_login_em`
+  (`ultimo_acesso_em`) e `senha_hash` (novo hash da mesma senha, quando o Argon2 pede) não
   troca `atualizado_em`/`atualizado_por` nem grava auditoria. Qualquer outra coluna alterada junto é
   tratada normalmente, e a troca de senha de verdade (edição, redefinição) continua auditada.
 - **Triggers em todas as tabelas** (`migrations/auxiliares.py`): preenchem `criado_em`,
   `atualizado_em`, `atualizado_por`, `excluido_em` e `excluido_por`; convertem `DELETE` em
-  exclusão lógica; gravam a `auditoria` (inserir, alterar, excluir, restaurar, sem `senha_hash`).
+  exclusão lógica; gravam a `auditoria` (inserir, alterar, excluir, restaurar, sem `senha_hash` nem
+  `cliente_codigos.codigo`).
 - **Exclusão lógica.** O ORM esconde linhas excluídas em toda consulta (`app/db.py`); para vê-las,
   use `.execution_options(incluir_excluidos=True)`. Unicidade por índice único parcial.
 - **Isolamento entre lojas.** FKs compostas `(loja_id, x_id)`, filtro pelo `loja_id` do token nas

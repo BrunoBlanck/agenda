@@ -1,0 +1,19 @@
+{% extends 'site/base.html' %}
+{% from 'site/_agendamento.html' import linhas, telefone_da_loja %}
+{% block titulo %}{{ titulo_pagina }} · {{ loja.nome_fantasia }}{% endblock %}
+{% block conteudo %}
+      <h2 class="titulo">{{ titulo_pagina }}</h2>
+      {% if agendamento %}
+      <div class="resumo">
+        <p class="resumo-titulo">{{ agendamento.servico }}</p>
+        <ul class="resumo-lista">
+{{ linhas(agendamento, rotulo_local) }}
+        </ul>
+      </div>
+      {% endif %}
+      <p class="aviso" role="alert">{{ mensagem }}{% if com_telefone %}{{ telefone_da_loja(loja, telefone_link) }}.{% endif %}</p>
+      {% if cancelar %}
+      <a class="botao botao-secundario botao-largo" href="{{ cancelar }}">Cancelar este agendamento</a>
+      {% endif %}
+      <a class="botao botao-largo" href="{{ conta }}">Voltar para Minha conta</a>
+{% endblock %}

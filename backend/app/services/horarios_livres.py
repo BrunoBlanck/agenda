@@ -115,7 +115,10 @@ class Agenda:
         local_ids: list[UUID] | None,
         primeiro: date,
         ultimo: date,
+        *,
+        ignorar: UUID | None = None,
     ) -> None:
+        """``ignorar``: agendamento que não conta como ocupado (o próprio, ao remarcar pelo site, SIT-24)."""
         self.zona = zona
         self.funcionarios = funcionarios
         self.local_ids = local_ids
@@ -143,17 +146,18 @@ class Agenda:
         ocupacao = [Agendamento.funcionario_id.in_(ids)]
         if local_ids:
             ocupacao.append(Agendamento.local_id.in_(local_ids))
-        linhas = db.execute(
-            select(
-                Agendamento.funcionario_id, Agendamento.local_id, Agendamento.inicio, Agendamento.fim
-            ).where(
-                Agendamento.loja_id == loja_id,
-                Agendamento.inicio < ate,
-                Agendamento.fim > de,
-                Agendamento.status.not_in(LIBERAM_HORARIO),
-                or_(*ocupacao),
-            )
-        ).all()
+        consulta = select(
+            Agendamento.funcionario_id, Agendamento.local_id, Agendamento.inicio, Agendamento.fim
+        ).where(
+            Agendamento.loja_id == loja_id,
+            Agendamento.inicio < ate,
+            Agendamento.fim > de,
+            Agendamento.status.not_in(LIBERAM_HORARIO),
+            or_(*ocupacao),
+        )
+        if ignorar is not None:
+            consulta = consulta.where(Agendamento.id != ignorar)
+        linhas = db.execute(consulta).all()
         self.por_funcionario: dict[UUID, list[tuple[datetime, datetime]]] = defaultdict(list)
         self.por_local: dict[UUID, list[tuple[datetime, datetime]]] = defaultdict(list)
         for funcionario_id, local_id, inicio, fim in linhas:

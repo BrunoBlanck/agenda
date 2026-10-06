@@ -23,6 +23,10 @@
         {% if loja.telefone %}
         <p>Dúvidas? Fale com a loja: {% if telefone_link %}<a href="{{ telefone_link }}">{{ loja.telefone }}</a>{% else %}{{ loja.telefone }}{% endif %}</p>
         {% endif %}
+        {% if conta.convite %}
+        <p class="convite">{{ conta.convite }}</p>
+        {% endif %}
+        <a class="botao" href="{{ conta.url }}">{{ conta.texto }}</a>
         <a class="botao botao-secundario" href="{{ inicio }}">Fazer outro agendamento</a>
       </div>
 {% endblock %}

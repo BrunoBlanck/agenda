@@ -1,0 +1,26 @@
+{% extends 'site/base.html' %}
+{% from 'site/_campos.html' import campo, resumo %}
+{% block titulo %}Entrar · {{ loja.nome_fantasia }}{% endblock %}
+{% block conteudo %}
+      <h2 class="titulo">Entrar</h2>
+      <p class="nota">Use o telefone do seu cadastro na {{ loja.nome_fantasia }} e a sua senha.</p>
+      {% if aviso %}
+      <p class="aviso" role="status">{{ aviso }}</p>
+      {% endif %}
+      {% if mensagem %}
+      <p class="aviso" role="alert">{{ mensagem }}</p>
+      {% endif %}
+{{ resumo(resumo_erros) }}
+      <form class="formulario" method="post" action="{{ acao }}" data-enviar>
+        {% if voltar %}
+        <input type="hidden" name="voltar" value="{{ voltar }}">
+        {% endif %}
+{{ campo('telefone', 'Telefone com DDD', valores, erros, tipo='tel', maximo=20, completar='tel', teclado='tel') }}
+{{ campo('senha', 'Senha', valores, erros, tipo='password', maximo=128, completar='current-password') }}
+        <button type="submit" class="botao botao-largo" data-enviando="Entrando…">Entrar</button>
+      </form>
+      <ul class="links-conta">
+        <li><a href="{{ criar }}">Esqueci minha senha</a></li>
+        <li>Primeira vez aqui? <a href="{{ criar }}">Criar conta</a></li>
+      </ul>
+{% endblock %}

@@ -715,6 +715,226 @@ a.dia:hover {
   margin: 0 0 16px;
 }
 
+/* --- Conta do cliente (SIT-16 a SIT-22) ----------------------------------------------------- */
+.conta-nav {
+  flex: none;
+  margin-left: auto;
+}
+
+.conta-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  padding: 0 14px;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  color: inherit;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.conta-link .icone {
+  margin: 0;
+}
+
+.links-conta {
+  display: grid;
+  gap: 4px;
+  margin: 16px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.links-conta a,
+.ja-tem-conta a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  font-weight: 600;
+}
+
+.ja-tem-conta,
+.agendando-como {
+  margin: 0 0 16px;
+}
+
+.instrucao {
+  margin: 0 0 16px;
+  padding: 12px 14px;
+  border-radius: 8px;
+  background: var(--cor-destaque-suave);
+}
+
+.dica-campo {
+  margin: 6px 0 0;
+  color: var(--cor-texto-suave);
+  font-size: 0.9375rem;
+}
+
+.convite {
+  font-weight: 600;
+}
+
+.pronto .botao {
+  margin: 0 4px 12px;
+}
+
+.conta-topo,
+.titulo-linha.conta-topo {
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+.conta-topo .titulo {
+  margin: 0;
+}
+
+.conta-topo form {
+  margin: 0;
+}
+
+.secao-conta {
+  margin: 0 0 24px;
+}
+
+.meus-agendamentos {
+  display: grid;
+  gap: 10px;
+  margin: 0 0 16px;
+  padding: 0;
+  list-style: none;
+}
+
+.meu-agendamento {
+  padding: 12px 14px;
+  border: 1px solid var(--cor-linha);
+  border-radius: 12px;
+}
+
+.meu-agendamento p {
+  margin: 0;
+}
+
+.meu-detalhe {
+  color: var(--cor-texto-suave);
+}
+
+.historico .meu-agendamento {
+  padding: 10px 14px;
+}
+
+.situacao {
+  display: inline-flex;
+  align-items: center;
+  margin-top: 6px !important;
+  font-size: 0.9375rem;
+  font-weight: 600;
+}
+
+.situacao-pendente {
+  color: var(--cor-aviso);
+}
+
+.situacao-agendado,
+.situacao-confirmado,
+.situacao-concluido {
+  color: var(--cor-destaque);
+}
+
+.situacao-cancelado,
+.situacao-nao_compareceu {
+  color: var(--cor-texto-suave);
+}
+
+.paginacao {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+.paginacao a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  font-weight: 600;
+}
+
+.paginacao-atual {
+  color: var(--cor-texto-suave);
+  font-size: 0.9375rem;
+}
+
+/* --- Cancelar e remarcar pela conta (SIT-23, SIT-24) ------------------------------------- */
+.meu-acoes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px !important;
+}
+
+.botao-pequeno {
+  min-height: 44px;
+  padding: 0 16px;
+}
+
+.meu-loja {
+  margin-top: 8px !important;
+  color: var(--cor-texto-suave);
+  font-size: 0.9375rem;
+}
+
+.meu-loja a {
+  font-weight: 600;
+}
+
+.pergunta {
+  margin: 0 0 16px;
+  font-size: 1.125rem;
+  font-weight: 700;
+}
+
+.botao-perigo {
+  border-color: var(--cor-erro);
+  background: transparent;
+  color: var(--cor-erro);
+}
+
+.formulario + .botao-largo,
+.botao-largo + .botao-largo {
+  margin-top: 12px;
+}
+
+.horario-atual strong {
+  color: var(--cor-texto);
+}
+
+.de-para {
+  display: grid;
+  gap: 12px;
+  margin: 0 0 20px;
+}
+
+.de-para .resumo {
+  margin: 0;
+}
+
+.resumo-de {
+  background: transparent;
+  border: 1px dashed var(--cor-linha);
+}
+
+@media (min-width: 640px) {
+  .de-para {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
 /* --- Rodapé --------------------------------------------------------------------------------- */
 .rodape {
   padding-bottom: 32px;

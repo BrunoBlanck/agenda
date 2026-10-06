@@ -2,8 +2,15 @@
 
 Decisão provisória para ABE-23/SIT-10 (sem captcha por enquanto):
 
-- **Por IP** (janela fixa): login da loja e do superadmin, todas as rotas do site e, à parte, os
-  pedidos de agendamento do site por IP em cada loja. Passou do limite: 429 com ``Retry-After``.
+- **Por IP** (janela fixa): login da loja, do superadmin e do cliente no site, todas as rotas do site
+  e, à parte, os pedidos de agendamento do site por IP em cada loja. Passou do limite: 429 com
+  ``Retry-After``.
+- **Entrar na conta do cliente no site** (``limite_login_site``): por IP, com os valores do login do painel
+  mas num contador próprio (esgotar um não afeta o outro).
+- **Códigos de confirmação do site** (SIT-17): pedidos por IP e um pedido por (telefone, IP) a cada N
+  segundos (``limite_codigo_pedido``); códigos gerados de fato por telefone em cada loja
+  (``limite_codigo_telefone``, conferido só quando não há código pendente); erros no mesmo código por IP
+  (``TentativasDoCodigo``). Assim um terceiro não invalida nem esgota o código de quem já o tem.
 - **Por conta + IP** no login: depois de N falhas seguidas com o mesmo e-mail **vindas do mesmo IP**,
   novas tentativas desse IP para essa conta recebem 429 por um tempo que dobra a cada nova falha
   (até um máximo). Outra origem não é afetada: quem só sabe o e-mail não tranca a conta do dono
@@ -134,6 +141,12 @@ def limite_login(request: Request) -> None:
     contar(_chave('login-ip', _ip(request)), s.limite_login_por_ip, s.limite_login_janela)
 
 
+def limite_login_site(request: Request) -> None:
+    """Tentativas de entrar na conta do cliente no site por IP (contador próprio, valores do login)."""
+    s = get_settings()
+    contar(_chave('site-login-ip', _ip(request)), s.limite_login_por_ip, s.limite_login_janela)
+
+
 def limite_site(request: Request) -> None:
     """Requisições ao site do consumidor por IP (todas as lojas e rotas)."""
     s = get_settings()
@@ -147,6 +160,50 @@ def limite_site_pedido(request: Request) -> None:
     contar(
         _chave('site-pedido', slug, _ip(request)), s.limite_site_pedidos_por_ip, s.limite_site_pedidos_janela
     )
+
+
+def limite_codigo_pedido(request: Request, slug: str, telefone_digitos: str) -> None:
+    """Pedidos de código do site (SIT-17): por IP (todas as lojas) e um por (loja, telefone, IP) a cada
+    ``LIMITE_CODIGO_INTERVALO`` segundos. 429 no primeiro que passar."""
+    s = get_settings()
+    ip = _ip(request)
+    contar(_chave('site-codigo-ip', ip), s.limite_codigos_por_ip, s.limite_codigos_por_ip_janela)
+    contar(_chave('site-codigo-intervalo', slug, telefone_digitos, ip), 1, s.limite_codigo_intervalo)
+
+
+def limite_codigo_telefone(slug: str, telefone_digitos: str) -> None:
+    """Códigos gerados de fato para o telefone na loja (SIT-17): só quando não há um pendente."""
+    s = get_settings()
+    contar(
+        _chave('site-codigo-telefone', slug, telefone_digitos),
+        s.limite_codigos_por_telefone,
+        s.limite_codigos_por_telefone_janela,
+    )
+
+
+_CONTAGEM = text('SELECT contagem FROM limites.contadores WHERE chave = :chave AND expira_em > now()')
+
+
+class TentativasDoCodigo:
+    """Erros num mesmo código vindos de um IP (SIT-17): passou do limite, aquele IP não tenta mais esse
+    código, mas o código continua valendo para os outros (o total por código fica na própria linha)."""
+
+    def __init__(self, request: Request, codigo_id: object, validade_segundos: int) -> None:
+        self.chave = _chave('site-codigo-tentativa', str(codigo_id), _ip(request))
+        self.janela = validade_segundos
+
+    def esgotadas(self) -> bool:
+        with get_engine_limites().connect() as conexao:
+            contagem = conexao.execute(_CONTAGEM, {'chave': self.chave}).scalar()
+        return (contagem or 0) >= get_settings().limite_codigo_tentativas_por_ip
+
+    def errou(self) -> bool:
+        """Soma um erro; True se este IP chegou ao limite para o código."""
+        with get_engine_limites().connect() as conexao:
+            contagem, _ = conexao.execute(
+                _CONTAR, {'chave': self.chave, 'janela': self.janela, 'maximo': CONTAGEM_MAXIMA}
+            ).one()
+        return contagem >= get_settings().limite_codigo_tentativas_por_ip
 
 
 # --- Bloqueio progressivo por conta (login) --------------------------------------------------------
@@ -216,7 +273,7 @@ class LimiteDoCorpo:
             return
         maximo = maximo_do_corpo()
         declarado = Headers(scope=scope).get('content-length')
-        if declarado is not None and declarado.isdigit() and int(declarado) > maximo:
+        if declarado is not None and declarado.isascii() and declarado.isdigit() and int(declarado) > maximo:
             resposta = JSONResponse({'detail': MSG_CORPO_GRANDE}, status.HTTP_413_CONTENT_TOO_LARGE)
             await resposta(scope, receive, send)
             return

@@ -8,10 +8,11 @@ from http import HTTPStatus
 
 from fastapi import FastAPI, Request, status
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 from sqlalchemy.exc import DBAPIError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
+from app.routers.html import pagina
 from app.services.cores_site import MSG_FORMATO_COR
 from app.services.slugs import MSG_SLUG_RESERVADO
 
@@ -158,11 +159,11 @@ def registrar_tratadores(app: FastAPI) -> None:
         return JSONResponse({'detail': MSG_FORA_DO_LIMITE}, status_code=status.HTTP_422_UNPROCESSABLE_CONTENT)
 
     @app.exception_handler(DBAPIError)
-    async def banco(_: Request, exc: DBAPIError) -> JSONResponse:
+    async def banco(request: Request, exc: DBAPIError) -> Response:
         sqlstate = getattr(exc.orig, 'sqlstate', None)
         if sqlstate not in ERROS_BANCO:
             log.error('Erro de banco não tratado (SQLSTATE %s)', sqlstate)
-            return JSONResponse({'detail': MENSAGENS_HTTP[500]}, status_code=500)
+            return _resposta_de_erro(request, 500, MENSAGENS_HTTP[500])
         codigo, mensagem = ERROS_BANCO[sqlstate]
         diag = getattr(exc.orig, 'diag', None)
         # Erros levantados pelas nossas funções (RAISE EXCEPTION) já vêm em português e sem dados
@@ -182,4 +183,14 @@ def registrar_tratadores(app: FastAPI) -> None:
             sqlstate,
             getattr(diag, 'constraint_name', None),
         )
+        return _resposta_de_erro(request, codigo, mensagem)
+
+
+def _resposta_de_erro(request: Request, codigo: int, mensagem: str) -> Response:
+    """JSON na API; nas páginas HTML (site do consumidor, fora de /api), a página de erro em HTML.
+
+    Ex.: duas transações disputando as mesmas linhas (40P01) num formulário da conta do cliente.
+    """
+    if request.url.path == '/api' or request.url.path.startswith('/api/'):
         return JSONResponse({'detail': mensagem}, status_code=codigo)
+    return pagina('erro.html', codigo, titulo='Não foi possível concluir', dica=mensagem)

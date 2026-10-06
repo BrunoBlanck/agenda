@@ -12,7 +12,7 @@ RLS e ao REVOKE da auditoria. O preparo de dados usa o dono do schema.
 import os
 import shutil
 import tempfile
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 
 import pytest
 from sqlalchemy import create_engine, text
@@ -114,6 +114,28 @@ def cliente() -> Iterator[TestClient]:
 
     with TestClient(app) as c:
         yield c
+
+
+@pytest.fixture
+def navegador() -> Iterator[Callable[..., TestClient]]:
+    """Fábrica de navegadores do site (cada um com os seus cookies), opcionalmente com um IP próprio.
+
+    Usam ``https://testserver``: o cookie da sessão do cliente tem ``Secure`` fora de desenvolvimento.
+    """
+    from app.main import app
+
+    abertos: list[TestClient] = []
+
+    def abrir(ip: str | None = None) -> TestClient:
+        extra = {'client': (ip, 50000)} if ip else {}
+        c = TestClient(app, base_url='https://testserver', **extra)
+        c.__enter__()
+        abertos.append(c)
+        return c
+
+    yield abrir
+    for c in abertos:
+        c.__exit__(None, None, None)
 
 
 @pytest.fixture

@@ -42,6 +42,15 @@ class Settings(BaseSettings):
     limite_site_pedidos_janela: int = Field(default=3600, ge=1)
     # Site: pedidos "Aguardando aceite" (futuros) ao mesmo tempo por telefone, em cada loja
     site_pendentes_por_telefone: int = Field(default=3, ge=1)
+    # Site, conta do cliente (SIT-17): códigos de confirmação por telefone (em cada loja) e por IP
+    limite_codigo_intervalo: int = Field(default=60, ge=1)  # um pedido por telefone e IP a cada N segundos
+    limite_codigos_por_telefone: int = Field(default=5, ge=1)  # códigos gerados de fato, por janela
+    limite_codigos_por_telefone_janela: int = Field(default=3600, ge=1)
+    limite_codigos_por_ip: int = Field(default=10, ge=1)
+    limite_codigos_por_ip_janela: int = Field(default=3600, ge=1)
+    limite_codigo_tentativas_por_ip: int = Field(default=5, ge=1)  # erros no mesmo código vindos de um IP
+    # Site, conta do cliente (SIT-20): validade da sessão (cookie), em dias. Provisório
+    site_sessao_dias: int = Field(default=30, ge=1, le=365)
 
     # --- Arquivos enviados (logo da loja, app/services/arquivos.py) ---
     # Pasta no disco (em produção, um volume persistente). Padrão: backend/arquivos

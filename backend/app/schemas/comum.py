@@ -150,7 +150,8 @@ lugar do mundo; a rota confere com o dia da loja (app.services.comum.conferir_na
 
 
 def so_digitos(valor: str) -> str:
-    return re.sub(r'\D', '', valor)
+    """Só os dígitos ASCII (0-9): dígitos de outros alfabetos (árabes, sobrescritos) não contam."""
+    return re.sub(r'[^0-9]', '', valor)
 
 
 def cpf_valido(digitos: str) -> bool:
