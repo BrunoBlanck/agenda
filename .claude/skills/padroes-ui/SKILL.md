@@ -65,7 +65,7 @@ Checklist usado pelo **frontend-ui** ao construir e pelo **revisor** ao conferir
 
 ## 9. Piso de qualidade
 
-- **UI-32** Responsivo até 360 px sem rolagem horizontal da página; foco de teclado visível; tudo clicável é `button`/`a` (nunca `div` com `onClick`); contraste AA; `aria-label` em botão só com ícone; `prefers-reduced-motion`; animação só com `transform`/`opacity`.
+- **UI-32** Mobile first (DIR-004): responsivo até 360 px sem rolagem horizontal da página; toda lista em `Tabela`, que vira cartões empilhados abaixo de 768 px (papel de cada coluna no cartão pela prop `cartao`: titulo, subtitulo, etiqueta, bloco, acoes, false — ver `docs/funcionalidades/mobile-first.md`); foco de teclado visível; tudo clicável é `button`/`a` (nunca `div` com `onClick`); contraste AA; `aria-label` em botão só com ícone; `prefers-reduced-motion`; animação só com `transform`/`opacity`.
 - **UI-33** Rotas com `lazy()` + fallback com formato da tela; `LimiteErro` por rota; painel da loja e SUPERADMIN em chunks separados; `key` estável (id), nunca índice.
 - **UI-34** Estado derivado calculado na renderização (sem `useEffect` + `useState` para isso); `useEffect` só para sincronizar com algo externo.
 - **UI-35** Site do consumidor (`frontend/src/site/`) é protótipo: não investir, não compartilhar componentes com o painel. Painel não importa nada de `site/`.
