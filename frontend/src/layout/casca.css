@@ -1,5 +1,6 @@
 .casca {
   min-height: 100vh;
+  min-height: 100dvh;
 }
 
 .pular-para-conteudo {
@@ -190,6 +191,18 @@
 
   .casca-usuario {
     padding-left: var(--espaco-2);
+  }
+
+  /* Alvos de toque de 44 px na barra superior e no menu em gaveta */
+  .casca-topo .ant-btn {
+    min-width: 44px;
+    height: 44px;
+  }
+
+  .casca-gaveta .ant-menu-item,
+  .casca-gaveta .ant-menu-submenu-title {
+    height: 44px;
+    line-height: 44px;
   }
 }
 

@@ -1,0 +1,346 @@
+/* Tabela no celular (DIR-004): fichas empilhadas, como cartões de um fichário.
+   Borda e sem sombra (DIR-002); o destaque da ficha aberta usa a tinta, como a linha na tabela. */
+
+.tabela-cartoes-area {
+  min-width: 0;
+  /* A barra superior do painel é fixa: ao trocar de página, o primeiro cartão não fica embaixo dela */
+  scroll-margin-top: 72px;
+}
+
+.tabela-cartoes {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espaco-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  transition: opacity var(--duracao);
+}
+
+/* Recarregando com cartões na tela: ficam, apagados, até a lista nova chegar */
+.tabela-cartoes.atualizando {
+  opacity: 0.55;
+}
+
+.cartao-tabela {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--espaco-3);
+  min-width: 0;
+  padding: var(--espaco-3) var(--espaco-4);
+  background: var(--cor-superficie);
+  border: 1px solid var(--cor-linha);
+  border-radius: var(--raio-conteiner);
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+.cartao-tabela-topo {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--espaco-3);
+}
+
+.cartao-tabela-cabeca {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.cartao-tabela-titulo {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.35;
+  color: var(--cor-texto);
+}
+
+.cartao-tabela-titulo strong {
+  font-weight: 600;
+}
+
+/* Nome clicável no título (link-tabela): alvo de toque de 44 px sem mudar a altura do texto */
+.cartao-tabela-titulo .link-tabela {
+  padding-block: 11px;
+  margin-block: -11px;
+}
+
+.cartao-tabela-subtitulo {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px var(--espaco-3);
+  margin: 0;
+  font-size: 13px;
+  color: var(--cor-texto-secundario);
+}
+
+.cartao-tabela-etiquetas {
+  display: flex;
+  flex-shrink: 0;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--espaco-1);
+  max-width: 50%;
+}
+
+/* Pares rótulo/valor: rótulo numa coluna estreita, valor alinhado à esquerda (texto longo quebra bem) */
+.cartao-tabela-dados {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espaco-2);
+  margin: 0;
+}
+
+.cartao-tabela-par {
+  display: grid;
+  grid-template-columns: minmax(88px, 38%) minmax(0, 1fr);
+  align-items: baseline;
+  gap: var(--espaco-3);
+}
+
+.cartao-tabela-par dt {
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--cor-texto-secundario);
+}
+
+.cartao-tabela-par dd {
+  min-width: 0;
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+/* Bloco: rótulo em cima, conteúdo na largura toda (campos, botões segmentados, listas longas) */
+.cartao-tabela-par.bloco {
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--espaco-1);
+}
+
+.cartao-tabela-par.bloco .ant-segmented {
+  display: flex;
+  width: 100%;
+}
+
+.cartao-tabela-par.bloco .ant-segmented-item {
+  flex: 1;
+}
+
+.cartao-tabela-par.bloco .ant-picker,
+.cartao-tabela-par.bloco .ant-select {
+  width: 100%;
+}
+
+.cartao-tabela-expandido {
+  padding-top: var(--espaco-3);
+  border-top: 1px solid var(--cor-linha-suave);
+}
+
+.cartao-tabela-rodape {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--espaco-2);
+  margin: 0 calc(var(--espaco-2) * -1) calc(var(--espaco-2) * -1);
+  padding-top: var(--espaco-1);
+  border-top: 1px solid var(--cor-linha-suave);
+}
+
+.cartao-tabela-acoes {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--espaco-2);
+  margin-left: auto;
+}
+
+.cartao-tabela-acoes .acoes-linha {
+  gap: var(--espaco-2);
+}
+
+/* Alvos de toque de 44 px no rodapé (os botões da tabela são "small") */
+.cartao-tabela-rodape .ant-btn {
+  min-width: 44px;
+  height: 44px;
+}
+
+.cartao-tabela-rodape .ant-btn .anticon {
+  font-size: 16px;
+}
+
+.cartao-tabela-expandir.ant-btn {
+  padding-inline: var(--espaco-2);
+  color: var(--cor-tinta);
+  font-weight: 600;
+}
+
+/* Cartão inteiro clicável: o botão do título cobre o cartão; os outros controles ficam por cima dele */
+.cartao-tabela-abrir {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  text-align: left;
+  color: inherit;
+  cursor: pointer;
+}
+
+.cartao-tabela-abrir::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+}
+
+.cartao-tabela-abrir:focus-visible {
+  outline: none;
+}
+
+.cartao-tabela:has(.cartao-tabela-abrir) {
+  border-radius: var(--raio-conteiner);
+}
+
+.cartao-tabela:has(.cartao-tabela-abrir:focus-visible) {
+  outline: 2px solid var(--cor-tinta);
+  outline-offset: 2px;
+}
+
+.cartao-tabela:has(.cartao-tabela-abrir) :is(a, button:not(.cartao-tabela-abrir), .ant-btn, .ant-switch, input) {
+  position: relative;
+  z-index: 1;
+}
+
+.cartao-tabela:has(.cartao-tabela-abrir):active {
+  background: var(--cor-superficie-suave);
+}
+
+/* Registro aberto no painel lateral */
+.cartao-tabela.linha-em-edicao {
+  background: var(--cor-tinta-clara);
+  border-color: var(--cor-tinta-borda);
+  box-shadow: inset 3px 0 0 var(--cor-tinta);
+}
+
+/* Linha apagada (cancelado, faltou): mesmo tratamento da tabela */
+.cartao-tabela.linha-apagada {
+  color: var(--cor-texto-terciario);
+}
+
+.cartao-tabela.linha-apagada .cartao-tabela-titulo strong {
+  font-weight: 500;
+  color: var(--cor-texto-terciario);
+  text-decoration: line-through;
+}
+
+/* Tabela dentro de um cartão (linha expandida): fichas viram linhas separadas por fio */
+.cartao-tabela .tabela-cartoes {
+  gap: 0;
+}
+
+.cartao-tabela .cartao-tabela {
+  padding: var(--espaco-3) 0;
+  border: 0;
+  border-top: 1px solid var(--cor-linha-suave);
+  border-radius: 0;
+  background: transparent;
+}
+
+.cartao-tabela .cartao-tabela:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.cartao-tabela-fantasma .ant-skeleton .ant-skeleton-title {
+  margin: 0;
+}
+
+.cartao-tabela-fantasma .ant-skeleton .ant-skeleton-paragraph {
+  margin-top: var(--espaco-3);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cartao-tabela-fantasma .ant-skeleton-active :is(.ant-skeleton-title, .ant-skeleton-paragraph > li) {
+    animation: none;
+  }
+}
+
+/* Filtros das colunas: botões acima dos cartões, quebrando linha */
+.tabela-cartoes-filtros {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--espaco-2);
+  margin-bottom: var(--espaco-3);
+}
+
+.tabela-cartoes-filtro.ant-btn {
+  max-width: 100%;
+  height: 40px;
+  color: var(--cor-texto-secundario);
+}
+
+.tabela-cartoes-filtro.ativo.ant-btn {
+  color: var(--cor-tinta);
+  border-color: var(--cor-tinta-borda);
+  background: var(--cor-tinta-clara);
+}
+
+.tabela-cartoes-filtro-texto {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tabela-cartoes-filtro-conteudo {
+  min-width: 200px;
+}
+
+.tabela-cartoes-filtro-conteudo .ant-menu {
+  border-inline-end: 0 !important;
+}
+
+.tabela-cartoes-filtro-conteudo .ant-menu-item {
+  height: 44px;
+  line-height: 44px;
+}
+
+.tabela-cartoes-vazio {
+  border: 1px dashed var(--cor-linha);
+  border-radius: var(--raio-conteiner);
+}
+
+.tabela-cartoes-paginacao.ant-pagination {
+  display: flex;
+  justify-content: center;
+  margin-top: var(--espaco-3);
+}
+
+.tabela-cartoes-paginacao .ant-pagination-prev,
+.tabela-cartoes-paginacao .ant-pagination-next {
+  min-width: 44px;
+  height: 44px;
+  line-height: 44px;
+}
+
+.tabela-cartoes-paginacao .ant-pagination-prev .ant-pagination-item-link,
+.tabela-cartoes-paginacao .ant-pagination-next .ant-pagination-item-link {
+  width: 44px;
+  height: 44px;
+}
+
+/* Dentro de uma seção "rente" (tabela encostada nas bordas), os cartões ganham margem */
+.secao-corpo.rente > .tabela-cartoes-area {
+  padding: 0 var(--espaco-3) var(--espaco-3);
+}
+
+.secao-corpo.rente > .tabela-cartoes-area > .tabela-cartoes-vazio {
+  border: 0;
+}
+
+/* Título com linha de apoio (ex.: área e módulo nos perfis): a linha de apoio fica com peso normal */
+.cartao-tabela-titulo .texto-apoio {
+  font-weight: 400;
+}

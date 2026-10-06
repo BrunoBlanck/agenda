@@ -22,7 +22,7 @@ export default function CodigoConfirmacao({ codigo, destaque = false }) {
         <span>{codigo.slice(0, 3)}</span>
         <span>{codigo.slice(3)}</span>
       </span>
-      <Tooltip title="Copiar código">
+      <Tooltip title="Copiar código" rootClassName="dica-icone">
         <Button type="text" size="small" icon={<CopyOutlined />} aria-label={`Copiar código ${codigo}`} onClick={copiar} />
       </Tooltip>
     </span>

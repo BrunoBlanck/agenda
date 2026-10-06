@@ -104,6 +104,7 @@ export default function Clientes() {
     {
       title: 'Situação',
       dataIndex: 'ativo',
+      cartao: 'etiqueta',
       ...filtroNoServidor(opcoesSituacao, clientes.filtros.ativo, (v) => clientes.filtrar('ativo', v == null ? null : v === 'true')),
       render: (ativo) => <EtiquetaSituacao ativo={ativo} />,
     },

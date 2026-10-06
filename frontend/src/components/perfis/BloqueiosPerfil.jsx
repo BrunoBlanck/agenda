@@ -73,6 +73,7 @@ export default function BloqueiosPerfil({ perfil, somenteLeitura }) {
     {
       title: 'Quem',
       key: 'quem',
+      cartao: 'etiqueta',
       render: (_, b) =>
         b.alvo === 'loja' ? (
           <Etiqueta tom="atencao">Loja inteira</Etiqueta>
@@ -82,7 +83,7 @@ export default function BloqueiosPerfil({ perfil, somenteLeitura }) {
           (b.quem ?? '—')
         ),
     },
-    { title: 'Período', key: 'periodo', render: (_, b) => periodo(b) },
+    { title: 'Período', key: 'periodo', cartao: 'titulo', render: (_, b) => periodo(b) },
     { title: 'Motivo', dataIndex: 'motivo', render: (m) => m || <span className="texto-apoio">Sem motivo</span> },
     !somenteLeitura && {
       title: <span className="sr-only">Ações</span>,
@@ -98,7 +99,7 @@ export default function BloqueiosPerfil({ perfil, somenteLeitura }) {
           cancelText="Cancelar"
           onConfirm={() => remover(b)}
         >
-          <Tooltip title="Remover">
+          <Tooltip title="Remover" rootClassName="dica-icone">
             <Button
               type="text"
               size="small"

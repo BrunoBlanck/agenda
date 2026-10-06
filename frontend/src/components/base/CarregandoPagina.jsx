@@ -6,7 +6,7 @@ export default function CarregandoPagina() {
     <div className="pagina" aria-busy="true" aria-label="Carregando">
       <div>
         <Skeleton.Input active size="large" className="carregando-titulo" />
-        <Skeleton active title={false} paragraph={{ rows: 1, width: 360 }} className="carregando-descricao" />
+        <Skeleton active title={false} paragraph={{ rows: 1, width: '100%' }} className="carregando-descricao" />
       </div>
       <div className="secao">
         <div className="secao-corpo">

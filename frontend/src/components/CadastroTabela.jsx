@@ -149,7 +149,7 @@ export default function CadastroTabela({
     fixed: 'right',
     render: (_, registro) => (
       <span className="acoes-linha">
-        <Tooltip title={somenteLeitura ? 'Ver' : 'Editar'}>
+        <Tooltip title={somenteLeitura ? 'Ver' : 'Editar'} rootClassName="dica-icone">
           <Button
             type="text"
             size="small"
@@ -168,7 +168,7 @@ export default function CadastroTabela({
             cancelText="Cancelar"
             onConfirm={() => excluir(registro)}
           >
-            <Tooltip title="Excluir">
+            <Tooltip title="Excluir" rootClassName="dica-icone">
               <Button
                 type="text"
                 size="small"

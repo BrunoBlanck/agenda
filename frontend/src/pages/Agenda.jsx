@@ -162,7 +162,7 @@ export default function Agenda() {
                 ]}
               />
               {!painelAberto && (
-                <Tooltip title="Mostrar os atendimentos do dia selecionado">
+                <Tooltip title="Mostrar os atendimentos do dia selecionado" rootClassName="dica-icone">
                   <Button icon={<MenuFoldOutlined />} onClick={() => alternarPainel(true)}>
                     Dia {dia.format('DD/MM')}
                   </Button>

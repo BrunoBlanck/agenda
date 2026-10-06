@@ -147,6 +147,7 @@ function PainelEstoque({ painel, somenteLeitura, aoLancar }) {
     {
       title: 'Movimentação',
       dataIndex: 'tipo',
+      cartao: 'etiqueta',
       render: (t) => {
         const tipo = tipoMovimentacao(t)
         return <Etiqueta tom={tipo.tom}>{tipo.label}</Etiqueta>
@@ -185,7 +186,7 @@ function PainelEstoque({ painel, somenteLeitura, aoLancar }) {
         />
       ) : (
         <Flex vertical gap={24}>
-          <Descriptions column={2} size="small" colon={false}>
+          <Descriptions column={{ xs: 1, sm: 2 }} size="small" colon={false}>
             <Descriptions.Item label="Em estoque">
               <strong>{quantidadeTexto(material?.quantidade, material?.unidade)}</strong>
             </Descriptions.Item>
@@ -279,10 +280,10 @@ function LinhaCategoria({ categoria, somenteLeitura, salvar, excluir }) {
         <Form.Item name="nome" rules={[{ required: true, whitespace: true, message: 'Informe o nome' }]}>
           <Input maxLength={80} aria-label="Nome da categoria" autoFocus />
         </Form.Item>
-        <Tooltip title="Salvar">
+        <Tooltip title="Salvar" rootClassName="dica-icone">
           <Button htmlType="submit" type="text" icon={<CheckOutlined />} loading={ocupado} aria-label="Salvar nome" />
         </Tooltip>
-        <Tooltip title="Cancelar">
+        <Tooltip title="Cancelar" rootClassName="dica-icone">
           <Button type="text" icon={<CloseOutlined />} aria-label="Cancelar" onClick={() => setEditando(false)} />
         </Tooltip>
       </Form>
@@ -294,7 +295,7 @@ function LinhaCategoria({ categoria, somenteLeitura, salvar, excluir }) {
       <span>{categoria.nome}</span>
       {!somenteLeitura && (
         <span className="acoes-linha">
-          <Tooltip title="Renomear">
+          <Tooltip title="Renomear" rootClassName="dica-icone">
             <Button type="text" size="small" icon={<EditOutlined />} aria-label={`Renomear ${categoria.nome}`} onClick={() => setEditando(true)} />
           </Tooltip>
           <Popconfirm
@@ -305,7 +306,7 @@ function LinhaCategoria({ categoria, somenteLeitura, salvar, excluir }) {
             cancelText="Cancelar"
             onConfirm={remover}
           >
-            <Tooltip title="Excluir">
+            <Tooltip title="Excluir" rootClassName="dica-icone">
               <Button type="text" size="small" danger icon={<DeleteOutlined />} loading={ocupado} aria-label={`Excluir ${categoria.nome}`} />
             </Tooltip>
           </Popconfirm>
@@ -412,7 +413,7 @@ export default function Materiais() {
       dataIndex: 'quantidade',
       align: 'right',
       render: (q, r) => (
-        <Tooltip title="Ver estoque e lançar movimentação">
+        <Tooltip title="Ver estoque e lançar movimentação" rootClassName="dica-icone">
           <Button type="link" size="small" icon={<HistoryOutlined />} iconPlacement="end" onClick={() => estoque.abrir(r)}>
             {quantidadeTexto(q, r.unidade)}
           </Button>
@@ -429,11 +430,13 @@ export default function Materiais() {
       ],
       onFilter: (v, r) => r.repor === v,
       sorter: (a, b) => Number(b.repor) - Number(a.repor),
+      cartao: 'etiqueta',
       render: (repor) => <EtiquetaEstoque repor={repor} />,
     },
     {
       title: 'Situação',
       dataIndex: 'ativo',
+      cartao: 'etiqueta',
       filters: [
         { text: 'Ativo', value: true },
         { text: 'Inativo', value: false },

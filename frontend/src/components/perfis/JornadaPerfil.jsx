@@ -94,6 +94,7 @@ export default function JornadaPerfil({ perfil, somenteLeitura, aoAlterar }) {
       title: 'Adicionar faixa',
       key: 'adicionar',
       width: 240,
+      cartao: 'bloco',
       render: (_, { dia, nome }) => (
         <TimePicker.RangePicker
           format="HH:mm"
