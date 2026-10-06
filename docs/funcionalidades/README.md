@@ -9,3 +9,4 @@ Uma especificação por funcionalidade (`<slug>.md`), escrita pelo agente `coord
 | [Vincular serviços pela tela de Locais](locais-servicos.md) | aprovada | feat/locais-servicos |
 | [Site do consumidor: agendamento online](site-agendamento.md) | em desenvolvimento | feat/site-agendamento |
 | [Cores do site escolhidas pela loja](cores-site.md) | aprovada | feat/cores-site |
+| [Conta do cliente no site (login, meus agendamentos, remarcar, cancelar)](conta-cliente.md) | aprovada | feat/conta-cliente |

@@ -464,6 +464,9 @@ erDiagram
     locais ||--o{ servico_locais : ""
     servicos ||--o{ servico_locais : "pode ocorrer em"
     locais ||--o{ agendamentos : "ocorre em"
+
+    lojas ||--o{ cliente_contas : "conta do site por telefone"
+    lojas ||--o{ cliente_codigos : "códigos de confirmação"
 ```
 
 ## 2.1 `perfis`
@@ -818,6 +821,7 @@ agendado ──► confirmado ──► concluido
 
 - Pedidos feitos pelo **site do consumidor** entram como `pendente` e já **ocupam o horário** (não aparecem como livres para outro cliente). Quem tem escrita na agenda aceita (`confirmado`) ou recusa (`cancelado`, com motivo).
 - `concluido`, `cancelado` e `nao_compareceu` são finais (só o Administrador pode reabrir).
+- **AGE-25** Transições exclusivas do cliente pelo site (conta, SIT-23/24): `pendente`/`agendado`/`confirmado` → `cancelado` (cancelar) e `agendado`/`confirmado` → `pendente` ou `pendente` → `pendente` com outro horário (remarcar). Nenhum caminho do painel volta um agendamento a `pendente` (`TRANSICOES` do painel não muda; as do cliente ficam em `TRANSICOES_DO_CLIENTE`, `app/services/conta_agendamentos.py`).
 - Ao ir para `concluido`: dá baixa nos materiais (ver 2.14 e 2.15), somente se o módulo **Materiais** estiver ativo.
 
 Índices sugeridos:
@@ -1017,6 +1021,55 @@ Opções da loja que não são dados cadastrais (ver 2.18). Uma linha por loja, 
 
 📌 Os rótulos são editados na própria tela de Locais, por quem tem **escrita** em *Locais*. Diferente do tipo da loja (1.2), que só muda os textos do site do consumidor, o rótulo muda os textos do **painel**.
 
+## 2.22 `cliente_contas`
+
+Conta do cliente no site do consumidor (SIT-16 a SIT-20, migração 0007). **Uma por (loja, telefone)**, e não por registro de cliente.
+
+| Coluna | Tipo | Regras |
+|---|---|---|
+| id | uuid | PK |
+| loja_id | uuid | FK → lojas |
+| telefone_digitos | varchar(11) | NOT NULL. Só dígitos, com DDD: `CHECK (~ '^[0-9]{10,11}$')`. **UNIQUE (loja_id, telefone_digitos) WHERE excluido_em IS NULL** |
+| senha_hash | text | NOT NULL. Argon2. Nunca vai para a auditoria |
+| sessao_versao | integer | NOT NULL DEFAULT 1, `CHECK (>= 1)`. Vai no token da sessão; trocar a senha ou a loja remover o acesso incrementa e derruba todas as sessões |
+| ultimo_acesso_em | timestamptz | Atualizado ao entrar (fora do histórico, como o login do painel) |
+| criado_em, atualizado_em, atualizado_por, excluido_em, excluido_por | | Controle (como em 2.7) |
+
+📌 **A conta segue o telefone (SIT-16):** enxerga os agendamentos de **todos os clientes da loja com aquele telefone** (comparação por dígitos, na hora). Se a loja trocar o telefone de um cliente, os agendamentos dele passam para a conta do telefone novo. Não há FK para `clientes` (o telefone de `clientes` não é único).
+
+📌 **Remover o acesso** (painel, CLI-06) = exclusão lógica + `sessao_versao` + 1. Criar a conta de novo no mesmo telefone cria outra linha.
+
+## 2.23 `cliente_codigos`
+
+Códigos de 6 dígitos que confirmam o telefone ao criar a conta ou trocar a senha (SIT-17, migração 0007).
+
+| Coluna | Tipo | Regras |
+|---|---|---|
+| id | uuid | PK |
+| loja_id | uuid | FK → lojas |
+| telefone_digitos | varchar(11) | NOT NULL, mesmo CHECK de 2.22. Índice `(loja_id, telefone_digitos, criado_em DESC)` |
+| codigo | char(6) | NOT NULL, `CHECK (~ '^[0-9]{6}$')`. Legível **de propósito** (o provedor "painel" mostra o código à loja); mascarado na auditoria |
+| expira_em | timestamptz | NOT NULL. `criado_em` + 15 min (`CHECK (expira_em > criado_em)`) |
+| tentativas | smallint | NOT NULL DEFAULT 0, `CHECK (0..20)`. Códigos digitados errado (no total, de todos os IPs) |
+| usado_em | timestamptz | Código certo digitado (telefone confirmado) |
+| invalidado_em | timestamptz | Um novo código foi pedido, a senha foi salva com ele (uso único) ou a loja removeu o acesso |
+| provedor | varchar(20) | NOT NULL. Por onde o código foi enviado: `painel` por enquanto |
+| criado_em, atualizado_em, atualizado_por, excluido_em, excluido_por | | Controle (como em 2.7) |
+
+📌 **Pendente** = não usado, não invalidado, `expira_em` > agora e `tentativas` < 20 (índice parcial `cliente_codigos_abertos_idx` para a lista do painel). Ao trocar o provedor "painel" por SMS/WhatsApp, guardar só o hash do código.
+
+📌 **Regras da conta do cliente** (detalhe em `docs/funcionalidades/conta-cliente.md` e `backend/README.md`):
+- **SIT-16** Conta por loja, identificada pelo telefone (acima).
+- **SIT-17** Criar conta e trocar a senha exigem o código: vale 15 min. **Pedir código com um pendente válido não gera outro nem invalida o atual** (a resposta é a mesma e o mesmo código continua valendo); só sem pendente (vencido, usado, esgotado, invalidado) um novo é gerado e os anteriores são invalidados. Erros: no máximo 5 por (código, IP), e então aquele IP recebe "Muitas tentativas. Peça um novo código mais tarde." sem o código deixar de valer para os outros; 20 no total por código = esgotado. Limites de pedidos: 1 por (telefone, IP) a cada 60 s, 10 por IP por hora (além do limite do site) e 5 códigos **gerados** por telefone por hora. Assim quem só sabe o telefone não invalida nem esgota o código de quem já o tem. Envio por provedor trocável; o atual ("painel") só grava, e a loja vê o código no painel e o repassa ao cliente.
+- **SIT-18** O mesmo caminho serve para criar conta e "esqueci minha senha" (telefone → código → senha). Só depois do código certo a página revela se o telefone tem cadastro: pede nome e sobrenome **apenas** se não houver nenhum cliente com o telefone (e cria o cliente com canal `site`). Cliente já cadastrado: nada do cadastro muda.
+- **SIT-19** Senha de 8 a 128 caracteres, diferente do telefone, Argon2. Entrar = telefone + senha, com bloqueio progressivo por telefone + IP e limite por IP. Mensagem única: "Telefone ou senha incorretos."
+- **SIT-20** Sessão por cookie `HttpOnly`, `SameSite=Lax`, `Path=/{slug}`, `Secure` fora de desenvolvimento, token do tipo `cliente` (loja, conta, versão), 30 dias (provisório). O token do cliente nunca vale na API do painel nem do SUPERADMIN, e vice-versa. Todo `POST` das páginas confere a origem.
+- **SIT-21** Minha conta: "Próximos" (`pendente`/`agendado`/`confirmado` que ainda não terminaram, até 50) e "Histórico" (o resto, 20 por página). Mostra serviço, dia, hora, profissional, local (só o nome), preço e situação; nunca o motivo de cancelamento/recusa. Agendamentos excluídos não aparecem.
+- **SIT-22** Agendar com a conta: o passo 3 só pede observações; o pedido usa o cliente mais antigo da loja com o telefone da conta e passa pelos mesmos limites. Sem conta, o fluxo continua igual, com "Já tem conta? Entrar" e o convite para criar a senha no fim.
+- **SIT-23** Cancelar pelo site: só `pendente`, `agendado` ou `confirmado` e só até **2 h antes do início** (constante `ANTECEDENCIA_CLIENTE`, provisória, ABE-11). Vira `cancelado` na hora, sem aceite da loja, com o motivo fixo "Cancelado pelo cliente pelo site." e `app.origem = 'site'`. Página "Cancelar este agendamento?" antes (sem JS). Fora do prazo ou em situação final: só a loja altera (o site mostra o telefone dela). Agendamento de outro telefone ou de outra loja: 404.
+- **SIT-24** Remarcar pelo site: mesmas situações e mesmo prazo da SIT-23. Mantém serviço, preço congelado e a **duração atual** (`fim − inicio`); o cliente escolhe profissional (habilitado e ativo, ou "qualquer") e um horário **oferecido** pelo site, sem o próprio agendamento contar como ocupado. Ao confirmar, o mesmo agendamento muda profissional, local (escolhido como no pedido; sem o módulo Locais, fica sem local), início e fim e **volta a `pendente`** (a loja aceita ou recusa como um pedido novo); o horário antigo fica livre na hora. Serviço inativo ou removido, ninguém habilitado ou nenhum local possível: "Para remarcar este horário, fale com a loja." (cancelar continua possível).
+- **CLI-06** No painel (tela Clientes), ver os códigos pendentes e remover o acesso de um cliente ao site exigem **escrita** em *Clientes*.
+
 ---
 
 # 3. Enums
@@ -1079,7 +1132,7 @@ Diferenças entre o mock atual e o banco:
 # 5. Pontos em aberto
 
 - [ ] Estoque pode ficar negativo ou deve bloquear a conclusão do atendimento?
-- [ ] Cliente precisa de acesso próprio (agendar online)? Se sim, entra uma tabela de login de clientes.
+- [x] ~~Cliente precisa de acesso próprio?~~ Decidido em 2026-10-06: conta do cliente por loja e telefone (2.22, 2.23, SIT-16 a SIT-24).
 - [ ] Antecedência mínima para agendar e para cancelar.
 - [ ] Notificações (WhatsApp/e-mail) de confirmação e lembrete: exigiria tabela de fila/histórico de envios.
 - [ ] Financeiro (pagamentos dos atendimentos, comissão de profissionais).
@@ -1102,9 +1155,9 @@ Como o back-end (`backend/`, migrações `0001` e `0002`) aplica este documento,
 
 - **Contexto da transação:** além de `app.funcionario_id`, `app.superadmin_id`, `app.origem` e `app.loja_id`, o back-end grava `app.ip`, usado na coluna `auditoria.ip`. Tudo com `set_config(..., true)` (equivale a `SET LOCAL`).
 - **Colunas de controle:** os triggers também fixam `criado_em` (no `INSERT` vale `now()` e depois nunca muda) e cuidam de `excluido_em`/`excluido_por`: excluir (por `DELETE` ou por `UPDATE` de `excluido_em`) grava a hora e quem excluiu; restaurar (`excluido_em = NULL`) limpa `excluido_por`. Colunas "quem criou" (`lojas.criado_por`, `funcionarios.criado_por_*`, `agendamentos.criado_por`, `bloqueios_agenda.criado_por`, `movimentacoes_estoque.funcionario_id`) têm `DEFAULT` lido do contexto.
-- **Auditoria:** não guarda `senha_hash` em `antes`/`depois` (só aparece em `campos_alterados`, indicando que a senha mudou). `campos_alterados` é preenchido em `alterar`. `UPDATE` que não muda nenhum valor não gera linha. Além do `REVOKE`, um trigger impede `UPDATE`/`DELETE` na auditoria até para o dono do schema.
+- **Auditoria:** não guarda `senha_hash` (nem `cliente_codigos.codigo`, desde a migração 0007) em `antes`/`depois` (só aparece em `campos_alterados`, indicando que a senha mudou). `campos_alterados` é preenchido em `alterar`. `UPDATE` que não muda nenhum valor não gera linha. Além do `REVOKE`, um trigger impede `UPDATE`/`DELETE` na auditoria até para o dono do schema.
 - **Leitura sem excluídos:** em vez de uma view `*_ativos` por tabela, o ORM do back-end acrescenta `excluido_em IS NULL` a toda consulta (com opção explícita para incluir os excluídos). As políticas de RLS não escondem excluídos (senão não daria para restaurar).
-- **RLS ligado** nas 19 tabelas da seção 2 (`loja_id = app.loja_id`). Com `app.superadmin_id` preenchido, todas as lojas ficam visíveis. A API conecta com um usuário sem privilégio de dono, para o RLS e o `REVOKE` valerem.
+- **RLS ligado** nas 21 tabelas da seção 2 (`loja_id = app.loja_id`). Com `app.superadmin_id` preenchido, todas as lojas ficam visíveis. A API conecta com um usuário sem privilégio de dono, para o RLS e o `REVOKE` valerem.
 - **Unicidade:** e-mails (`superadmin_usuarios`, `funcionarios`) são únicos sem diferenciar maiúsculas (`lower(email)`). `funcionalidades.codigo` e `recursos.codigo` também usam índice parcial. `UNIQUE (loja_id, id)` continua comum (não parcial), porque é alvo das FKs compostas.
 - **FKs compostas** também em `criado_por`, `editado_por`, `movimentacoes_estoque.agendamento_id`/`funcionario_id`, `funcionarios.criado_por_funcionario`, `lojas (id, atualizado_por_funcionario)` e `auditoria (loja_id, funcionario_id)`.
 - **Conflito de horário:** as duas restrições `EXCLUDE` de `agendamentos` ignoram também linhas excluídas (`excluido_em IS NULL`).

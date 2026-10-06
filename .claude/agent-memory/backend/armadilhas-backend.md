@@ -38,3 +38,27 @@ Armadilhas confirmadas em 2026-10-02 (correção da revisão A1–A12):
 - **Teste flaky ≠ culpa da mudança:** para ter a linha de base sem git stash, `git archive HEAD backend | tar -x -C <scratch>` + copiar `.env` + `uv sync` e rodar o teste lá (mesmo banco de teste; apagar a cópia no fim).
 
 Relacionado: [[contratos-alterados-revisao-1]]
+
+Confirmadas em 2026-10-06 (conta do cliente no site):
+
+- **Cookie `Secure` no TestClient:** o cookie da sessão do cliente tem `Secure` fora de `AMBIENTE=desenvolvimento` (nos testes, `teste`). Com o `base_url` padrão (`http://testserver`) o httpx não guarda nem manda o cookie: use `TestClient(app, base_url='https://testserver')` (fixture `navegador` em `tests/test_conta_cliente.py`). O `mesma_origem` compara só o host, então `Origin: https://testserver` passa.
+- **ruff PT018 nos testes:** `assert a and b` reprova no `ruff check`; quebre em vários `assert`.
+- **`tests/test_saude.py::test_cors_libera_o_front_local` falha com o `.env` de dev atual** (`CORS_ORIGENS=["http://localhost:4824"]`, porta do front configurável): o teste espera `localhost:5173` (o do `.env.example`). Não é regressão; reportar e não mexer no `.env` do usuário.
+- **Migração que muda função de trigger** (`registrar_auditoria`, `so_dados_de_login`): `CREATE OR REPLACE` com o corpo inteiro da versão anterior parametrizado, e o downgrade recria exatamente o corpo da migração anterior (ver 0004 e 0007). `jsonb - text[]` tira várias chaves de uma vez.
+- **Dev DB precisa da migração nova** para a API de dev (com --reload) não dar 500 nas rotas novas: `.venv/Scripts/python.exe -m alembic upgrade head` em `backend/` (avisar no relatório).
+
+Confirmadas em 2026-10-06 (conta do cliente, Fase B):
+
+- **Heredoc truncou de novo** (~140 linhas anexadas com `cat >> ... <<'EOF'`): parou no meio de uma string. Para trechos grandes, Write num arquivo do scratchpad e anexe com Python.
+- **Provar que o teste pega o defeito sem tocar em `app/`:** arquivo temporário `tests/test_tmp_*.py` que importa as funções de teste **e as fixtures do módulo delas** (senão dá ERROR de fixture) e um fixture autouse com `monkeypatch` desligando a regra; rodar, ver falhar, apagar.
+- **Fixture `navegador`** (TestClient https) mora em `tests/conftest.py`; não importe fixture de outro módulo de teste nos testes definitivos (ruff F811/F401).
+- **Corrida em página HTML com sessão:** o `servidor` é http; mande o cookie como cabeçalho `Cookie: sessao_cliente=<token>` (o `Secure` só vale para o navegador guardar). Helper `_postar_com_cookie` em `tests/test_conta_cliente_alterar.py`.
+- **Forçar 23P01 de forma determinística:** monkeypatch da função de conferência do serviço (ex.: `conta_agendamentos.horario_oferecido`) chamando a original e, antes de devolver, inserindo o agendamento conflitante com `engine_dono` (outra conexão, já confirmada).
+- **Nunca rode dois pytest ao mesmo tempo** (suíte inteira em background + um arquivo em primeiro plano): os dois usam o mesmo banco agenda_test e o limpar/recriar de um derruba o outro (55 ERROR falsos). Espere a suíte terminar; se precisar parar, TaskStop e mate só os processos pytest (Get-CimInstance Win32_Process), nunca o uvicorn da porta 4823.
+
+Confirmadas em 2026-10-06 (revisão rodada 1 da conta do cliente):
+
+- **Dígitos Unicode:** `str.isdigit()`, `\d` e `re.sub(r'\D', ...)` aceitam "²", "١" e "１"; `int('²')` levanta ValueError e `secrets.compare_digest` com não-ASCII levanta TypeError (500). `so_digitos` agora é `[^0-9]`; regex de data/hora com `re.ASCII`; número lido à mão com `re.fullmatch(r'[0-9]{1,N}', ...)`.
+- **Advisory lock + FOR UPDATE = impasse se a ordem variar.** Na conta do cliente a ordem é sempre telefone (advisory) e depois linha (código/conta). Quem parte de um id assinado lê sem travar, trava o telefone e relê com FOR UPDATE + populate_existing. Argon2 antes de qualquer trava.
+- **Erro de banco escapando numa página HTML virava JSON:** o tratador de DBAPIError em `app/erros.py` agora responde `erro.html` fora de /api.
+- **Provar o teste de impasse:** monkeypatch de `conta.codigo_confirmado` travando o código com FOR UPDATE (a ordem antiga) faz `test_senha_e_novo_codigo_juntos_sem_impasse` falhar com 409.

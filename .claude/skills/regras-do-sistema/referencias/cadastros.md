@@ -8,6 +8,7 @@ Fonte: `estrutura.md` 2.3, 2.4, 2.7 a 2.12, 2.15, 2.16, 2.18 a 2.21 e 6.1.
 - **CLI-03** `canais` (lista): `loja`, `whatsapp`, `site`. Quem vem do site entra com `site`; telefone já existente na loja reaproveita o cadastro e só ganha o canal `site`.
 - **CLI-04** Cliente com agendamentos **não é excluído** (409): inative.
 - **CLI-05** CPF, telefone e e-mail são dados pessoais (LGPD): não aparecem em log, nem em respostas públicas.
+- **CLI-06** No painel (tela Clientes), ver os códigos de confirmação pendentes do site e remover o acesso de um cliente ao site exigem **escrita** em *Clientes* (SIT-16 a SIT-20).
 
 ## Funcionários e cargos (`FUN-*`)
 - **FUN-01** Funcionário é também o usuário do painel. E-mail obrigatório e único na loja (login); CPF único na loja quando preenchido.

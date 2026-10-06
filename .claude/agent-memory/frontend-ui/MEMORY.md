@@ -1,3 +1,3 @@
 - [Identidade visual](identidade-visual.md) — tinta + marca-texto, fonte, onde ficam os tokens e regras de uso do destaque
-- [Padrões de tela](padroes-de-tela.md) — Pagina/Secao, armadilhas antd 6/Vite 8, skeleton, ACE-19, caminhos /:slug/painel, Playwright sem MCP
+- [Padrões de tela](padroes-de-tela.md) — Pagina/Secao, armadilhas antd 6/Vite 8, skeleton, ACE-19, caminhos /:slug/painel, Playwright (MCP e script)
 - [Painel lateral](painel-lateral.md) — todo formulário/consulta por cima da tela é painel lateral; API, regras e armadilhas
