@@ -1,5 +1,19 @@
 {% extends 'site/base.html' %}
 {% block titulo %}{{ titulo or servico_nome }} · {{ loja.nome_fantasia }}{% endblock %}
+{% macro lista(itens) %}
+        <ul class="horarios">
+          {% for h in itens %}
+          <li>
+            <a class="horario" href="{{ h.url }}">
+              <strong>{{ h.hora }}</strong>
+              {% if h.profissional %}
+              <span>{{ h.profissional }}</span>
+              {% endif %}
+            </a>
+          </li>
+          {% endfor %}
+        </ul>
+{% endmacro %}
 {% block conteudo %}
       <div class="titulo-linha">
         {% if voltar %}
@@ -13,24 +27,17 @@
       {% if aviso %}
       <p class="aviso" role="alert">{{ aviso }}</p>
       {% endif %}
-      <form class="filtro" method="get" action="{{ acao }}" data-auto>
-        {% if servico_id %}
-        <input type="hidden" name="servico" value="{{ servico_id }}">
-        {% endif %}
-        {% if dia_escolhido %}
-        <input type="hidden" name="dia" value="{{ dia_escolhido }}">
-        {% endif %}
-        <label for="profissional">Profissional</label>
-        <div class="filtro-linha">
-          <select id="profissional" name="profissional">
-            <option value="">Qualquer profissional</option>
-            {% for p in equipe %}
-            <option value="{{ p.id }}"{% if p.escolhido %} selected{% endif %}>{{ p.nome }}</option>
-            {% endfor %}
-          </select>
-          <button type="submit" class="botao botao-secundario" data-atualizar>Atualizar</button>
-        </div>
-      </form>
+      {% if equipe %}
+      <section class="escolha" aria-labelledby="profissional-titulo">
+        <h3 class="rotulo" id="profissional-titulo">Profissional</h3>
+        <ul class="faixa" data-faixa>
+          <li><a class="chip" href="{{ qualquer_url }}"{% if qualquer_escolhido %} aria-current="true"{% endif %}>Qualquer profissional</a></li>
+          {% for p in equipe %}
+          <li><a class="chip" href="{{ p.url }}"{% if p.escolhido %} aria-current="true"{% endif %}>{{ p.nome }}</a></li>
+          {% endfor %}
+        </ul>
+      </section>
+      {% endif %}
       {% if nenhum_horario %}
       <div class="vazio">
         <p>Nenhum horário livre nos próximos 31 dias.</p>
@@ -40,7 +47,7 @@
       </div>
       {% else %}
       <h3 class="rotulo" id="dias-titulo">Escolha o dia</h3>
-      <ul class="dias" aria-labelledby="dias-titulo" data-dias>
+      <ul class="faixa dias" aria-labelledby="dias-titulo" data-faixa>
         {% for d in dias %}
         <li>
           {% if d.total %}
@@ -62,18 +69,14 @@
       <section id="horarios" class="secao-horarios" aria-labelledby="horarios-titulo">
         <h3 class="rotulo" id="horarios-titulo">Horários livres{% if dia_extenso %}: {{ dia_extenso }}{% endif %}</h3>
         {% if horarios %}
-        <ul class="horarios">
-          {% for h in horarios %}
-          <li>
-            <a class="horario" href="{{ h.url }}">
-              <strong>{{ h.hora }}</strong>
-              {% if h.profissional %}
-              <span>{{ h.profissional }}</span>
-              {% endif %}
-            </a>
-          </li>
-          {% endfor %}
-        </ul>
+        {# Agrupados por período do dia; "HH:MM" compara como texto #}
+        {% set manha = horarios | selectattr('hora', 'lt', '12:00') | list %}
+        {% set tarde = horarios | selectattr('hora', 'ge', '12:00') | selectattr('hora', 'lt', '18:00') | list %}
+        {% set noite = horarios | selectattr('hora', 'ge', '18:00') | list %}
+        {% for periodo, itens in [('Manhã', manha), ('Tarde', tarde), ('Noite', noite)] if itens %}
+        <h4 class="periodo">{{ periodo }}</h4>
+{{ lista(itens) }}
+        {% endfor %}
         {% else %}
         <p class="vazio">Nenhum horário livre neste dia. Escolha outro dia.</p>
         {% endif %}

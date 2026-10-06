@@ -13,8 +13,10 @@
         </ul>
       </div>
       <p class="pergunta">Cancelar este agendamento?</p>
-      <form class="formulario" method="post" action="{{ acao }}" data-enviar>
-        <button type="submit" class="botao botao-largo botao-perigo" data-enviando="Cancelando…">Sim, cancelar</button>
-      </form>
-      <a class="botao botao-secundario botao-largo" href="{{ conta }}">Não, manter o horário</a>
+      <div class="acoes">
+        <form class="formulario" method="post" action="{{ acao }}" data-enviar>
+          <button type="submit" class="botao botao-largo botao-perigo" data-enviando="Cancelando…">Sim, cancelar</button>
+        </form>
+        <a class="botao botao-secundario botao-largo" href="{{ conta }}">Não, manter o horário</a>
+      </div>
 {% endblock %}

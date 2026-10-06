@@ -2,10 +2,13 @@
 <html lang="pt-BR">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   {% if not indexar %}
   <meta name="robots" content="noindex">
   {% endif %}
+  <meta name="color-scheme" content="light dark">
+  <meta name="theme-color" content="{{ tema.claro }}" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="{{ tema.escuro }}" media="(prefers-color-scheme: dark)">
   <title>{% block titulo %}{{ loja.nome_fantasia }}{% endblock %}</title>
   <link rel="stylesheet" href="{{ css }}">
   {% if estilo %}
@@ -13,6 +16,19 @@
   {% endif %}
   <script src="{{ js }}" defer></script>
 </head>
+{# Endereço e telefone da loja: na capa (telas largas) e no rodapé (celular, fora da dobra). #}
+{% macro contato(classe, endereco, loja, telefone_link) %}
+        {% if endereco or loja.telefone %}
+        <ul class="contato {{ classe }}">
+          {% if endereco %}
+          <li><svg class="icone" aria-hidden="true" viewBox="0 0 24 24"><path d="M12 22s7-6.1 7-12a7 7 0 1 0-14 0c0 5.9 7 12 7 12Z"/><circle cx="12" cy="10" r="2.5"/></svg><span class="sr">Endereço: </span>{{ endereco }}</li>
+          {% endif %}
+          {% if loja.telefone %}
+          <li><svg class="icone" aria-hidden="true" viewBox="0 0 24 24"><path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2Z"/></svg><span class="sr">Telefone: </span>{% if telefone_link %}<a href="{{ telefone_link }}">{{ loja.telefone }}</a>{% else %}{{ loja.telefone }}{% endif %}</li>
+          {% endif %}
+        </ul>
+        {% endif %}
+{% endmacro %}
 <body class="tipo-{{ loja.tipo }}{% if estilo %} {{ classe_cores }}{% endif %}">
   <header class="capa">
     <div class="largura marca">
@@ -25,16 +41,7 @@
         {% endif %}
         <h1 class="nome">{{ loja.nome_fantasia }}</h1>
         <p class="frase">{{ frase }}</p>
-        {% if endereco or loja.telefone %}
-        <ul class="contato">
-          {% if endereco %}
-          <li><svg class="icone" aria-hidden="true" viewBox="0 0 24 24"><path d="M12 22s7-6.1 7-12a7 7 0 1 0-14 0c0 5.9 7 12 7 12Z"/><circle cx="12" cy="10" r="2.5"/></svg><span class="sr">Endereço: </span>{{ endereco }}</li>
-          {% endif %}
-          {% if loja.telefone %}
-          <li><svg class="icone" aria-hidden="true" viewBox="0 0 24 24"><path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2Z"/></svg><span class="sr">Telefone: </span>{% if telefone_link %}<a href="{{ telefone_link }}">{{ loja.telefone }}</a>{% else %}{{ loja.telefone }}{% endif %}</li>
-          {% endif %}
-        </ul>
-        {% endif %}
+{{ contato('contato-capa', endereco, loja, telefone_link) }}
       </div>
       <nav class="conta-nav" aria-label="Sua conta">
         <a class="conta-link" href="{{ conta_nav.url }}"><svg class="icone" aria-hidden="true" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>{{ conta_nav.texto }}</a>
@@ -44,17 +51,23 @@
   <main class="largura principal">
     <div class="cartao">
       {% if passos %}
-      <ol class="passos" aria-label="Etapas do agendamento">
-        {% for nome in passos %}
-        <li{% if loop.index0 == passo_atual %} aria-current="step"{% elif loop.index0 < passo_atual %} class="feito"{% endif %}><span class="passo-num" aria-hidden="true">{{ loop.index }}</span><span class="passo-nome">{{ nome }}</span></li>
-        {% endfor %}
-      </ol>
+      <div class="etapas">
+        <p class="etapas-resumo" aria-hidden="true">Passo {{ passo_atual + 1 }} de {{ passos | length }} · <strong>{{ passos[passo_atual] }}</strong></p>
+        <ol class="passos" aria-label="Etapas do agendamento">
+          {% for nome in passos %}
+          <li{% if loop.index0 == passo_atual %} aria-current="step"{% elif loop.index0 < passo_atual %} class="feito"{% endif %}><span class="passo-num" aria-hidden="true">{{ loop.index }}</span><span class="passo-nome">{{ nome }}</span></li>
+          {% endfor %}
+        </ol>
+      </div>
       {% endif %}
 {% block conteudo %}{% endblock %}
     </div>
   </main>
-  <footer class="largura rodape">
-    <p>{{ loja.nome_fantasia }}{% if endereco %} · {{ endereco }}{% endif %}</p>
+  <footer class="rodape">
+    <div class="largura">
+{{ contato('contato-rodape', endereco, loja, telefone_link) }}
+      <p>{{ loja.nome_fantasia }}{% if endereco %}<span class="rodape-endereco"> · {{ endereco }}</span>{% endif %}</p>
+    </div>
   </footer>
 </body>
 </html>

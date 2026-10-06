@@ -1,11 +1,12 @@
 {# Peças dos formulários do site: campo com rótulo e erro, resumo dos erros no topo. #}
-{% macro campo(id, rotulo, valores, erros, tipo='text', obrigatorio=True, maximo=None, completar=None, teclado=None, minimo=None, dica=None) %}
-        <div class="campo{% if erros[id] %} com-erro{% endif %}">
+{# ``atributos``: atributos fixos a mais do campo (ex.: autocapitalize), sempre escritos no template. #}
+{% macro campo(id, rotulo, valores, erros, tipo='text', obrigatorio=True, maximo=None, completar=None, teclado=None, minimo=None, dica=None, classe=None, atributos={}) %}
+        <div class="campo{% if classe %} {{ classe }}{% endif %}{% if erros[id] %} com-erro{% endif %}">
           <label for="campo-{{ id }}">{{ rotulo }}{% if obrigatorio %} <span class="obrigatorio" aria-hidden="true">*</span>{% else %} <span class="opcional">(opcional)</span>{% endif %}</label>
           {% if tipo == 'textarea' %}
           <textarea id="campo-{{ id }}" name="{{ id }}" rows="3"{% if maximo %} maxlength="{{ maximo }}"{% endif %}{% if erros[id] %} aria-invalid="true" aria-describedby="erro-{{ id }}"{% endif %}>{{ valores[id] }}</textarea>
           {% else %}
-          <input id="campo-{{ id }}" name="{{ id }}" type="{{ tipo }}" value="{{ valores[id] if tipo != 'password' else '' }}"{% if obrigatorio %} required{% endif %}{% if minimo %} minlength="{{ minimo }}"{% endif %}{% if maximo %} maxlength="{{ maximo }}"{% endif %}{% if completar %} autocomplete="{{ completar }}"{% endif %}{% if teclado %} inputmode="{{ teclado }}"{% endif %}{% if erros[id] %} aria-invalid="true" aria-describedby="erro-{{ id }}"{% elif dica %} aria-describedby="dica-{{ id }}"{% endif %}>
+          <input id="campo-{{ id }}" name="{{ id }}" type="{{ tipo }}" value="{{ valores[id] if tipo != 'password' else '' }}"{% if obrigatorio %} required{% endif %}{% if minimo %} minlength="{{ minimo }}"{% endif %}{% if maximo %} maxlength="{{ maximo }}"{% endif %}{% if completar %} autocomplete="{{ completar }}"{% endif %}{% if teclado %} inputmode="{{ teclado }}"{% endif %}{% for nome, valor in atributos.items() %} {{ nome }}="{{ valor }}"{% endfor %}{% if erros[id] %} aria-invalid="true" aria-describedby="erro-{{ id }}"{% elif dica %} aria-describedby="dica-{{ id }}"{% endif %}>
           {% endif %}
           {% if erros[id] %}
           <p class="erro-campo" id="erro-{{ id }}">{{ erros[id] }}</p>

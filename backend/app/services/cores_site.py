@@ -7,7 +7,8 @@ topo usa a cor escolhida e o destaque é clareado até ter 4,5:1 sobre o fundo e
 Só cálculo (sem banco): usado pela validação da entrada, pelas rotas e pelas páginas do site.
 
 📌 ``PALETAS`` tem os mesmos valores de ``app/static/site/site.css`` (``tests/test_cores_site.py``
-confere): o CSS continua sendo o padrão de quem não escolheu cor.
+confere): o CSS continua sendo o padrão de quem não escolheu cor. ``topo_escuro`` só alimenta o
+``<meta name="theme-color">`` do modo escuro (``cores_do_topo``).
 """
 
 import re
@@ -33,13 +34,28 @@ class Paleta:
     destaque: str
     fundo_escuro: str
     superficie_escura: str
+    topo_escuro: str
 
 
 PALETAS: dict[TipoLoja, Paleta] = {
-    TipoLoja.clinica: Paleta('#0d4b4f', '#0b6767', fundo_escuro='#0e1617', superficie_escura='#162123'),
-    TipoLoja.barbearia: Paleta('#1f2230', '#8f4a1c', fundo_escuro='#141210', superficie_escura='#1f1c19'),
-    TipoLoja.escola: Paleta('#2a357f', '#3a45a6', fundo_escuro='#11121c', superficie_escura='#1a1c2a'),
+    TipoLoja.clinica: Paleta(
+        '#0d4b4f', '#0b6767', fundo_escuro='#0e1617', superficie_escura='#162123', topo_escuro='#0a3437'
+    ),
+    TipoLoja.barbearia: Paleta(
+        '#1f2230', '#8f4a1c', fundo_escuro='#141210', superficie_escura='#1f1c19', topo_escuro='#15171f'
+    ),
+    TipoLoja.escola: Paleta(
+        '#2a357f', '#3a45a6', fundo_escuro='#11121c', superficie_escura='#1a1c2a', topo_escuro='#1c2358'
+    ),
 }
+
+
+@dataclass(frozen=True)
+class CoresDoTopo:
+    """Cor do topo no modo claro e no escuro: vai no ``<meta name="theme-color">`` (barra do navegador)."""
+
+    claro: str
+    escuro: str
 
 
 def paleta_do_tipo(tipo: TipoLoja | str) -> Paleta:
@@ -111,6 +127,20 @@ def clarear_ate_contraste(cor: Rgb, fundo: Rgb) -> Rgb:
 
 
 # --- CSS da loja -----------------------------------------------------------------------------------
+
+
+def cores_do_topo(tipo: TipoLoja | str, topo: str | None) -> CoresDoTopo:
+    """Cor da barra do navegador (DIR-004): a mesma do topo do site, em cada modo.
+
+    Topo escolhido pela loja vale nos dois modos, como no ``css_da_loja``; sem escolha (ou fora do
+    formato), as do tipo da loja. Só sai cor reescrita por ``escrever_cor`` ou da paleta fixa.
+    """
+    rgb = ler_cor(topo)
+    if rgb is not None:
+        cor = escrever_cor(rgb)
+        return CoresDoTopo(claro=cor, escuro=cor)
+    paleta = paleta_do_tipo(tipo)
+    return CoresDoTopo(claro=paleta.topo, escuro=paleta.topo_escuro)
 
 
 def css_da_loja(tipo: TipoLoja | str, topo: str | None, destaque: str | None) -> str | None:

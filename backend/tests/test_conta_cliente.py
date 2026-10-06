@@ -1029,6 +1029,9 @@ def test_paginas_da_conta_noindex_sem_painel_e_com_cabecalhos(navegador, clinica
         assert resposta.headers['x-frame-options'] == 'DENY'
         assert "form-action 'self'" in resposta.headers['content-security-policy']
         assert '<meta name="robots" content="noindex">' in resposta.text
+        assert 'viewport-fit=cover' in resposta.text  # DIR-004
+        # A ação principal fica na barra de ação (presa ao pé da tela no celular)
+        assert re.search(r'<div class="acoes">\s*(?:<button type="submit"|<a class="botao)', resposta.text)
         assert '/painel' not in resposta.text
         assert 'superadmin' not in resposta.text.lower()
         assert 'login' not in resposta.text.lower()

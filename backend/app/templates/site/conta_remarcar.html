@@ -18,11 +18,13 @@
         </div>
       </div>
       <p class="aviso" role="note">A loja vai confirmar o novo horário. O horário atual fica livre.</p>
-      <form class="formulario" method="post" action="{{ acao }}" data-enviar>
-        {% for nome, valor in ocultos.items() %}
-        <input type="hidden" name="{{ nome }}" value="{{ valor }}">
-        {% endfor %}
-        <button type="submit" class="botao botao-largo" data-enviando="Enviando…">Confirmar remarcação</button>
-      </form>
-      <a class="botao botao-secundario botao-largo" href="{{ escolher }}">Escolher outro horário</a>
+      <div class="acoes">
+        <form class="formulario" method="post" action="{{ acao }}" data-enviar>
+          {% for nome, valor in ocultos.items() %}
+          <input type="hidden" name="{{ nome }}" value="{{ valor }}">
+          {% endfor %}
+          <button type="submit" class="botao botao-largo" data-enviando="Enviando…">Confirmar remarcação</button>
+        </form>
+        <a class="botao botao-secundario botao-largo" href="{{ escolher }}">Escolher outro horário</a>
+      </div>
 {% endblock %}

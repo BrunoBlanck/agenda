@@ -261,15 +261,13 @@ def pagina_remarcar(slug: str, agendamento_id: str, request: Request, db: DbDep)
         duracao=duracao,
         horario_atual=_horario_atual(site, item),
         voltar=_conta(site),
-        acao=f'{base}/remarcar',
-        servico_id=None,
         **escolha_de_horario(
             site,
             request.query_params,
             servico,
             aviso=AVISOS.get(request.query_params.get('aviso', '')),
             url_dia=lambda profissional_id, dia: montar_url(
-                f'{base}/remarcar', profissional=profissional_id, dia=dia.isoformat()
+                f'{base}/remarcar', profissional=profissional_id, dia=dia.isoformat() if dia else None
             ),
             url_horario=lambda livre, inicio: montar_url(
                 f'{base}/remarcar/confirmar',

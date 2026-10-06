@@ -13,7 +13,9 @@
         <input type="hidden" name="voltar" value="{{ voltar }}">
         {% endif %}
 {{ campo('telefone', 'Telefone com DDD', valores, erros, tipo='tel', maximo=20, completar='tel', teclado='tel') }}
-        <button type="submit" class="botao botao-largo" data-enviando="Enviando…">Continuar</button>
+        <div class="acoes">
+          <button type="submit" class="botao botao-largo" data-enviando="Enviando…">Continuar</button>
+        </div>
       </form>
       <ul class="links-conta">
         <li>Já tem senha? <a href="{{ entrar }}">Entrar</a></li>

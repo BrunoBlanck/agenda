@@ -255,7 +255,7 @@ def test_pagina_da_loja_sem_dados_opcionais(cliente, engine_dono):
     eh_html(resposta, 200, CSP_SITE)
     assert '<h1 class="nome">Loja loja-a</h1>' in resposta.text  # sem nome fantasia: o nome
     assert '<img' not in resposta.text
-    assert 'class="contato"' not in resposta.text
+    assert 'class="contato' not in resposta.text  # nem na capa nem no rodapé
 
 
 def test_pagina_da_loja_nao_leva_ao_painel_nem_ao_login(cliente, engine_dono):

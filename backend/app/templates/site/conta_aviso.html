@@ -12,8 +12,10 @@
       </div>
       {% endif %}
       <p class="aviso" role="alert">{{ mensagem }}{% if com_telefone %}{{ telefone_da_loja(loja, telefone_link) }}.{% endif %}</p>
-      {% if cancelar %}
-      <a class="botao botao-secundario botao-largo" href="{{ cancelar }}">Cancelar este agendamento</a>
-      {% endif %}
-      <a class="botao botao-largo" href="{{ conta }}">Voltar para Minha conta</a>
+      <div class="acoes">
+        {% if cancelar %}
+        <a class="botao botao-secundario botao-largo" href="{{ cancelar }}">Cancelar este agendamento</a>
+        {% endif %}
+        <a class="botao botao-largo" href="{{ conta }}">Voltar para Minha conta</a>
+      </div>
 {% endblock %}
