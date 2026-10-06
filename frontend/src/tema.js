@@ -22,6 +22,7 @@ export const cores = {
 export const coresAgenda = ['#2340A8', '#0F766E', '#B45309', '#7C3AED', '#BE123C', '#0E7490', '#4D7C0F', '#A21CAF']
 
 const fonte = "'Atkinson Hyperlegible Next', 'Segoe UI', system-ui, sans-serif"
+const fonteCodigo = "'Atkinson Hyperlegible Mono', ui-monospace, 'Cascadia Mono', Consolas, monospace"
 const sombraFlutuante = '0 8px 28px rgba(30, 34, 48, 0.14), 0 1px 3px rgba(30, 34, 48, 0.08)'
 
 export const tema = {
@@ -44,6 +45,7 @@ export const tema = {
     colorFillTertiary: '#EEF0F4',
     colorFillQuaternary: '#F6F7F9',
     fontFamily: fonte,
+    fontFamilyCode: fonteCodigo,
     fontSize: 14,
     fontSizeSM: 12,
     fontSizeHeading1: 32,

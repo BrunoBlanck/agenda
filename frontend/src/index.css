@@ -40,6 +40,8 @@
   --tom-marca: #3d3200;
 
   --fonte: 'Atkinson Hyperlegible Next', 'Segoe UI', system-ui, sans-serif;
+  /* Códigos lidos em voz alta (confirmação do site): só os dígitos da Mono são baixados (index.html) */
+  --fonte-codigo: 'Atkinson Hyperlegible Mono', ui-monospace, 'Cascadia Mono', Consolas, monospace;
 
   --espaco-1: 4px;
   --espaco-2: 8px;
