@@ -41,14 +41,16 @@ export default defineConfig(({ mode }) => {
   const proxy = {
     [`^/(?!${BASE.slice(1, -1)}(?:/|$))`]: { target: env.API_PROXY_ALVO || 'http://localhost:8000', changeOrigin: false },
   }
+  // Porta do `npm run dev` e do `npm run preview` (PORTA_DEV no .env.local; padrão 5173)
+  const port = Number(env.PORTA_DEV) || 5173
   return {
     base: BASE,
     // Sem o fallback de SPA do Vite: só os endereços do app (acima) recebem o index.html; um arquivo que
     // não existe em /_app/ dá 404, como no nginx
     appType: 'mpa',
     plugins: [react(), imitarNginx()],
-    server: { proxy },
-    preview: { proxy },
+    server: { proxy, port, strictPort: true },
+    preview: { proxy, port, strictPort: true },
     build: {
       rolldownOptions: {
         output: {
