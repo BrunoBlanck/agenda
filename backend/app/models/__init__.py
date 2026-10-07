@@ -1,7 +1,13 @@
 """Modelos SQLAlchemy. Importar daqui registra todas as tabelas no Base.metadata."""
 
 from app.models.acesso import Cargo, Funcionario, Perfil, PerfilAcesso
-from app.models.agenda import Agendamento, AgendamentoMaterial, BloqueioAgenda, PerfilHorario
+from app.models.agenda import (
+    Agendamento,
+    AgendamentoMaterial,
+    AgendamentoPagamento,
+    BloqueioAgenda,
+    PerfilHorario,
+)
 from app.models.base import Base, ControleMixin, LojaMixin
 from app.models.clientes import Cliente, ClienteCodigo, ClienteConta
 from app.models.locais import Local, LojaConfiguracao
@@ -22,6 +28,7 @@ from app.models.servicos import Servico, ServicoFuncionario, ServicoLocal, Servi
 __all__ = [
     'Agendamento',
     'AgendamentoMaterial',
+    'AgendamentoPagamento',
     'Auditoria',
     'Base',
     'BloqueioAgenda',

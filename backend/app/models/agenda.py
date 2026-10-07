@@ -1,4 +1,4 @@
-"""Jornadas, bloqueios e agendamentos (estrutura.md, 2.5, 2.6, 2.13 e 2.14)."""
+"""Jornadas, bloqueios, agendamentos e pagamentos (estrutura.md, 2.5, 2.6, 2.13, 2.14 e 2.25)."""
 
 import uuid
 from datetime import datetime, time
@@ -8,7 +8,7 @@ from sqlalchemy import Numeric, SmallInteger, String, Text, Time
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import Base, IdMixin, LojaMixin, default_do_banco
-from app.models.enums import OrigemAgendamento, StatusAgendamento, pg_enum
+from app.models.enums import FormaPagamento, OrigemAgendamento, StatusAgendamento, pg_enum
 
 
 class PerfilHorario(IdMixin, LojaMixin, Base):
@@ -65,3 +65,15 @@ class AgendamentoMaterial(LojaMixin, Base):
     agendamento_id: Mapped[uuid.UUID] = mapped_column(primary_key=True)
     material_id: Mapped[uuid.UUID] = mapped_column(primary_key=True)
     quantidade: Mapped[Decimal] = mapped_column(Numeric(10, 2))
+
+
+class AgendamentoPagamento(IdMixin, LojaMixin, Base):
+    """Pagamento que concluiu o atendimento (AGE-26 a AGE-28). Um ativo por agendamento."""
+
+    __tablename__ = 'agendamento_pagamentos'
+
+    agendamento_id: Mapped[uuid.UUID]
+    forma: Mapped[FormaPagamento] = mapped_column(pg_enum(FormaPagamento, 'forma_pagamento'))
+    valor: Mapped[Decimal] = mapped_column(Numeric(10, 2))
+    pago_em: Mapped[datetime] = default_do_banco()  # hora do servidor (GER-17)
+    criado_por: Mapped[uuid.UUID | None] = default_do_banco()

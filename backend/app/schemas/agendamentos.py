@@ -1,4 +1,4 @@
-"""Agendamentos, listas de apoio e histórico do cliente (estrutura.md, 2.13 e 2.14)."""
+"""Agendamentos, pagamento, listas de apoio e histórico do cliente (estrutura.md, 2.13, 2.14 e 2.25)."""
 
 from datetime import datetime
 from decimal import Decimal
@@ -7,7 +7,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field, field_validator
 
-from app.models.enums import OrigemAgendamento, StatusAgendamento, TipoLocal
+from app.models.enums import FormaPagamento, OrigemAgendamento, StatusAgendamento, TipoLocal
 from app.schemas.clientes import ClienteSaida
 from app.schemas.comum import (
     LISTA_MAX,
@@ -77,6 +77,21 @@ class MateriaisEntrada(Entrada):
         return materiais
 
 
+class PagamentoEntrada(Entrada):
+    """Registrar o pagamento conclui o atendimento (AGE-26, AGE-27)."""
+
+    forma: FormaPagamento
+    valor: Dinheiro = Field(description='De 0 (cortesia) a 99.999.999,99, no máximo 2 casas')
+
+
+class PagamentoSaida(BaseModel):
+    id: UUID
+    forma: FormaPagamento
+    valor: DecimalSaida
+    pago_em: datetime = Field(description='Hora do servidor, no fuso da loja')
+    registrado_por_nome: str | None = Field(description='Funcionário que registrou')
+
+
 class MaterialUsadoSaida(BaseModel):
     material_id: UUID
     nome: str
@@ -108,6 +123,10 @@ class AgendamentoSaida(Controle):
     motivo_cancelamento: str | None
     criado_por: UUID | None
     materiais: list[MaterialUsadoSaida] | None = Field(default=None, description='Só no detalhe')
+    pagamento: PagamentoSaida | None = Field(
+        default=None,
+        description='Pagamento ativo (só em concluído). Nulo nos demais e nos concluídos antigos (AGE-29)',
+    )
 
 
 # --- Listas de apoio ---------------------------------------------------------------------------

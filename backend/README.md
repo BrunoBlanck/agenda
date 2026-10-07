@@ -89,7 +89,7 @@ e vice-versa (401). Loja suspensa ou cancelada recebe 403 (menos na sessão de s
 | Serviços | `GET/POST servicos`, `GET/PUT/DELETE servicos/{id}` (com profissionais, locais e materiais), `GET servicos/opcoes` (profissionais, locais e materiais ativos para o formulário; escrita) | `servicos` |
 | Locais | `GET/POST locais`, `GET/PUT locais/{id}`, `GET/PUT locais/rotulos` | `locais` |
 | Materiais | `GET/POST materiais`, `GET/PUT/DELETE materiais/{id}`, `GET/POST materiais/{id}/movimentacoes`, `GET/POST categorias-material`, `PUT/DELETE categorias-material/{id}` | `materiais` |
-| Agendamentos | `GET/POST agendamentos`, `GET/PUT/DELETE agendamentos/{id}`, `POST agendamentos/{id}/status`, `POST .../aceitar`, `POST .../recusar`, `PUT .../materiais` | `agenda_propria` / `agenda_equipe` |
+| Agendamentos | `GET/POST agendamentos`, `GET/PUT/DELETE agendamentos/{id}`, `POST agendamentos/{id}/status`, `POST .../pagamento` (concluir, ver "Pagamento do atendimento"), `POST .../aceitar`, `POST .../recusar`, `PUT .../materiais` | `agenda_propria` / `agenda_equipe` |
 | Apoio ao formulário | `GET apoio/agendamento`, `GET apoio/clientes?busca=`, `GET apoio/disponibilidade` | escrita na agenda |
 | Filtros da agenda | `GET apoio/filtros-agenda` (`so_propria`, profissionais e locais, inclusive inativos) | leitura na agenda |
 | Agenda | `GET agenda?inicio=&fim=&funcionario_id=` (semana, mês ou dia) | `agenda_propria` / `agenda_equipe` |
@@ -541,6 +541,32 @@ Especificação: [`docs/funcionalidades/notificacoes.md`](../docs/funcionalidade
   "Informe a senha de novo ao trocar o servidor ou o usuário."): a senha salva nunca vai para outra conta.
   A consulta ao DNS do servidor (produção) só acontece para quem tem escrita em `config_loja` (conferida
   numa sessão curta, já fechada) e antes de abrir a transação da requisição.
+
+### Pagamento do atendimento (AGE-26 a AGE-29, SIT-26)
+
+Tabela `agendamento_pagamentos` (migração 0009, `estrutura.md` 2.25). Regras em `app/services/agendamentos.py`
+(`registrar_pagamento`, `mudar_status`, `pagamentos_ativos`).
+
+- **`POST /api/loja/agendamentos/{id}/pagamento`** `{"forma": "credito"|"debito"|"dinheiro"|"pix", "valor": 50}`
+  é a **única** forma de concluir: grava o pagamento, muda para `concluido` e dá a baixa de materiais na mesma
+  transação, com o agendamento travado (`FOR UPDATE`). Permissão igual à de `/status` (escrita na agenda e
+  poder alterar aquele agendamento). Resposta 200: o agendamento (detalhe, com materiais).
+  - 409 "Este atendimento já está pago." (já concluído, inclusive concluído antigo sem pagamento; também
+    quando o índice único `agendamento_pagamentos_ativo_uk` recusa um segundo pagamento ativo);
+    409 `Não é possível passar de "<rótulo>" para "Concluído".` (só a partir de `confirmado`);
+    404 "Agendamento não encontrado."; 403 "Você só pode alterar os seus próprios agendamentos." ou
+    "Você só tem permissão de leitura aqui."; 422 com `erros[]` em `forma` ("Opção inválida.") e `valor`
+    ("O valor deve ser maior ou igual a 0.", "Use no máximo 2 casas decimais.", "Valor fora do limite
+    permitido.", "Informe um número.").
+- **`POST .../status` e `PUT .../{id}` com `status = concluido`:** 422 "Para concluir o atendimento, registre
+  o pagamento." (antes de olhar a transição, mesmo se já estiver concluído).
+- **Reabrir** um concluído (Administrador, por `/status` ou `PUT`) exclui logicamente o pagamento ativo junto
+  com o estorno dos materiais; concluir de novo exige outro pagamento.
+- **`AgendamentoSaida.pagamento`** (lista, detalhe, agenda, início, histórico e respostas de escrita):
+  `{"id", "forma", "valor" (número), "pago_em" (fuso da loja), "registrado_por_nome" (string ou null)}` ou
+  `null` (não concluído, ou concluído antigo sem pagamento). Uma consulta para a página inteira.
+- **Site, Minha conta:** concluído com pagamento mostra "Concluído · pago no Pix · R$ 50,00" ("no crédito",
+  "no débito", "em dinheiro", "no Pix"); sem pagamento, só "Concluído". Nunca quem registrou nem a hora.
 
 ## Limite de requisições
 

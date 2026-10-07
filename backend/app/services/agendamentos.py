@@ -8,12 +8,15 @@
 - Sem conflito de horário do profissional (EXCLUDE no banco, mensagem traduzida em app/erros.py).
 - Módulo Serviços desligado: agendamento sem serviço, com duração e preço manuais.
 - Materiais do serviço copiados para agendamento_materiais; baixa no estoque ao concluir.
+- Concluir = registrar o pagamento (AGE-26): só ``registrar_pagamento`` leva a ``concluido``, gravando o
+  pagamento, o status e a baixa de materiais na mesma transação. Reabrir exclui o pagamento (AGE-28).
 
 Visibilidade (2.13): leitura em Agenda da equipe vê todos; só Minha agenda vê os próprios.
 Escrita segue a mesma divisão (useAcesso.js: agenda.ver / agenda.editar).
 """
 
 from datetime import datetime, timedelta
+from decimal import Decimal
 from uuid import UUID
 
 from fastapi import HTTPException, status
@@ -24,6 +27,7 @@ from app.auth.dependencias import ContextoLoja
 from app.models import (
     Agendamento,
     AgendamentoMaterial,
+    AgendamentoPagamento,
     Cliente,
     Funcionario,
     Local,
@@ -33,11 +37,12 @@ from app.models import (
     ServicoLocal,
     ServicoMaterial,
 )
-from app.models.enums import NivelAcesso, OrigemAgendamento, StatusAgendamento, TipoLocal
-from app.schemas.agendamentos import AgendamentoEntrada, AgendamentoSaida, MaterialUsadoSaida
+from app.models.enums import FormaPagamento, NivelAcesso, OrigemAgendamento, StatusAgendamento, TipoLocal
+from app.schemas.agendamentos import AgendamentoEntrada, AgendamentoSaida, MaterialUsadoSaida, PagamentoSaida
 from app.services.comum import (
     com_autor,
     conflito,
+    excluir,
     fuso,
     invalido,
     nao_encontrado,
@@ -56,6 +61,8 @@ from app.services.notificacoes import (
 
 S = StatusAgendamento
 MSG_404 = 'Agendamento não encontrado.'
+MSG_CONCLUIR_PELO_PAGAMENTO = 'Para concluir o atendimento, registre o pagamento.'
+MSG_JA_PAGO = 'Este atendimento já está pago.'
 
 ROTULOS = {
     S.pendente: 'Aguardando aceite',
@@ -69,7 +76,8 @@ ROTULOS = {
 LIBERAM_HORARIO = (S.cancelado, S.nao_compareceu)
 FINAIS = frozenset({S.concluido, S.cancelado, S.nao_compareceu})
 ATIVOS = (S.pendente, S.agendado, S.confirmado)
-# Fluxo de status (estrutura.md, 2.13). Dos finais só sai o Administrador, reabrindo.
+# Fluxo de status (estrutura.md, 2.13). Dos finais só sai o Administrador, reabrindo. A ida a
+# ``concluido`` só acontece por ``registrar_pagamento`` (AGE-26), que também segue esta tabela.
 TRANSICOES: dict[StatusAgendamento, frozenset[StatusAgendamento]] = {
     S.pendente: frozenset({S.confirmado, S.cancelado}),
     S.agendado: frozenset({S.confirmado, S.cancelado, S.nao_compareceu}),
@@ -133,6 +141,15 @@ def loja_do_aviso(ctx: ContextoLoja) -> LojaAviso:
 def mudar_status(
     ctx: ContextoLoja, ag: Agendamento, novo: StatusAgendamento, motivo: str | None = None
 ) -> None:
+    """Muda o status pelas rotas de status, aceite, recusa e edição. Concluir só pagando (AGE-26)."""
+    if novo == S.concluido:
+        raise invalido(MSG_CONCLUIR_PELO_PAGAMENTO)
+    _aplicar_status(ctx, ag, novo, motivo)
+
+
+def _aplicar_status(
+    ctx: ContextoLoja, ag: Agendamento, novo: StatusAgendamento, motivo: str | None = None
+) -> None:
     atual = ag.status
     if novo == atual:
         if novo == S.cancelado and motivo:
@@ -147,6 +164,7 @@ def mudar_status(
             raise proibido(f'Só o Administrador pode reabrir um agendamento "{ROTULOS[atual]}".')
         if atual == S.concluido:
             estornar_materiais(ctx.db, ctx.loja_id, ag.id)
+            _excluir_pagamento(ctx, ag)
         ag.motivo_cancelamento = None
     elif novo not in TRANSICOES[atual]:
         raise conflito(f'Não é possível passar de "{ROTULOS[atual]}" para "{ROTULOS[novo]}".')
@@ -160,6 +178,35 @@ def mudar_status(
         baixar_materiais(ctx.db, ctx.loja_id, ag.id)
     if atual not in FINAIS:  # NOT-02: a reabertura não avisa o cliente
         avisar_mudanca_de_status(ctx.db, loja_do_aviso(ctx), ag, atual)
+
+
+# --- Pagamento (AGE-26 a AGE-28) -----------------------------------------------------------------
+
+
+def registrar_pagamento(ctx: ContextoLoja, ag: Agendamento, forma: FormaPagamento, valor: Decimal) -> None:
+    """Grava o pagamento e conclui o atendimento na mesma transação, com a baixa de materiais (AGE-20).
+
+    O chamador já travou o agendamento (FOR UPDATE): dois registros simultâneos ficam em fila e o segundo
+    vê o atendimento concluído (409). O índice único ``agendamento_pagamentos_ativo_uk`` é a última
+    barreira contra dois pagamentos ativos.
+    """
+    if ag.status == S.concluido:
+        raise conflito(MSG_JA_PAGO)
+    if S.concluido not in TRANSICOES.get(ag.status, frozenset()):
+        raise conflito(f'Não é possível passar de "{ROTULOS[ag.status]}" para "{ROTULOS[S.concluido]}".')
+    ctx.db.add(AgendamentoPagamento(loja_id=ctx.loja_id, agendamento_id=ag.id, forma=forma, valor=valor))
+    ctx.db.flush()
+    _aplicar_status(ctx, ag, S.concluido)
+
+
+def _excluir_pagamento(ctx: ContextoLoja, ag: Agendamento) -> None:
+    """AGE-28: reabrir exclui logicamente o pagamento ativo (o histórico fica na auditoria)."""
+    for pagamento in ctx.db.scalars(
+        select(AgendamentoPagamento).where(
+            AgendamentoPagamento.loja_id == ctx.loja_id, AgendamentoPagamento.agendamento_id == ag.id
+        )
+    ):
+        excluir(ctx.db, pagamento)
 
 
 # --- Criação e edição ----------------------------------------------------------------------------
@@ -216,6 +263,8 @@ def salvar(ctx: ContextoLoja, dados: AgendamentoEntrada, atual: Agendamento | No
             raise invalido('Um novo agendamento começa como "Agendado" ou "Confirmado".')
     else:
         exigir_edicao(ctx, atual)
+        if dados.status == S.concluido:
+            raise invalido(MSG_CONCLUIR_PELO_PAGAMENTO)
         if atual.status in FINAIS:
             if dados.status is None or dados.status in FINAIS:
                 raise conflito(
@@ -429,6 +478,7 @@ def descrever(
                     quantidade=quantidade,
                 )
             )
+    pagamentos = pagamentos_ativos(ctx, [a.id for a in agendamentos if a.status == S.concluido])
 
     saida = []
     for a in agendamentos:
@@ -447,8 +497,40 @@ def descrever(
             item.link = a.link_reuniao or (link_padrao if item.local_tipo == TipoLocal.online else None)
         if com_materiais:
             item.materiais = materiais.get(a.id, [])
+        item.pagamento = pagamentos.get(a.id)
         saida.append(item)
     return com_autor(db, loja_id, saida)
+
+
+def pagamentos_ativos(ctx: ContextoLoja, agendamento_ids: list[UUID]) -> dict[UUID, PagamentoSaida]:
+    """Pagamento ativo de cada agendamento, com o nome de quem registrou, numa consulta só (PER-01)."""
+    if not agendamento_ids:
+        return {}
+    zona = fuso(ctx.loja.fuso_horario)
+    linhas = ctx.db.execute(
+        select(AgendamentoPagamento, Funcionario.nome)
+        .outerjoin(
+            Funcionario,
+            (Funcionario.id == AgendamentoPagamento.criado_por)
+            & (Funcionario.loja_id == AgendamentoPagamento.loja_id),
+        )
+        .where(
+            AgendamentoPagamento.loja_id == ctx.loja_id,
+            AgendamentoPagamento.agendamento_id.in_(agendamento_ids),
+            AgendamentoPagamento.excluido_em.is_(None),
+        )
+        .execution_options(incluir_excluidos=True)  # o nome de quem registrou, mesmo excluído depois
+    )
+    return {
+        pagamento.agendamento_id: PagamentoSaida(
+            id=pagamento.id,
+            forma=pagamento.forma,
+            valor=pagamento.valor,
+            pago_em=pagamento.pago_em.astimezone(zona),
+            registrado_por_nome=nome,
+        )
+        for pagamento, nome in linhas
+    }
 
 
 def ocupa_intervalo(inicio: datetime, fim: datetime) -> list[ColumnElement[bool]]:

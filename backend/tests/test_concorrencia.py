@@ -43,18 +43,35 @@ def _luvas(engine, clinica):
     return _um(engine, 'SELECT quantidade_atual FROM materiais WHERE id = :i', i=clinica.luvas)
 
 
+def _pagamentos_ativos(engine, agendamento_id) -> int:
+    return _um(
+        engine,
+        'SELECT count(*) FROM agendamento_pagamentos WHERE agendamento_id = :i AND excluido_em IS NULL',
+        i=agendamento_id,
+    )
+
+
+PIX = {'forma': 'pix', 'valor': 200}
+
+
 # --- A2: baixa e estorno de estoque ---------------------------------------------------------------
 
 
-def test_concluir_ao_mesmo_tempo_baixa_o_estoque_uma_vez(cliente, clinica, engine_dono, servidor):
+def test_pagar_ao_mesmo_tempo_grava_um_pagamento_e_baixa_o_estoque_uma_vez(
+    cliente, clinica, engine_dono, servidor
+):
+    """AGE-26/27: o FOR UPDATE põe os registros em fila; o segundo vê o atendimento pago (409)."""
     h = clinica.lt.h_admin
     ag = cliente.post(f'{API}/agendamentos', json=clinica.dados(status='confirmado'), headers=h).json()
-    url = f'{API}/agendamentos/{ag["id"]}/status'
+    url = f'{API}/agendamentos/{ag["id"]}/pagamento'
 
-    respostas = rajada(servidor, [('POST', url, {'status': 'concluido'}, h)] * N)
+    respostas = rajada(servidor, [('POST', url, PIX, h)] * N)
 
-    assert {r.status_code for r in respostas} == {200}  # o repetido é ignorado (mesmo status)
-    assert {r.json()['status'] for r in respostas} == {'concluido'}
+    assert sorted(r.status_code for r in respostas) == [200] + [409] * (N - 1)
+    assert {r.json()['detail'] for r in respostas if r.status_code == 409} == {
+        'Este atendimento já está pago.'
+    }
+    assert _pagamentos_ativos(engine_dono, ag['id']) == 1
     assert _saidas(engine_dono, ag['id']) == 1
     assert _luvas(engine_dono, clinica) == 8  # 10 - 2 do serviço Limpeza, uma vez só
 
@@ -63,33 +80,36 @@ def test_reabrir_ao_mesmo_tempo_estorna_uma_vez(cliente, clinica, engine_dono, s
     h = clinica.lt.h_admin
     ag = cliente.post(f'{API}/agendamentos', json=clinica.dados(status='confirmado'), headers=h).json()
     url = f'{API}/agendamentos/{ag["id"]}/status'
-    assert cliente.post(url, json={'status': 'concluido'}, headers=h).status_code == 200
+    assert cliente.post(f'{API}/agendamentos/{ag["id"]}/pagamento', json=PIX, headers=h).status_code == 200
 
     respostas = rajada(servidor, [('POST', url, {'status': 'confirmado'}, h)] * N)
 
     assert {r.status_code for r in respostas} == {200}
     assert _estornos(engine_dono, ag['id']) == 1
     assert _luvas(engine_dono, clinica) == 10
+    assert _pagamentos_ativos(engine_dono, ag['id']) == 0  # AGE-28
 
 
 def test_concluir_e_cancelar_ao_mesmo_tempo_ficam_coerentes(cliente, clinica, engine_dono, servidor):
     h = clinica.lt.h_admin
     ag = cliente.post(f'{API}/agendamentos', json=clinica.dados(status='confirmado'), headers=h).json()
-    url = f'{API}/agendamentos/{ag["id"]}/status'
-    concluir = ('POST', url, {'status': 'concluido'}, h)
-    cancelar = ('POST', url, {'status': 'cancelado', 'motivo_cancelamento': 'Desistiu'}, h)
+    base = f'{API}/agendamentos/{ag["id"]}'
+    concluir = ('POST', f'{base}/pagamento', PIX, h)
+    cancelar = ('POST', f'{base}/status', {'status': 'cancelado', 'motivo_cancelamento': 'Desistiu'}, h)
 
     respostas = rajada(servidor, [concluir, cancelar] * (N // 2))
 
     final = _um(engine_dono, 'SELECT status::text FROM agendamentos WHERE id = :i', i=ag['id'])
-    perdedor = 'cancelado' if final == 'concluido' else 'concluido'
-    recusadas = [r for r in respostas if r.status_code == 409]
-    assert len(recusadas) == N // 2  # todas as do status que perdeu a corrida
-    assert all(perdedor in r.request.content.decode() for r in recusadas)
-    if final == 'concluido':
+    pagamentos = [r.status_code for r in respostas if r.request.url.path.endswith('/pagamento')]
+    cancelamentos = [r.status_code for r in respostas if r.request.url.path.endswith('/status')]
+    if final == 'concluido':  # um pagamento passou; os outros e todos os cancelamentos foram recusados
+        assert (sorted(pagamentos), set(cancelamentos)) == ([200] + [409] * (N // 2 - 1), {409})
         assert (_saidas(engine_dono, ag['id']), _luvas(engine_dono, clinica)) == (1, 8)
-    else:
+        assert _pagamentos_ativos(engine_dono, ag['id']) == 1
+    else:  # o cancelamento repetido é ignorado (mesmo status); nenhum pagamento passa
+        assert (set(pagamentos), set(cancelamentos)) == ({409}, {200})
         assert (_saidas(engine_dono, ag['id']), _luvas(engine_dono, clinica)) == (0, 10)
+        assert _pagamentos_ativos(engine_dono, ag['id']) == 0
 
 
 def test_atendimentos_com_os_mesmos_materiais_concluidos_ao_mesmo_tempo(
@@ -117,9 +137,7 @@ def test_atendimentos_com_os_mesmos_materiais_concluidos_ao_mesmo_tempo(
         )
         ids.append(ag['id'])
 
-    respostas = rajada(
-        servidor, [('POST', f'{API}/agendamentos/{i}/status', {'status': 'concluido'}, h) for i in ids]
-    )
+    respostas = rajada(servidor, [('POST', f'{API}/agendamentos/{i}/pagamento', PIX, h) for i in ids])
 
     assert {r.status_code for r in respostas} == {200}
     assert _luvas(engine_dono, clinica) == 10 - len(ids)
