@@ -88,12 +88,12 @@ const nomeServico = (s) => (s.ativo === false ? `${s.nome} (inativo)` : s.nome)
 function AgendamentosDoLocal({ localId, comServicos }) {
   const ag = useAgendamentosDoLocal(localId)
   const colunas = [
-    { title: 'Data', dataIndex: 'data', render: dataBR },
-    { title: 'Horário', dataIndex: 'hora', render: horaCurta },
-    { title: 'Cliente', dataIndex: 'clienteNome' },
+    { title: 'Data', dataIndex: 'data', cartao: 'subtitulo', render: dataBR },
+    { title: 'Horário', dataIndex: 'hora', cartao: 'subtitulo', render: horaCurta },
+    { title: 'Cliente', dataIndex: 'clienteNome', cartao: 'titulo' },
     { title: 'Profissional', dataIndex: 'funcionarioNome' },
     comServicos && { title: 'Serviço', dataIndex: 'servicoNome' },
-    { title: 'Situação', dataIndex: 'status', render: (s) => <EtiquetaStatus status={s} /> },
+    { title: 'Situação', dataIndex: 'status', cartao: 'etiqueta', render: (s) => <EtiquetaStatus status={s} /> },
   ].filter(Boolean)
 
   return (
@@ -167,7 +167,7 @@ export default function Locais() {
       align: 'right',
       render: (n) => (n ? <Etiqueta tom="tinta">{plural(n, 'agendamento', 'agendamentos')}</Etiqueta> : <span className="texto-apoio">Nenhum</span>),
     },
-    { title: 'Situação', dataIndex: 'ativo', render: (ativo) => <EtiquetaSituacao ativo={ativo} /> },
+    { title: 'Situação', dataIndex: 'ativo', cartao: 'etiqueta', render: (ativo) => <EtiquetaSituacao ativo={ativo} /> },
   ].filter(Boolean)
 
   return (
@@ -175,7 +175,7 @@ export default function Locais() {
       titulo={nomePlural}
       descricao={
         verAgendamentos
-          ? `Onde o atendimento acontece: salas, cadeiras, macas ou links online. Abra a linha para ver os próximos agendamentos de cada ${singular.toLowerCase()}.`
+          ? 'Onde o atendimento acontece: salas, cadeiras, macas ou links online. Os próximos agendamentos de cada um aparecem na própria lista, ao expandir o item.'
           : 'Onde o atendimento acontece: salas, cadeiras, macas ou links online.'
       }
       item={singular.toLowerCase()}
@@ -189,7 +189,10 @@ export default function Locais() {
       antes={<RotuloLocais somenteLeitura={somenteLeitura} />}
       expandable={
         verAgendamentos
-          ? { expandedRowRender: (l) => <AgendamentosDoLocal localId={l.id} comServicos={comServicos} /> }
+          ? {
+              expandedRowRender: (l) => <AgendamentosDoLocal localId={l.id} comServicos={comServicos} />,
+              rotuloCartao: 'Próximos agendamentos',
+            }
           : undefined
       }
       valoresNovo={{ tipo: 'presencial', ativo: true, servicoIds: [] }}

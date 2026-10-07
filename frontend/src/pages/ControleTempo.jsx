@@ -140,7 +140,8 @@ export default function ControleTempo() {
 
   const colunas = [
     verEquipe && { title: 'Funcionário', dataIndex: 'funcionarioNome', render: (n) => <strong>{n}</strong> },
-    { title: 'Data', dataIndex: 'data', render: dataBR },
+    // No cartão: com a equipe, o nome é o título e a data vai embaixo; só os meus, a data é o título
+    { title: 'Data', dataIndex: 'data', cartao: verEquipe ? 'subtitulo' : 'titulo', render: dataBR },
     { title: 'Entrada', dataIndex: 'entradaHora', align: 'right', render: horaCurta },
     {
       title: 'Saída',
@@ -152,6 +153,7 @@ export default function ControleTempo() {
     {
       title: 'Origem',
       dataIndex: 'origem',
+      cartao: 'etiqueta',
       render: (o, p) =>
         o === 'manual' ? (
           <Tooltip title={[p.justificativa, p.editadoPorNome && `(por ${p.editadoPorNome})`].filter(Boolean).join(' ') || undefined}>
@@ -165,13 +167,22 @@ export default function ControleTempo() {
           <span className="texto-apoio">Registro normal</span>
         ),
     },
+    // No desktop a justificativa fica na dica da etiqueta "Corrigido"; no cartão (toque), aparece escrita
+    {
+      title: 'Justificativa',
+      key: 'justificativa',
+      soNoCartao: true,
+      cartao: 'bloco',
+      render: (_, p) =>
+        p.origem === 'manual' && [p.justificativa, p.editadoPorNome && `(por ${p.editadoPorNome})`].filter(Boolean).join(' '),
+    },
     corrigir && {
       title: <span className="sr-only">Ações</span>,
       key: 'acoes',
       width: 56,
       align: 'right',
       render: (_, p) => (
-        <Tooltip title="Corrigir">
+        <Tooltip title="Corrigir" rootClassName="dica-icone">
           <Button type="text" size="small" icon={<EditOutlined />} aria-label="Corrigir registro" onClick={() => painel.abrir(p)} />
         </Tooltip>
       ),
@@ -180,7 +191,7 @@ export default function ControleTempo() {
 
   const colunasTotais = [
     verEquipe && { title: 'Funcionário', dataIndex: 'funcionarioNome', render: (n) => <strong>{n}</strong> },
-    { title: 'Data', dataIndex: 'data', render: dataBR },
+    { title: 'Data', dataIndex: 'data', cartao: verEquipe ? 'subtitulo' : 'titulo', render: dataBR },
     { title: 'Horas trabalhadas', dataIndex: 'minutos', align: 'right', render: duracaoTexto },
   ].filter(Boolean)
 

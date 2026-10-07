@@ -87,13 +87,14 @@ export default function Dashboard() {
       title: 'Horário',
       key: 'hora',
       width: 120,
+      cartao: 'subtitulo',
       render: (_, a) => (
         <span className={a.hora < horaAgora ? 'texto-apoio sem-quebra' : 'sem-quebra'}>
           {horaCurta(a.hora)} às {horaCurta(fimDe(a))}
         </span>
       ),
     },
-    { title: 'Cliente', dataIndex: 'clienteNome', render: (nome) => <strong>{nome ?? '—'}</strong> },
+    { title: 'Cliente', dataIndex: 'clienteNome', cartao: 'titulo', render: (nome) => <strong>{nome ?? '—'}</strong> },
     comServicos && { title: 'Serviço', dataIndex: 'servicoNome', render: (nome) => nome ?? '—' },
     !soPropria && {
       title: 'Profissional',
@@ -104,7 +105,7 @@ export default function Dashboard() {
         </span>
       ),
     },
-    { title: 'Situação', dataIndex: 'status', render: (s) => <EtiquetaStatus status={s} /> },
+    { title: 'Situação', dataIndex: 'status', cartao: 'etiqueta', render: (s) => <EtiquetaStatus status={s} /> },
   ].filter(Boolean)
 
   const colunasPendentes = [
@@ -112,9 +113,10 @@ export default function Dashboard() {
       title: 'Quando',
       key: 'quando',
       width: 150,
+      cartao: 'subtitulo',
       render: (_, a) => (a.data ? `${capitalizar(lerData(a.data).format('ddd DD/MM'))}, ${horaCurta(a.hora)}` : '—'),
     },
-    { title: 'Cliente', dataIndex: 'clienteNome', render: (nome) => <strong>{nome ?? '—'}</strong> },
+    { title: 'Cliente', dataIndex: 'clienteNome', cartao: 'titulo', render: (nome) => <strong>{nome ?? '—'}</strong> },
     comServicos && { title: 'Serviço', dataIndex: 'servicoNome', render: (nome) => nome ?? '—' },
     !soPropria && { title: 'Profissional', dataIndex: 'funcionarioNome', render: (nome) => nome ?? '—' },
     {

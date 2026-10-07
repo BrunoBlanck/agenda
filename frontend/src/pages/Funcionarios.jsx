@@ -176,6 +176,7 @@ function PainelCargos({ open, onClose, cargos, somenteLeitura }) {
       title: 'Ativo',
       dataIndex: 'ativo',
       width: 72,
+      cartao: 'etiqueta',
       render: (ativo, c) =>
         somenteLeitura ? (
           <EtiquetaSituacao ativo={ativo} />
@@ -203,7 +204,7 @@ function PainelCargos({ open, onClose, cargos, somenteLeitura }) {
           cancelText="Cancelar"
           onConfirm={() => excluir(c)}
         >
-          <Tooltip title="Excluir">
+          <Tooltip title="Excluir" rootClassName="dica-icone">
             <Button type="text" size="small" danger icon={<DeleteOutlined />} disabled={ocupadoId === c.id} aria-label={`Excluir o cargo ${c.nome}`} />
           </Tooltip>
         </Popconfirm>
@@ -325,7 +326,7 @@ export default function Funcionarios() {
     },
     { title: 'E-mail (login)', dataIndex: 'email' },
     { title: 'Telefone', dataIndex: 'telefone', render: (t) => t ?? '—' },
-    { title: 'Situação', dataIndex: 'ativo', render: (ativo) => <EtiquetaSituacao ativo={ativo} /> },
+    { title: 'Situação', dataIndex: 'ativo', cartao: 'etiqueta', render: (ativo) => <EtiquetaSituacao ativo={ativo} /> },
   ]
 
   return (

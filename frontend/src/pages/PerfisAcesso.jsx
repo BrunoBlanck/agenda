@@ -101,18 +101,19 @@ export default function PerfisAcesso() {
       title: 'Área',
       key: 'recurso',
       render: (_, r) => (
-        <div className="recurso">
+        <span className="recurso">
           <strong>{r.nome}</strong>
           <span className="texto-apoio">
             {nomeModulo(r.modulo)}
             {!r.moduloAtivo && ' (módulo desligado nesta loja)'}
           </span>
-        </div>
+        </span>
       ),
     },
     {
       title: 'O que cada nível permite',
       key: 'descricao',
+      cartao: 'bloco',
       render: (_, r) =>
         r.leitura || r.escrita ? (
           <div className="recurso texto-ajuda">
@@ -131,6 +132,7 @@ export default function PerfisAcesso() {
       title: 'Nível',
       key: 'nivel',
       width: 250,
+      cartao: 'bloco',
       render: (_, r) => (
         <Segmented
           size="small"

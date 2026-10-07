@@ -183,7 +183,7 @@ export default function VisaoSemana({ dias, agendamentos, bloqueios, horaInicio,
                 // A continuação abre o agendamento no dia em que ele começa (é lá que o painel do dia o lista)
                 const diaDoAgendamento = continuacao ? dia.subtract(1, 'day') : dia
                 return (
-                  <Tooltip key={chaveEvento} title={<Resumo a={a} />}>
+                  <Tooltip key={chaveEvento} title={<Resumo a={a} />} rootClassName="dica-icone">
                     <button
                       type="button"
                       className={[

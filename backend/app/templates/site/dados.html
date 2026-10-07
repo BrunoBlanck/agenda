@@ -33,15 +33,15 @@
         {% endfor %}
         {% if 'nome' in campos %}
         <div class="campos-nome">
-{{ campo('nome', 'Nome', valores, erros, maximo=60, completar='given-name') }}
-{{ campo('sobrenome', 'Sobrenome', valores, erros, maximo=100, completar='family-name') }}
+{{ campo('nome', 'Nome', valores, erros, maximo=60, completar='given-name', atributos={'autocapitalize': 'words'}) }}
+{{ campo('sobrenome', 'Sobrenome', valores, erros, maximo=100, completar='family-name', atributos={'autocapitalize': 'words'}) }}
         </div>
         {% endif %}
         {% if 'telefone' in campos %}
 {{ campo('telefone', 'WhatsApp com DDD', valores, erros, tipo='tel', maximo=20, completar='tel', teclado='tel') }}
         {% endif %}
         {% if 'email' in campos %}
-{{ campo('email', 'E-mail', valores, erros, tipo='email', obrigatorio=False, maximo=254, completar='email') }}
+{{ campo('email', 'E-mail', valores, erros, tipo='email', obrigatorio=False, maximo=254, completar='email', atributos={'autocapitalize': 'none', 'spellcheck': 'false'}) }}
         {% endif %}
 {{ campo('observacoes', 'Observações', valores, erros, tipo='textarea', obrigatorio=False, maximo=500) }}
         <div class="armadilha" aria-hidden="true">
@@ -49,6 +49,8 @@
           <input id="campo-{{ armadilha }}" name="{{ armadilha }}" type="text" tabindex="-1" autocomplete="off">
         </div>
         <p class="nota">A {{ loja.nome_fantasia }} vai confirmar seu horário pelo WhatsApp.</p>
-        <button type="submit" class="botao botao-largo" data-enviando="Enviando…">Pedir agendamento</button>
+        <div class="acoes">
+          <button type="submit" class="botao botao-largo" data-enviando="Enviando…">Pedir agendamento</button>
+        </div>
       </form>
 {% endblock %}

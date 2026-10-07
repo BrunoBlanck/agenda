@@ -10,3 +10,4 @@ Uma especificação por funcionalidade (`<slug>.md`), escrita pelo agente `coord
 | [Site do consumidor: agendamento online](site-agendamento.md) | em desenvolvimento | feat/site-agendamento |
 | [Cores do site escolhidas pela loja](cores-site.md) | aprovada | feat/cores-site |
 | [Conta do cliente no site (login, meus agendamentos, remarcar, cancelar)](conta-cliente.md) | aprovada | feat/conta-cliente |
+| [Mobile first: site e painéis (DIR-004)](mobile-first.md) | aprovada | feat/mobile-first |

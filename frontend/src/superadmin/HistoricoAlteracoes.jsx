@@ -206,6 +206,7 @@ export default function HistoricoAlteracoes({ lojaId }) {
       title: 'Quando',
       dataIndex: 'criadoEm',
       width: 150,
+      cartao: 'subtitulo',
       render: (d) => lerDataHora(d)?.format('DD/MM/YYYY HH:mm') ?? '—',
     },
     {
@@ -219,10 +220,11 @@ export default function HistoricoAlteracoes({ lojaId }) {
         </span>
       ),
     },
-    { title: 'Operação', dataIndex: 'operacao', render: (o) => <EtiquetaOperacao operacao={o} /> },
+    { title: 'Operação', dataIndex: 'operacao', cartao: 'etiqueta', render: (o) => <EtiquetaOperacao operacao={o} /> },
     {
       title: 'Registro',
       key: 'registro',
+      cartao: 'titulo',
       render: (_, h) => (
         <span className="recurso">
           <span>{h.rotulo ?? '—'}</span>
@@ -235,6 +237,7 @@ export default function HistoricoAlteracoes({ lojaId }) {
     {
       title: 'O que mudou',
       key: 'mudancas',
+      cartao: 'bloco',
       render: (_, h) => {
         if (h.operacao !== 'alterar') return <span className="texto-apoio">{textoOperacao[h.operacao] ?? '—'}</span>
         if (!h.mudancas.length) return <span className="texto-apoio">Só dados de controle</span>
@@ -313,7 +316,8 @@ export default function HistoricoAlteracoes({ lojaId }) {
         }}
         vazio={vazio}
         expandable={{
-          rowExpandable: (h) => (h.operacao === 'alterar' ? h.mudancas.length > 0 : retrato(h).length > 0),
+          rotuloCartao: (h) => (h.operacao === 'alterar' ? 'Todas as mudanças' : 'Valores do registro'),
+          rowExpandable:(h) => (h.operacao === 'alterar' ? h.mudancas.length > 0 : retrato(h).length > 0),
           expandedRowRender: (h) =>
             h.operacao === 'alterar' ? (
               <Tabela
@@ -338,6 +342,8 @@ export default function HistoricoAlteracoes({ lojaId }) {
                   {
                     title: h.operacao === 'excluir' ? 'Valor ao excluir' : 'Valor',
                     dataIndex: 'valor',
+                    // No cartão o valor fica logo abaixo do nome do campo (sem repetir o rótulo "Valor")
+                    cartao: 'subtitulo',
                     render: (v, c) => formatarCampo(c.campo, v),
                   },
                 ]}

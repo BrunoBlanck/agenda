@@ -177,6 +177,7 @@ function Modulos({ lojaId }) {
       title: 'Situação',
       key: 'situacao',
       width: 170,
+      cartao: 'etiqueta',
       render: (_, m) =>
         m.opcional ? (
           <span className="recurso">
@@ -200,6 +201,7 @@ function Modulos({ lojaId }) {
     {
       title: 'Observação',
       key: 'observacao',
+      cartao: 'bloco',
       render: (_, m) =>
         m.opcional && (
           <Input
@@ -217,6 +219,7 @@ function Modulos({ lojaId }) {
       title: 'Expira em',
       key: 'expira',
       width: 170,
+      cartao: 'bloco',
       render: (_, m) =>
         m.opcional && (
           <DatePicker
@@ -316,7 +319,7 @@ function Funcionarios({ lojaId }) {
           <Etiqueta tom="contorno">{f.perfilNome ?? '—'}</Etiqueta>
         ),
     },
-    { title: 'Situação', dataIndex: 'ativo', render: (a) => <EtiquetaSituacao ativo={a} /> },
+    { title: 'Situação', dataIndex: 'ativo', cartao: 'etiqueta', render: (a) => <EtiquetaSituacao ativo={a} /> },
     {
       title: 'Criado por',
       dataIndex: 'criadoPor',
@@ -330,10 +333,10 @@ function Funcionarios({ lojaId }) {
       fixed: 'right',
       render: (_, f) => (
         <span className="acoes-linha">
-          <Tooltip title="Editar">
+          <Tooltip title="Editar" rootClassName="dica-icone">
             <Button type="text" size="small" icon={<EditOutlined />} aria-label="Editar" onClick={() => painel.abrir(f)} />
           </Tooltip>
-          <Tooltip title="Redefinir senha">
+          <Tooltip title="Redefinir senha" rootClassName="dica-icone">
             <Button type="text" size="small" icon={<KeyOutlined />} aria-label="Redefinir senha" onClick={() => painelSenha.abrir(f)} />
           </Tooltip>
         </span>

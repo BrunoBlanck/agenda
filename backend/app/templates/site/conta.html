@@ -37,7 +37,9 @@
         {% else %}
         <p class="vazio">Você não tem horários marcados.</p>
         {% endif %}
-        <a class="botao botao-largo" href="{{ agendar }}">Agendar novo horário</a>
+        <div class="acoes">
+          <a class="botao botao-largo" href="{{ agendar }}">Agendar novo horário</a>
+        </div>
       </section>
       <section class="secao-conta" id="historico" aria-labelledby="historico-titulo">
         <h3 class="rotulo" id="historico-titulo">Histórico</h3>

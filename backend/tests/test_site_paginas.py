@@ -10,6 +10,7 @@ import html
 import re
 import threading
 from datetime import UTC, datetime, time, timedelta
+from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
 from uuid import uuid4
 from zoneinfo import ZoneInfo
@@ -125,6 +126,16 @@ def primeiro_horario(texto: str) -> str:
     return link(texto, f'{LOJA}/agendar/dados?')
 
 
+def opcoes_de_profissional(texto: str) -> list[tuple[dict[str, str], bool, str]]:
+    """Opções de profissional do passo 2 (links): (parâmetros da URL, marcada?, nome)."""
+    return [
+        (parametros(html.unescape(url)), bool(marcada), html.unescape(nome))
+        for url, marcada, nome in re.findall(
+            r'<a class="chip" href="([^"]+)"( aria-current="true")?>([^<]+)</a>', texto
+        )
+    ]
+
+
 # --- Fluxo completo sem JavaScript ----------------------------------------------------------------
 
 
@@ -143,7 +154,14 @@ def test_fluxo_completo_sem_js(cliente, site, engine_dono):
     assert 'Limpeza · 60 min' in passo2
     assert len(re.findall(r'class="dia[" ]', passo2)) == 31
     assert passo2.count('aria-current="date"') == 1
-    assert '<option value="">Qualquer profissional</option>' in passo2
+    opcoes = opcoes_de_profissional(passo2)
+    assert opcoes[0][1:] == (True, 'Qualquer profissional')  # sem escolha: qualquer um, marcado
+    assert [nome for _, marcada, nome in opcoes[1:] if not marcada] == ['Admin', 'Profissional']
+    marcado = re.search(r'<a class="dia" href="([^"]+)"[^>]*aria-current="date"', passo2).group(1)
+    for url, _, _ in opcoes:  # trocar de profissional mantém o serviço e o dia marcado
+        assert url['servico'] == site.limpeza
+        assert url['dia'] == parametros(html.unescape(marcado))['dia']
+    assert 'profissional' not in opcoes[0][0]
 
     horario = primeiro_horario(passo2)
     escolha = parametros(horario)
@@ -226,15 +244,19 @@ def test_qualquer_profissional_mostra_quem_atende(cliente, site):
 def test_escolher_um_profissional_filtra_os_horarios(cliente, site):
     prof = str(site.lt.prof.id)
     passo2 = passo_horarios(cliente, site, profissional=prof)
-    assert f'<option value="{prof}" selected>Profissional</option>' in passo2
+    opcoes = opcoes_de_profissional(passo2)
+    assert [(url.get('profissional'), nome) for url, marcada, nome in opcoes if marcada] == [
+        (prof, 'Profissional')
+    ]
+    assert not opcoes[0][1]  # "Qualquer profissional" deixa de ser a marcada
     urls = [h for h in hrefs(passo2) if h.startswith(f'{LOJA}/agendar/dados?')]
     assert urls
     assert all(parametros(u)['profissional'] == prof for u in urls)
     assert '<span>Profissional</span>' not in passo2  # com um profissional escolhido, não repete o nome
     # Os links dos dias mantêm o profissional escolhido
-    dias = [h for h in hrefs(passo2) if '&dia=' in h]
-    assert dias
-    assert all(parametros(d)['profissional'] == prof for d in dias)
+    dias = [h for h in hrefs(passo2) if h.endswith('#horarios')]
+    assert len(dias) == len(re.findall(r'<a class="dia" ', passo2))
+    assert all(parametros(d.removesuffix('#horarios'))['profissional'] == prof for d in dias)
 
 
 def test_faixa_de_dias_marca_o_dia_escolhido_e_os_dias_sem_horario(cliente, site, engine_dono):
@@ -281,7 +303,11 @@ def test_profissional_invalido_mostra_qualquer_profissional_com_aviso(cliente, s
     for valor in ('abc', str(uuid4()), str(site.lt.recepcao.id)):  # Recepção não faz a Limpeza
         passo2 = passo_horarios(cliente, site, profissional=valor)
         assert 'Esse profissional não atende este serviço.' in passo2
-        assert '<option value="" selected' not in passo2
+        # Só "Qualquer profissional" fica marcada; o valor inválido não volta na página
+        assert [nome for _, marcada, nome in opcoes_de_profissional(passo2) if marcada] == [
+            'Qualquer profissional'
+        ]
+        assert f'profissional={valor}' not in passo2
         assert primeiro_horario(passo2)
 
 
@@ -297,7 +323,9 @@ def test_sem_modulo_servicos_a_pagina_inicial_ja_mostra_os_horarios(cliente, sit
     assert '>Serviço<' not in inicio  # indicador sem o passo "Serviço"
     assert '<li aria-current="step"><span class="passo-num" aria-hidden="true">1</span>' in inicio
     # Recepção também atende (todos com jornada)
-    assert '<option value="' + str(site.lt.recepcao.id) + '">Recepção</option>' in inicio
+    recepcao = [url for url, _, nome in opcoes_de_profissional(inicio) if nome == 'Recepção']
+    assert [url['profissional'] for url in recepcao] == [str(site.lt.recepcao.id)]
+    assert 'servico' not in recepcao[0]
 
     horario = primeiro_horario(inicio)
     assert 'servico' not in parametros(horario)
@@ -886,6 +914,58 @@ def test_cabecalhos_e_indexacao(cliente, site):
     assert js is not None
     assert 'style=' not in inicio.text  # CSP sem estilo embutido
     assert '<script>' not in inicio.text
+
+
+VIEWPORT = '<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">'
+
+
+def test_paginas_do_fluxo_prontas_para_o_celular(cliente, site):
+    """DIR-004: área segura, cor da barra do navegador, passo compacto e ação principal na barra."""
+    passo1 = pagina_html(cliente.get(LOJA))
+    passo2 = passo_horarios(cliente, site)
+    passo3 = pagina_html(cliente.get(primeiro_horario(passo2)))
+    envio = enviar(cliente, {**ocultos(passo3), **CLIENTE})
+    pronto = pagina_html(cliente.get(envio.headers['location']))
+    nomes = ('Serviço', 'Horário', 'Seus dados', 'Pronto')
+    for numero, (nome, texto) in enumerate(zip(nomes, (passo1, passo2, passo3, pronto), strict=True), 1):
+        assert VIEWPORT in texto
+        assert '<meta name="theme-color" content="#0d4b4f" media="(prefers-color-scheme: light)">' in texto
+        assert '<meta name="theme-color" content="#0a3437" media="(prefers-color-scheme: dark)">' in texto
+        assert f'Passo {numero} de 4 · <strong>{nome}</strong>' in texto
+        assert texto.count('aria-current="step"') == 1
+        assert 'style=' not in texto
+        assert '/painel' not in texto  # DIR-003
+    # A ação principal do passo 3 fica na barra de ação (presa ao pé da tela no celular)
+    assert re.search(r'<div class="acoes">\s*<button type="submit"[^>]*>Pedir agendamento</button>', passo3)
+    # Teclado e preenchimento certos em cada campo
+    assert 'type="tel" value="" required maxlength="20" autocomplete="tel" inputmode="tel"' in passo3
+    assert 'autocomplete="given-name" autocapitalize="words"' in passo3
+    assert 'type="email"' in passo3
+    # Horários agrupados por período, sem perder nenhum
+    assert '<h4 class="periodo">' in passo2
+    assert len(re.findall(r'<a class="horario" ', passo2)) == sum(
+        1 for h in hrefs(passo2) if h.startswith(f'{LOJA}/agendar/dados?')
+    )
+
+
+@pytest.mark.parametrize('tipo', ['barbearia', 'escola'])
+def test_cor_da_barra_do_navegador_segue_o_tipo_da_loja(cliente, clinica, engine_dono, tipo):
+    alterar_loja(engine_dono, 'loja-a', tipo=tipo)
+    texto = cliente.get(LOJA).text
+    claro, escuro = {'barbearia': ('#1f2230', '#15171f'), 'escola': ('#2a357f', '#1c2358')}[tipo]
+    assert f'<meta name="theme-color" content="{claro}" media="(prefers-color-scheme: light)">' in texto
+    assert f'<meta name="theme-color" content="{escuro}" media="(prefers-color-scheme: dark)">' in texto
+
+
+def test_css_do_site_e_mobile_first():
+    """DIR-004: a base é o celular; as media queries de largura só acrescentam (min-width)."""
+    css = (Path(__file__).resolve().parent.parent / 'app' / 'static' / 'site' / 'site.css').read_text('utf-8')
+    consultas = re.findall(r'@media([^{]*)\{', css)
+    assert consultas
+    assert not [c for c in consultas if 'max-width' in c]
+    assert 'env(safe-area-inset-bottom)' in css
+    assert '100dvh' in css
+    assert 'prefers-reduced-motion' in css
 
 
 def test_head_nas_paginas_do_site(cliente, site):

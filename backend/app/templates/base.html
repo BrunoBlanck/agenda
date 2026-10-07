@@ -2,13 +2,17 @@
 <html lang="pt-BR">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="color-scheme" content="light dark">
+  <meta name="theme-color" content="#f6f1e7" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#1d1a16" media="(prefers-color-scheme: dark)">
   {% if not indexar %}
   <meta name="robots" content="noindex">
   {% endif %}
   <title>{% block titulo %}{% endblock %}</title>
   <style>
     :root {
+      color-scheme: light dark;
       --papel: #f6f1e7;
       --folha: #fffdf8;
       --tinta: #2b2620;
@@ -30,10 +34,12 @@
     body {
       margin: 0;
       min-height: 100vh;
+      min-height: 100dvh;
       display: flex;
       align-items: center;
       justify-content: center;
-      padding: 24px 16px;
+      padding: max(24px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right))
+        max(24px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
       background: var(--papel);
       color: var(--tinta);
       font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
@@ -44,7 +50,7 @@
       background: var(--folha);
       border: 1px solid var(--linha);
       border-radius: 6px;
-      padding: 32px 28px;
+      padding: 24px 20px;
       box-shadow: 0 1px 0 var(--linha), 0 12px 32px -24px rgba(0, 0, 0, .35);
     }
     h1 {
@@ -71,6 +77,9 @@
     dd { margin: 0; overflow-wrap: anywhere; }
     a { color: var(--destaque); }
     p { margin: 0 0 8px; }
+    @media (min-width: 640px) {
+      .folha { padding: 32px 28px; }
+    }
   </style>
 </head>
 <body>

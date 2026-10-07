@@ -31,7 +31,7 @@ export default function DetalheDia({ dia, agendamentos, bloqueios, podeCriar, po
           {carregando ? <Skeleton.Input active size="small" className="agenda-dia-resumo-carregando" /> : <p>{resumo}</p>}
         </div>
         {onFechar && (
-          <Tooltip title="Recolher e ampliar o calendário">
+          <Tooltip title="Recolher e ampliar o calendário" rootClassName="dica-icone">
             <Button type="text" icon={<MenuUnfoldOutlined />} aria-label="Recolher painel do dia" onClick={onFechar} />
           </Tooltip>
         )}

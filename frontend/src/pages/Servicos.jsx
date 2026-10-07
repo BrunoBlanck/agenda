@@ -61,6 +61,7 @@ export default function Servicos() {
     comMateriais && {
       title: 'Materiais por atendimento',
       dataIndex: 'materiais',
+      cartao: 'bloco',
       render: (lista = []) =>
         lista.length === 0 ? (
           <span className="texto-apoio">Nenhum</span>
@@ -75,6 +76,7 @@ export default function Servicos() {
     {
       title: 'Situação',
       dataIndex: 'ativo',
+      cartao: 'etiqueta',
       filters: [
         { text: 'Ativo', value: true },
         { text: 'Inativo', value: false },

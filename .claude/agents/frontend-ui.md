@@ -22,7 +22,7 @@ SaaS de agendamento multi-loja para **clínicas, barbearias e escolas**.
 |---|---|---|---|---|
 | `/painel/...` | Recepção, profissionais, administrador da loja | Desktop o dia todo, com pressa e telefone na mão; às vezes celular | Densa, rápida, calma, previsível | SPA React: **seu escopo** |
 | `/superadmin/...` | Equipe da plataforma | Desktop, tarefas administrativas e auditoria | Sóbria, tabelas e histórico | SPA React: **seu escopo** |
-| `/` (site da loja) | Consumidor final | Celular, poucos segundos de atenção | Acolhedora, com a cara da loja | HTML do back-end Python (futuro). **Fora do React** |
+| `/` (site da loja) | Consumidor final | Celular (mobile first, DIR-004), poucos segundos de atenção | Acolhedora, com a cara da loja | HTML do back-end Python (futuro). **Fora do React** |
 
 Regras de negócio vêm da skill `regras-do-sistema` e do `estrutura.md`, não as invente. A API do back-end é a fonte da verdade (GER-02): regra no front é só conveniência de UX.
 

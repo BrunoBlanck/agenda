@@ -78,7 +78,7 @@ from app.services.agendamento_site import (
 )
 from app.services.comum import hoje, no_fuso
 from app.services.conta_cliente import SessaoCliente
-from app.services.cores_site import CLASSE_CORES, css_da_loja
+from app.services.cores_site import CLASSE_CORES, CoresDoTopo, cores_do_topo, css_da_loja
 from app.services.horarios_livres import DIAS_MAXIMOS, Livre, profissionais
 from app.services.site import configuracao_publica, dados_publicos
 from app.services.slugs import endereco_de_loja
@@ -194,6 +194,7 @@ class Pagina:
     ctx: ContextoSite
     loja: LojaPublica
     estilo: str | None = None
+    tema: CoresDoTopo | None = None  # cor da barra do navegador; None = a do tipo da loja
     sessao: SessaoCliente | None = None  # cliente na conta (SIT-20)
     sessao_expirada: bool = False  # veio um cookie de sessão que não vale mais
     caminho: str = ''  # página atual (caminho + consulta), para o "Entrar" voltar a ela
@@ -243,6 +244,7 @@ class Pagina:
             csp=csp_site(nonce) if nonce else CSP_SITE,
             extras=extras,
             estilo=self.estilo,
+            tema=self.tema or cores_do_topo(self.loja.tipo, None),
             nonce=nonce,
             classe_cores=CLASSE_CORES,
             loja=self.loja,
@@ -288,12 +290,14 @@ def abrir(request: Request, db: DbDep, slug: str) -> Pagina:
         if configuracao
         else None
     )
+    tema = cores_do_topo(ctx.loja.tipo, configuracao.cor_site_topo if configuracao else None)
     lida = ler_sessao(request, db, ctx.loja)
     consulta = request.url.query
     return Pagina(
         ctx=ctx,
         loja=dados_publicos(db, ctx.loja, ctx.modulos, configuracao),
         estilo=estilo,
+        tema=tema,
         sessao=lida.sessao,
         sessao_expirada=lida.expirada,
         caminho=f'{request.url.path}?{consulta}' if consulta else request.url.path,
@@ -363,15 +367,13 @@ def _pagina_horarios(site: Pagina, request: Request, *, indexar: bool = False) -
         servico_nome=nome_de(servico),
         duracao=duracao_de(servico),
         voltar=site.inicio if site.ctx.usa_servicos else None,
-        acao=site.agendar,
-        servico_id=servico_id,
         **escolha_de_horario(
             site,
             request.query_params,
             servico,
             aviso=AVISOS.get(request.query_params.get('aviso', '')),
             url_dia=lambda profissional_id, dia: site.url_horarios(
-                servico_id, profissional=profissional_id, dia=dia.isoformat()
+                servico_id, profissional=profissional_id, dia=dia.isoformat() if dia else None
             ),
             url_horario=lambda livre, inicio: montar_url(
                 f'{site.agendar}/dados',
@@ -390,7 +392,7 @@ def escolha_de_horario(
     servico: Servico | None,
     *,
     aviso: str | None,
-    url_dia: Callable[[UUID | None, date], str],
+    url_dia: Callable[[UUID | None, date | None], str],
     url_horario: Callable[[Livre, str], str],
     duracao: int | None = None,
     ignorar: UUID | None = None,
@@ -398,8 +400,9 @@ def escolha_de_horario(
     """Filtro de profissional, faixa de 31 dias e horários do dia (``profissional=`` e ``dia=`` da URL).
 
     Serve ao passo 2 do agendamento e à remarcação pela conta (SIT-24, com a ``duracao`` atual e o próprio
-    agendamento em ``ignorar``). ``url_dia(profissional, dia)`` e ``url_horario(livre, inicio ISO)`` montam
-    os links. Profissional inválido (ou que não faz o serviço) mostra os de qualquer profissional com aviso.
+    agendamento em ``ignorar``). ``url_dia(profissional, dia)`` (dia None = sem ``dia=``) e
+    ``url_horario(livre, inicio ISO)`` montam os links (dos profissionais, dos dias e dos horários).
+    Profissional inválido (ou que não faz o serviço) mostra os de qualquer profissional com aviso.
     """
     ctx = site.ctx
     texto_profissional = parametros.get('profissional') or ''
@@ -439,8 +442,11 @@ def escolha_de_horario(
 
     return {
         'aviso': aviso,
+        # Opções de profissional (links, DIR-004): trocar mantém o dia escolhido, como o filtro antigo
+        'qualquer_url': url_dia(None, escolhido),
+        'qualquer_escolhido': profissional_id is None,
         'equipe': [
-            {'id': f.id, 'nome': f.nome, 'escolhido': f.id == profissional_id}
+            {'nome': f.nome, 'escolhido': f.id == profissional_id, 'url': url_dia(f.id, escolhido)}
             for f in profissionais(ctx.db, ctx.loja.id, servico)
         ],
         'dias': [
@@ -454,7 +460,6 @@ def escolha_de_horario(
             }
             for dia, livres in dias
         ],
-        'dia_escolhido': escolhido.isoformat() if escolhido else None,
         'dia_extenso': dia_por_extenso(escolhido) if escolhido else None,
         'nenhum_horario': not any(livres for _, livres in dias),
         'horarios': [horario(livre) for livre in livres_do_dia],

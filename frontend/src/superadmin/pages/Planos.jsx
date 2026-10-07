@@ -11,10 +11,10 @@ export default function Planos() {
 
   const colunas = [
     { title: 'Plano', dataIndex: 'nome', render: (n) => <strong>{n}</strong> },
-    { title: 'Descrição', dataIndex: 'descricao', render: (d) => d ?? <span className="texto-apoio">—</span> },
+    { title: 'Descrição', dataIndex: 'descricao', cartao: 'bloco', render: (d) => d ?? <span className="texto-apoio">—</span> },
     { title: 'Preço mensal', dataIndex: 'precoMensal', align: 'right', render: moeda },
     { title: 'Lojas ativas', dataIndex: 'lojasAtivas', align: 'right' },
-    { title: 'Situação', dataIndex: 'ativo', render: (a) => <EtiquetaSituacao ativo={a} /> },
+    { title: 'Situação', dataIndex: 'ativo', cartao: 'etiqueta', render: (a) => <EtiquetaSituacao ativo={a} /> },
   ]
 
   return (

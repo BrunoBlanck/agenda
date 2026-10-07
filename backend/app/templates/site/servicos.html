@@ -9,16 +9,19 @@
         {% for s in servicos %}
         <li>
           <a class="servico" href="{{ s.url }}">
-            <span class="servico-nome">{{ s.nome }}</span>
-            {% if s.descricao %}
-            <span class="servico-descricao">{{ s.descricao }}</span>
-            {% endif %}
-            <span class="servico-info">
-              <span><svg class="icone" aria-hidden="true" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>{{ s.duracao }} min</span>
-              {% if s.preco %}
-              <span class="preco">{{ s.preco }}</span>
+            <span class="servico-corpo">
+              <span class="servico-nome">{{ s.nome }}</span>
+              {% if s.descricao %}
+              <span class="servico-descricao">{{ s.descricao }}</span>
               {% endif %}
+              <span class="servico-info">
+                <span><svg class="icone" aria-hidden="true" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>{{ s.duracao }} min</span>
+                {% if s.preco %}
+                <span class="preco">{{ s.preco }}</span>
+                {% endif %}
+              </span>
             </span>
+            <svg class="seta" aria-hidden="true" viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg>
           </a>
         </li>
         {% endfor %}

@@ -22,6 +22,7 @@ from app.services.cores_site import (
     MSG_FORMATO_COR,
     PALETAS,
     contraste,
+    cores_do_topo,
     css_da_loja,
     legivel_com_branco,
     ler_cor,
@@ -365,6 +366,7 @@ def test_paleta_do_back_end_e_a_mesma_do_site_css():
         assert claros[tipo.value]['--cor-destaque'] == paleta.destaque, tipo
         assert escuros[tipo.value]['--cor-fundo'] == paleta.fundo_escuro, tipo
         assert escuros[tipo.value]['--cor-superficie'] == paleta.superficie_escura, tipo
+        assert escuros[tipo.value]['--cor-topo'] == paleta.topo_escuro, tipo  # theme-color do modo escuro
         # A cor padrão também passaria na regra de contraste (dá para escolher a mesma cor de volta)
         assert legivel_com_branco(paleta.topo), tipo
         assert legivel_com_branco(paleta.destaque), tipo
@@ -407,6 +409,19 @@ def test_css_ignora_valor_fora_do_formato(valor):
     """Nunca texto livre no CSS: só cores reescritas a partir do hex validado."""
     assert css_da_loja('clinica', valor, valor) is None
     assert css_da_loja('clinica', valor, DESTAQUE).startswith('body.cores-da-loja{--cor-destaque:#1f5f8b;')
+    # A barra do navegador também fica com a cor do tipo
+    assert cores_do_topo('clinica', valor) == cores_do_topo('clinica', None)
+
+
+@pytest.mark.parametrize('tipo', list(TipoLoja))
+def test_cor_da_barra_do_navegador(tipo):
+    """DIR-004: ``theme-color`` = topo do site; o escolhido vale nos dois modos, como no CSS (SIT-15)."""
+    paleta = PALETAS[tipo]
+    padrao = cores_do_topo(tipo, None)
+    assert (padrao.claro, padrao.escuro) == (paleta.topo, paleta.topo_escuro)
+    escolhida = cores_do_topo(tipo, TOPO)
+    assert (escolhida.claro, escolhida.escuro) == (TOPO, TOPO)
+    assert cores_do_topo('outro', None) == cores_do_topo(TipoLoja.clinica, None)
 
 
 # --- Site do consumidor ----------------------------------------------------------------------------
@@ -465,6 +480,10 @@ def test_site_com_cores_usa_as_cores_em_todos_os_passos(cliente, site):
     for resposta in _paginas_do_fluxo(cliente):
         assert _estilo(resposta) == esperado
         assert '<body class="tipo-clinica cores-da-loja">' in resposta.text
+        for modo in ('light', 'dark'):  # a barra do navegador acompanha o topo escolhido, nos dois modos
+            assert f'<meta name="theme-color" content="{TOPO}" media="(prefers-color-scheme: {modo})">' in (
+                resposta.text
+            )
         nonces.add(re.search(r'nonce="([^"]+)"', resposta.text).group(1))
         assert '/painel' not in resposta.text  # DIR-003
     assert len(nonces) == 4  # um nonce novo a cada resposta

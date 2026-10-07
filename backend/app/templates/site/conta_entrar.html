@@ -17,7 +17,9 @@
         {% endif %}
 {{ campo('telefone', 'Telefone com DDD', valores, erros, tipo='tel', maximo=20, completar='tel', teclado='tel') }}
 {{ campo('senha', 'Senha', valores, erros, tipo='password', maximo=128, completar='current-password') }}
-        <button type="submit" class="botao botao-largo" data-enviando="Entrando…">Entrar</button>
+        <div class="acoes">
+          <button type="submit" class="botao botao-largo" data-enviando="Entrando…">Entrar</button>
+        </div>
       </form>
       <ul class="links-conta">
         <li><a href="{{ criar }}">Esqueci minha senha</a></li>

@@ -62,14 +62,14 @@ export default function Agendamentos() {
   }
 
   const colunas = [
-    { title: 'Data', dataIndex: 'data', render: dataBR },
-    { title: 'Horário', dataIndex: 'hora', render: horaCurta },
-    { title: 'Cliente', dataIndex: 'clienteNome', render: (nome) => <strong>{nome ?? '—'}</strong> },
+    { title: 'Data', dataIndex: 'data', cartao: 'subtitulo', render: dataBR },
+    { title: 'Horário', dataIndex: 'hora', cartao: 'subtitulo', render: horaCurta },
+    { title: 'Cliente', dataIndex: 'clienteNome', cartao: 'titulo', render: (nome) => <strong>{nome ?? '—'}</strong> },
     agenda.verEquipe && { title: 'Profissional', dataIndex: 'funcionarioNome', render: (nome) => nome ?? '—' },
     moduloAtivo('servicos') && { title: 'Serviço', dataIndex: 'servicoNome', render: (nome) => nome ?? '—' },
     comLocais && { title: rotulos.singular, key: 'local', render: (_, a) => <LocalInfo local={localDe(a)} /> },
     { title: 'Duração', dataIndex: 'duracao', align: 'right', render: duracaoTexto },
-    { title: 'Situação', dataIndex: 'status', render: (s) => <EtiquetaStatus status={s} /> },
+    { title: 'Situação', dataIndex: 'status', cartao: 'etiqueta', render: (s) => <EtiquetaStatus status={s} /> },
     {
       title: <span className="sr-only">Ações</span>,
       key: 'acoes',
@@ -78,7 +78,7 @@ export default function Agendamentos() {
       fixed: 'right',
       render: (_, a) => (
         <span className="acoes-linha">
-          <Tooltip title={agenda.editar(a) ? 'Editar' : 'Ver'}>
+          <Tooltip title={agenda.editar(a) ? 'Editar' : 'Ver'} rootClassName="dica-icone">
             <Button
               type="text"
               size="small"
@@ -97,7 +97,7 @@ export default function Agendamentos() {
               cancelText="Cancelar"
               onConfirm={() => excluir(a)}
             >
-              <Tooltip title="Excluir">
+              <Tooltip title="Excluir" rootClassName="dica-icone">
                 <Button
                   type="text"
                   size="small"

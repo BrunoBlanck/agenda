@@ -25,7 +25,7 @@ export default function Usuarios() {
     },
     { title: 'E-mail', dataIndex: 'email' },
     { title: 'Último acesso', dataIndex: 'ultimoLoginEm', render: (d) => (d ? dataHoraBR(d) : <span className="texto-apoio">Nunca entrou</span>) },
-    { title: 'Situação', dataIndex: 'ativo', render: (a) => <EtiquetaSituacao ativo={a} /> },
+    { title: 'Situação', dataIndex: 'ativo', cartao: 'etiqueta', render: (a) => <EtiquetaSituacao ativo={a} /> },
   ]
 
   return (

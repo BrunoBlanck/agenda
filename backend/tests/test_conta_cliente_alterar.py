@@ -4,6 +4,8 @@ Usa a loja de tests/clinica.py: Maria (11) 98888-1111 e João (11) 98888-2222; L
 Admin e Profissional, locais Sala 1 e Online); jornada às segundas, 08h-12h e 13h-18h (2030-01-07 é segunda).
 """
 
+import html
+import re
 import threading
 from datetime import UTC, date, datetime, timedelta
 from urllib.parse import urlsplit
@@ -23,6 +25,7 @@ from app.services.conta_cliente import ANTECEDENCIA_CLIENTE, pode_alterar
 from tests.clinica import SEGUNDA
 from tests.fabricas import inserir, mudar_modulo, sessao
 from tests.test_conta_cliente import LOJA, NOVO_TEL, contar, criar_conta, destino, hrefs, parametros
+from tests.test_site_paginas import opcoes_de_profissional
 
 S = StatusAgendamento
 SP = ZoneInfo('America/Sao_Paulo')
@@ -447,7 +450,17 @@ def test_escolha_de_horario_da_remarcacao(conta, clinica, engine_dono):
     assert 'Horário atual: <strong>' in texto
     assert '60 min' in texto
     assert f'href="{LOJA}/conta"' in texto  # Voltar
-    assert f'action="{url(ag, "remarcar")}"' in texto
+    # Opções de profissional: links da própria remarcação (sem serviço), mantendo o dia escolhido
+    opcoes = opcoes_de_profissional(texto)
+    assert opcoes
+    assert [nome for _, marcada, nome in opcoes if marcada] == ['Profissional']
+    for parametros_da_opcao, _, _ in opcoes:
+        assert 'servico' not in parametros_da_opcao
+        assert parametros_da_opcao['dia'] == segunda.isoformat()
+    assert all(
+        urlsplit(html.unescape(h)).path == url(ag, 'remarcar')
+        for h in re.findall(r'<a class="chip" href="([^"]+)"', texto)
+    )
     assert 'name="servico"' not in texto
     horarios = {
         parametros(h)['inicio'][11:16]: h
@@ -458,9 +471,9 @@ def test_escolha_de_horario_da_remarcacao(conta, clinica, engine_dono):
     assert '11:00' not in horarios
     assert '10:30' not in horarios  # 10:30-11:30 bate no das 11:00
     assert parametros(horarios['09:30'])['profissional'] == prof
-    dias = [h for h in hrefs(texto) if urlsplit(h).path == url(ag, 'remarcar') and 'dia=' in h]
+    dias = [h for h in hrefs(texto) if urlsplit(h).path == url(ag, 'remarcar') and h.endswith('#horarios')]
     assert dias
-    assert all(parametros(h)['profissional'] == prof for h in dias)
+    assert all(parametros(h.removesuffix('#horarios'))['profissional'] == prof for h in dias)
 
     # Profissional inválido: horários de qualquer profissional, com aviso
     invalido = conta.get(url(ag, 'remarcar'), params={'profissional': str(clinica.lt.recepcao.id)}).text
@@ -616,7 +629,10 @@ def test_sem_modulo_servicos_remarca_com_a_duracao_atual_entre_os_da_jornada(con
     escolher = conta.get(url(ag, 'remarcar'))
     assert escolher.status_code == 200
     assert '45 min' in escolher.text
-    assert f'<option value="{clinica.lt.recepcao.id}">Recepção</option>' in escolher.text  # SIT-08
+    recepcao = [
+        url['profissional'] for url, _, nome in opcoes_de_profissional(escolher.text) if nome == 'Recepção'
+    ]
+    assert recepcao == [str(clinica.lt.recepcao.id)]  # SIT-08
     dados = {'profissional': str(clinica.lt.recepcao.id), 'inicio': f'{SEGUNDA}T10:00-03:00'}
     assert destino(confirmar_remarcacao(conta, ag, dados)) == f'{LOJA}/conta?aviso=remarcado'
     linha = ler(engine_dono, ag)

@@ -92,6 +92,59 @@ body {
   }
 }
 
+/* Dica que só repete o nome do botão (ícone com aria-label): no toque ela abre com o toque e fica
+   presa por cima do painel que o botão abriu, então some em telas sem mouse */
+@media (hover: none) {
+  .dica-icone.ant-tooltip {
+    display: none;
+  }
+}
+
+/* Celular: campos com 16 px, senão o iOS amplia a tela a cada toque num campo (DIR-004) */
+@media (max-width: 767.98px) {
+  body :is(.ant-input, .ant-input-affix-wrapper, .ant-input-number-input, .ant-picker-input > input, .ant-select, .ant-select-selection-search-input) {
+    font-size: 16px;
+  }
+}
+
+/* Celular: o calendário de período (RangePicker) mostra um mês só, com as setas dos dois lados, e os
+   atalhos (Hoje, Esta semana...) em cima; os dois meses lado a lado não cabem na tela */
+@media (max-width: 767.98px) {
+  .ant-picker-dropdown-range .ant-picker-panel-layout {
+    flex-direction: column;
+  }
+
+  .ant-picker-dropdown-range .ant-picker-panels > .ant-picker-panel + .ant-picker-panel {
+    display: none;
+  }
+
+  .ant-picker-dropdown-range .ant-picker-panels > .ant-picker-panel:first-child :is(.ant-picker-header-next-btn, .ant-picker-header-super-next-btn) {
+    visibility: visible !important;
+  }
+
+  .ant-picker-dropdown-range .ant-picker-range-arrow {
+    display: none;
+  }
+
+  body .ant-picker-dropdown-range .ant-picker-panel-container .ant-picker-presets {
+    max-width: none;
+    border-inline-end: 0;
+    border-bottom: 1px solid var(--cor-linha-suave);
+  }
+
+  body .ant-picker-dropdown-range .ant-picker-panel-container .ant-picker-presets ul {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--espaco-1);
+    height: auto;
+    padding: var(--espaco-2);
+  }
+
+  body .ant-picker-dropdown-range .ant-picker-panel-container .ant-picker-presets ul li + li {
+    margin: 0;
+  }
+}
+
 /* ---------- Marca-texto: o destaque do que pede atenção ---------- */
 
 .marca-texto {
@@ -980,6 +1033,7 @@ body {
 }
 
 .carregando-descricao {
+  max-width: 360px;
   margin-top: var(--espaco-3);
 }
 
@@ -1053,6 +1107,19 @@ body {
   white-space: nowrap;
 }
 
+/* Celular: painel em tela cheia (max-width acima) com alvos de toque de 44 px no X e no rodapé */
+@media (max-width: 767.98px) {
+  .painel-lateral .ant-drawer-close {
+    width: 44px;
+    height: 44px;
+    margin-inline-end: -10px;
+  }
+
+  .painel-lateral .ant-drawer-footer .ant-btn {
+    height: 44px;
+  }
+}
+
 /* Grupos do formulário separados por uma linha, como a pauta da agenda */
 .painel-formulario .grupo-formulario {
   padding-top: var(--espaco-5);
@@ -1060,7 +1127,8 @@ body {
   border-top: 1px solid var(--cor-linha-suave);
 }
 
-.painel-formulario .grupo-formulario:first-child {
+.painel-formulario .grupo-formulario:first-child,
+.painel-formulario form > div:empty:first-child + .grupo-formulario {
   padding-top: 0;
   margin-top: 0;
   border-top: 0;

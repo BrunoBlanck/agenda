@@ -95,7 +95,7 @@ export default function Lojas() {
         </span>
       ),
     },
-    { title: 'Tipo', dataIndex: 'tipo', render: (t) => tiposLoja[t]?.nome ?? t ?? '—' },
+    { title: 'Tipo', dataIndex: 'tipo', cartao: 'subtitulo', render: (t) => tiposLoja[t]?.nome ?? t ?? '—' },
     { title: 'Plano', dataIndex: 'planoNome', render: (n) => n ?? '—' },
     { title: 'Cidade', key: 'cidade', render: (_, l) => (l.cidade ? [l.cidade, l.uf].filter(Boolean).join('/') : '—') },
     {
@@ -109,11 +109,13 @@ export default function Lojas() {
       },
     },
     { title: 'Funcionários', dataIndex: 'funcionariosAtivos', align: 'right' },
-    { title: 'Situação', dataIndex: 'status', render: (s) => <EtiquetaLoja status={s} /> },
+    { title: 'Situação', dataIndex: 'status', cartao: 'etiqueta', render: (s) => <EtiquetaLoja status={s} /> },
     {
       title: <span className="sr-only">Abrir</span>,
       key: 'abrir',
       width: 48,
+      // No cartão o nome da loja já abre o detalhe
+      cartao: false,
       align: 'right',
       render: (_, l) => <Button type="text" size="small" icon={<RightOutlined />} aria-label={`Abrir ${l.nomeFantasia}`} onClick={() => abrir(l)} />,
     },
