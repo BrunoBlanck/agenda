@@ -248,6 +248,41 @@ a {
   margin: 0;
 }
 
+/* Avisos (SIT-25): no celular só o sino e o contador; o texto aparece em telas maiores */
+.conta-nav {
+  display: flex;
+  gap: 8px;
+}
+
+.avisos-link {
+  position: relative;
+  padding: 0 12px;
+}
+
+.avisos-texto {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.contador {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--cor-topo-texto);
+  color: var(--cor-topo);
+  font-size: 0.8125rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
 .contato {
   display: grid;
   gap: 4px;
@@ -1069,6 +1104,61 @@ textarea {
   font-size: 0.9375rem;
 }
 
+/* --- Avisos do cliente (SIT-25) ---------------------------------------------------------- */
+.avisos {
+  display: grid;
+  gap: 12px;
+  margin: 0 0 16px;
+  padding: 0;
+  list-style: none;
+}
+
+.aviso-item {
+  padding: 14px 16px;
+  border: 1px solid var(--cor-linha);
+  border-radius: var(--raio);
+}
+
+.aviso-item p {
+  margin: 0;
+}
+
+.aviso-novo {
+  border-left: 4px solid var(--cor-destaque);
+  background: var(--cor-destaque-suave);
+}
+
+.aviso-titulo {
+  line-height: 1.35;
+}
+
+.selo-novo {
+  display: inline-flex;
+  align-items: center;
+  margin-right: 4px;
+  color: var(--cor-destaque);
+  font-size: 0.875rem;
+  font-weight: 700;
+}
+
+.selo-novo .icone {
+  width: 0.7em;
+  height: 0.7em;
+  margin-right: 4px;
+  fill: currentColor;
+}
+
+.aviso-mensagem {
+  margin-top: 4px !important;
+  overflow-wrap: anywhere;
+}
+
+.aviso-quando {
+  margin-top: 6px !important;
+  color: var(--cor-texto-suave);
+  font-size: 0.9375rem;
+}
+
 .pergunta {
   margin: 0 0 8px;
   font-size: 1.125rem;
@@ -1140,6 +1230,14 @@ textarea {
 
 /* --- A partir de 480 px: dois campos de nome lado a lado, de/para em colunas ----------------- */
 @media (min-width: 480px) {
+  .avisos-texto {
+    position: static;
+    width: auto;
+    height: auto;
+    overflow: visible;
+    clip-path: none;
+  }
+
   .campos-nome {
     display: grid;
     grid-template-columns: 1fr 1.4fr;

@@ -1,0 +1,31 @@
+{% extends 'site/base.html' %}
+{% block titulo %}Avisos · {{ loja.nome_fantasia }}{% endblock %}
+{% block conteudo %}
+      <h2 class="titulo">Avisos</h2>
+      {% if novos %}
+      <p class="nota" role="status">{{ novos }} {{ 'aviso novo' if novos == 1 else 'avisos novos' }}.</p>
+      {% endif %}
+      {% if avisos %}
+      <ul class="avisos">
+        {% for a in avisos %}
+        <li class="aviso-item{% if a.novo %} aviso-novo{% endif %}">
+          <p class="aviso-titulo">{% if a.novo %}<span class="selo-novo"><svg class="icone" aria-hidden="true" viewBox="0 0 24 24"><circle cx="12" cy="12" r="5"/></svg>Novo</span> {% endif %}<strong>{{ a.titulo }}</strong></p>
+          <p class="aviso-mensagem">{{ a.mensagem }}</p>
+          <p class="aviso-quando"><time datetime="{{ a.momento }}">{{ a.quando }}</time></p>
+        </li>
+        {% endfor %}
+      </ul>
+      {% else %}
+      <p class="vazio">Nenhum aviso por enquanto.</p>
+      {% endif %}
+      {% if anteriores or mais_novos %}
+      <nav class="paginacao" aria-label="Páginas dos avisos">
+        {% if anteriores %}<a href="{{ anteriores }}" rel="next">‹ Anteriores</a>{% else %}<span></span>{% endif %}
+        <span class="paginacao-atual">Página {{ pagina }} de {{ paginas }}</span>
+        {% if mais_novos %}<a href="{{ mais_novos }}" rel="prev">Mais novos ›</a>{% else %}<span></span>{% endif %}
+      </nav>
+      {% endif %}
+      <div class="acoes">
+        <a class="botao botao-secundario botao-largo" href="{{ conta }}">Voltar para Minha conta</a>
+      </div>
+{% endblock %}

@@ -21,7 +21,8 @@ from app.models.enums import StatusAgendamento
 from app.services import conta_agendamentos
 from app.services.agendamentos import TRANSICOES
 from app.services.conta_agendamentos import MOTIVO_CANCELAMENTO, TRANSICOES_DO_CLIENTE
-from app.services.conta_cliente import ANTECEDENCIA_CLIENTE, pode_alterar
+from app.services.conta_cliente import pode_alterar
+from app.services.notificacoes import antecedencia_da_loja
 from tests.clinica import SEGUNDA
 from tests.fabricas import inserir, mudar_modulo, sessao
 from tests.test_conta_cliente import LOJA, NOVO_TEL, contar, criar_conta, destino, hrefs, parametros
@@ -228,12 +229,17 @@ def test_cancelar_de_novo_volta_a_minha_conta_sem_alterar(conta, clinica, engine
 # --- Prazo e situações finais (SIT-23/24) ----------------------------------------------------------
 
 
-def test_prazo_de_2h_na_funcao():
+def test_prazo_padrao_da_loja_e_2h_na_funcao(clinica, engine_dono):
+    """CFG-05: sem mudar a configuração, a loja nasce com 120 min (o comportamento anterior)."""
+    with sessao(engine_dono) as db:
+        antecedencia = timedelta(minutes=antecedencia_da_loja(db, clinica.lt.loja.id))
+    assert antecedencia == timedelta(hours=2)
     inicio = datetime(2030, 1, 7, 12, tzinfo=UTC)
-    assert timedelta(hours=2) == ANTECEDENCIA_CLIENTE
-    assert pode_alterar(S.confirmado, inicio, agora=inicio - timedelta(hours=2))  # encostado no prazo
-    assert not pode_alterar(S.confirmado, inicio, agora=inicio - timedelta(hours=2) + timedelta(seconds=1))
-    assert not pode_alterar(S.concluido, inicio, agora=inicio - timedelta(days=1))
+    assert pode_alterar(S.confirmado, inicio, antecedencia, agora=inicio - antecedencia)  # encostado no prazo
+    assert not pode_alterar(
+        S.confirmado, inicio, antecedencia, agora=inicio - antecedencia + timedelta(seconds=1)
+    )
+    assert not pode_alterar(S.concluido, inicio, antecedencia, agora=inicio - timedelta(days=1))
 
 
 def test_a_menos_de_2h_nada_se_altera_e_mostra_o_telefone(conta, clinica, engine_dono):

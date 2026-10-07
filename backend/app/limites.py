@@ -121,7 +121,7 @@ def _faxina_de_vez_em_quando(conexao: Connection) -> None:
         conexao.execute(_FAXINA)
 
 
-def contar(chave: str, limite: int, janela: int) -> None:
+def contar(chave: str, limite: int, janela: int, mensagem: str = MSG_MUITAS_REQUISICOES) -> None:
     """Soma uma requisição ao contador da chave; 429 se passou de ``limite`` na janela."""
     with get_engine_limites().connect() as conexao:
         contagem, restante = conexao.execute(
@@ -129,7 +129,7 @@ def contar(chave: str, limite: int, janela: int) -> None:
         ).one()
         _faxina_de_vez_em_quando(conexao)
     if contagem > limite:
-        raise muitas_requisicoes(restante)
+        raise muitas_requisicoes(restante, mensagem)
 
 
 # --- Dependências (por IP) -------------------------------------------------------------------------
@@ -179,6 +179,16 @@ def limite_codigo_telefone(slug: str, telefone_digitos: str) -> None:
         s.limite_codigos_por_telefone,
         s.limite_codigos_por_telefone_janela,
     )
+
+
+# Configurações › Avisos e e-mail: "Enviar e-mail de teste" (CFG-06), por loja
+TESTES_DE_EMAIL, TESTES_DE_EMAIL_JANELA = 5, 600
+MSG_MUITOS_TESTES = 'Muitos testes seguidos. Tente de novo em alguns minutos.'
+
+
+def limite_teste_email(loja_id: object) -> None:
+    """No máximo 5 e-mails de teste por loja a cada 10 min (429)."""
+    contar(_chave('teste-email', str(loja_id)), TESTES_DE_EMAIL, TESTES_DE_EMAIL_JANELA, MSG_MUITOS_TESTES)
 
 
 _CONTAGEM = text('SELECT contagem FROM limites.contadores WHERE chave = :chave AND expira_em > now()')

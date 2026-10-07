@@ -111,7 +111,7 @@ def test_toda_tabela_da_loja_tem_isolamento(engine_dono):
         n for n, t in Base.metadata.tables.items() if 'atualizado_por' in t.columns and 'loja_id' in t.columns
     }
     tabelas_loja.discard('loja_funcionalidades')  # tabela da plataforma (atualizado_por = superadmin)
-    assert len(tabelas_loja) == 21
+    assert len(tabelas_loja) == 22
     with engine_dono.connect() as conexao:
         com_rls = set(
             conexao.execute(

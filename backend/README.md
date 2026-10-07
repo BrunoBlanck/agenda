@@ -94,7 +94,8 @@ e vice-versa (401). Loja suspensa ou cancelada recebe 403 (menos na sessão de s
 | Filtros da agenda | `GET apoio/filtros-agenda` (`so_propria`, profissionais e locais, inclusive inativos) | leitura na agenda |
 | Agenda | `GET agenda?inicio=&fim=&funcionario_id=` (semana, mês ou dia) | `agenda_propria` / `agenda_equipe` |
 | Controle de Tempo | `GET ponto`, `GET ponto/aberto`, `POST ponto/registrar` (`{"acao": "entrada"\|"saida"}`), `POST ponto`, `PUT ponto/{id}`, `GET ponto/funcionarios` (lista de apoio, com inativos; leitura em `ponto_equipe`) | `ponto_proprio` / `ponto_equipe` |
-| Configurações | `GET/PUT configuracoes/loja`, `PUT/DELETE configuracoes/loja/logo` (ver "Logo da loja"), `GET/PUT configuracoes/site` (ver "Cores do site") | `config_loja` |
+| Configurações | `GET/PUT configuracoes/loja`, `PUT/DELETE configuracoes/loja/logo` (ver "Logo da loja"), `GET/PUT configuracoes/site` (ver "Cores do site"), `GET/PUT configuracoes/notificacoes`, `POST configuracoes/notificacoes/testar-email` (ver "Notificações") | `config_loja` |
+| Notificações (sino) | `GET notificacoes`, `GET notificacoes/resumo`, `POST notificacoes/visualizar` (só as do próprio funcionário) | — (só login) |
 
 Saúde: `GET /api/saude`. Arquivos públicos: `GET /api/arquivos/logos/{loja_id}/{nome}` (sem login).
 
@@ -438,10 +439,11 @@ remarcar). Regras em `app/services/conta_cliente.py` e `app/services/conta_agend
   "Ver meus agendamentos"). O cabeçalho de todas as páginas da loja mostra "Entrar" ou "Minha conta".
 - **Cancelar e remarcar** (SIT-23, SIT-24, AGE-25): nos "Próximos" de Minha conta, "Remarcar" e
   "Cancelar" aparecem enquanto o agendamento está `pendente`/`agendado`/`confirmado` e falta pelo menos
-  `ANTECEDENCIA_CLIENTE` (2 h, provisória); depois disso, "Para alterar, fale com a loja: <telefone>".
+  a antecedência da loja (CFG-05, `loja_configuracoes.antecedencia_cliente_minutos`, padrão 120 min); depois
+  disso, "Para alterar, fale com a loja: <telefone>".
   Páginas em `/{slug}/conta/agendamentos/{id}/...`, todas com sessão (sem ela, 303 para entrar voltando à
   mesma página). Agendamento de outro telefone, de outra loja, de cliente excluído, inexistente ou
-  excluído: 404. Situação final ou menos de 2 h: 409 "Este agendamento não pode mais ser alterado pelo
+  excluído: 404. Situação final ou fora do prazo da loja: 409 "Este agendamento não pode mais ser alterado pelo
   site. Fale com a loja: <telefone>.". Os `POST` travam a linha (`FOR UPDATE`, a mesma trava do painel) e
   conferem dono, situação e prazo de novo.
   - **Cancelar:** `GET` mostra o resumo e "Cancelar este agendamento?"; `POST` vira `cancelado` na hora
@@ -479,6 +481,66 @@ remarcar). Regras em `app/services/conta_cliente.py` e `app/services/conta_agend
     telefone invalidados). 404 "Cliente não encontrado." (outra loja, inexistente ou excluído) ou
     "Este cliente não tem acesso ao site.".
 - **Auditoria:** `senha_hash` e `cliente_codigos.codigo` nunca vão para `antes`/`depois`.
+
+### Notificações (NOT-01 a NOT-08, CFG-05, CFG-06, SIT-25)
+
+Especificação: [`docs/funcionalidades/notificacoes.md`](../docs/funcionalidades/notificacoes.md). Tabela
+`notificacoes` e colunas novas de `loja_configuracoes` (migração 0008). Regras em
+`app/services/notificacoes.py` (criação, sino do painel, lembretes), `app/services/tarefa_notificacoes.py`
+(ciclo da tarefa), `app/services/envio_email.py` (SMTP), `app/services/config_notificacoes.py` e
+`app/services/avisos_conta.py` (sino do site).
+
+- **Criação** na mesma transação do fato (se a mudança não grava, o aviso também não), com o texto
+  congelado e horas no padrão do painel ("ter 14/10 às 9h30", fuso da loja). Cliente: `pedido_recebido`
+  (pedido ou remarcação pelo site), `agendamento_criado` (painel), `confirmado`, `cancelado` (loja cancelou
+  ou recusou; nunca o motivo), `horario_alterado` (loja mudou início, profissional ou local de um
+  agendamento não final), `lembrete`. Loja (**só o profissional do agendamento**, se ativo): `novo_pedido`,
+  `remarcacao_pedida`, `cancelado_pelo_cliente`. Concluir, não compareceu e reabrir não avisam.
+- **Canais:** `status_site` 1/2; `status_email`/`status_whatsapp` 1 pendente, 2 enviado, 3 erro, 4 dado
+  faltando. Sem e-mail no cadastro = 4; loja sem SMTP ativo = 3 ("O envio de e-mail da loja não está
+  configurado."); WhatsApp sempre 4. O status só avança (trigger `notificacoes_status_avanca`).
+- **Sino do painel** (qualquer funcionário logado, só as suas, sem recurso de acesso):
+  `GET notificacoes?pagina=&por_pagina=` (máx. 50) → `{itens, total, pagina, por_pagina, nao_visualizadas}`,
+  `GET notificacoes/resumo` → `{nao_visualizadas}`, `POST notificacoes/visualizar` `{ids: [1..100]}` →
+  `{marcadas, nao_visualizadas}` (ids alheios ignorados; no acesso de suporte do SUPERADMIN nada é marcado).
+- **Configurações › Avisos e e-mail** (`config_loja`): `GET/PUT configuracoes/notificacoes`
+  (`antecedencia_cliente_minutos` 0..10080 e `email` {ativo, servidor, porta 25/465/587/2525, seguranca
+  ssl/starttls, usuario, senha, remetente_email, remetente_nome}; `senha` ausente = mantém, `null` = apaga;
+  a saída traz só `senha_definida`) e `POST configuracoes/notificacoes/testar-email` `{destino}` →
+  `{enviado: true}` ou `{enviado: false, erro}` (409 sem SMTP ativo; 429 depois de 5 em 10 min por loja). A
+  senha é cifrada com `CHAVE_CIFRA` (Fernet) e mascarada na auditoria; sem a chave, 422 em `email.senha`.
+  Em `AMBIENTE=producao` o servidor precisa resolver só para endereços públicos (422 "Servidor não
+  permitido."), conferido de novo na hora de conectar (a conexão vai para o IP conferido).
+- **Tarefa de fundo** (`app/tarefas.py`, no `lifespan` da API; `NOTIFICACOES_TAREFA`, `NOTIFICACOES_INTERVALO`
+  = 30 s): cria os lembretes (um por agendamento `agendado`/`confirmado` e início, quando faltar a
+  antecedência da loja; 0 = sem lembrete) e envia os e-mails pendentes. Descobre as lojas com trabalho pela
+  função `notificacoes_lojas_com_trabalho` (SECURITY DEFINER, só ids de lojas **ativas**; `EXECUTE` só para o
+  papel da aplicação, não PUBLIC) e atende até 4 lojas em paralelo, cada uma com o contexto dela (origem
+  `sistema`). Reserva com `FOR UPDATE SKIP LOCKED` (tentativa + 1 e `email_proxima_tentativa_em` = relógio
+  **da hora da reserva** + 5 min, mais que o pior caso de uma loja), envia fora da transação e grava o
+  resultado só se a linha ainda tiver a mesma reserva (tentativa e data): 2; falha temporária volta a 1 com
+  espera de 1 e 5 min; na 3ª falha (ou falha definitiva: usuário/senha, remetente, destinatário ou servidor
+  recusados, endereço com acento sem SMTPUTF8) fica 3 com a mensagem tratada. Cada envio tem **prazo total
+  de 15 s** em todas as fases (DNS numa thread com espera limitada; o socket TCP é registrado antes do TLS e o
+  TLS antes do handshake, e o vigia derruba todos com `shutdown` quando o prazo acaba; cada comando confere o
+  prazo e lê com o tempo que sobrou; vale também para o "testar e-mail"); a primeira falha de conexão
+  interrompe o lote da loja e cada loja tem 60 s de envio por ciclo: o que não foi tentado volta à fila sem
+  gastar tentativa. O ciclo espera as lojas no máximo 20 s: a atrasada continua no pool fixo de 4 threads e
+  fica fora dos ciclos seguintes até terminar; as outras seguem. Antes de enviar, encerra com 3 o lembrete cujo agendamento mudou (não está mais
+  `agendado`/`confirmado`, outro início, excluído ou já começou: "Aviso vencido: o agendamento mudou.") e o
+  aviso com mais de 24 h ou de agendamento que já começou ("Aviso vencido."). Vários processos ao mesmo tempo
+  são seguros. Fora da API: `uv run python -m scripts.notificacoes [--uma-vez]`.
+- **E-mail:** texto simples, remetente da loja, assunto "<título> · <loja>"; ao cliente, com `URL_PUBLICA`,
+  o link `URL_PUBLICA/<slug>/conta` (nunca o painel, DIR-003). Nos testes (`AMBIENTE=teste`) o provedor é
+  o falso (`EnvioFalso`), nada sai para a rede.
+- **Site** (SIT-25): com sessão, o cabeçalho mostra "Avisos" com a contagem (`aria-label="Avisos, N não
+  lidos"`; no celular só o sino e o número). `GET /{slug}/conta/avisos?pagina=` lista os avisos dos
+  clientes do telefone da conta (20 por página), destaca os novos desta abertura ("Novo") e os marca como
+  visualizados depois de montar a página (um `HEAD` não marca). Página estranha: a primeira.
+- **Trocar servidor ou usuário do SMTP** com senha salva exige mandar `senha` de novo (422 em `email.senha`:
+  "Informe a senha de novo ao trocar o servidor ou o usuário."): a senha salva nunca vai para outra conta.
+  A consulta ao DNS do servidor (produção) só acontece para quem tem escrita em `config_loja` (conferida
+  numa sessão curta, já fechada) e antes de abrir a transação da requisição.
 
 ## Limite de requisições
 

@@ -9,9 +9,9 @@
 
 Regras em ``app/services/conta_agendamentos.py``. Todas exigem a sessão (sem ela, 303 para entrar voltando à
 mesma página). Agendamento de outro telefone, de outra loja, inexistente ou excluído: 404. Situação final ou
-menos de 2 h antes: 409 com o telefone da loja. Serviço que não dá mais para remarcar pelo site: 409 "Para
-remarcar este horário, fale com a loja." (cancelar continua possível). Horário que não é mais oferecido
-(inclusive a corrida recusada pelo banco, 23P01): 303 de volta à escolha com ``aviso=ocupado``.
+fora do prazo da loja (CFG-05): 409 com o telefone da loja. Serviço que não dá mais para remarcar pelo site:
+409 "Para remarcar este horário, fale com a loja." (cancelar continua possível). Horário que não é mais
+oferecido (inclusive a corrida recusada pelo banco, 23P01): 303 de volta à escolha com ``aviso=ocupado``.
 Todo ``POST`` confere a origem e trava a linha do agendamento antes de conferir tudo de novo.
 """
 
@@ -85,7 +85,13 @@ def _da_conta(site: Pagina, texto_id: str) -> MeuAgendamento:
     sessao = exigir_sessao(site)
     agendamento_id = ler_uuid(texto_id)
     item = (
-        meu_agendamento(site.ctx.db, site.ctx.loja.id, sessao.conta.telefone_digitos, agendamento_id)
+        meu_agendamento(
+            site.ctx.db,
+            site.ctx.loja.id,
+            sessao.conta.telefone_digitos,
+            agendamento_id,
+            site.ctx.antecedencia,
+        )
         if agendamento_id is not None
         else None
     )
@@ -231,7 +237,7 @@ def enviar_cancelar(slug: str, agendamento_id: str, request: Request, db: DbDep)
     if cancelado_pelo_cliente(ag):  # o mesmo envio de novo (LOG-07)
         return redirecionar(_conta(site, 'cancelado'))
     try:
-        cancelar(db, ag)
+        cancelar(site.ctx, ag)
     except NaoAlteravel:
         raise _nao_alteravel(site) from None
     return redirecionar(_conta(site, 'cancelado'))
@@ -322,7 +328,7 @@ def enviar_remarcacao(
         return recusa
     site = abrir(request, db, slug)
     ag = _travado(site, agendamento_id)
-    if not pode_alterar(ag.status, ag.inicio):
+    if not pode_alterar(ag.status, ag.inicio, site.ctx.antecedencia):
         raise _nao_alteravel(site)
     servico = _servico(site, ag.id, ag.servico_id, travar=True)
     profissional_id, inicio, local_id = _ler_escolha(site, ag.id, formulario)

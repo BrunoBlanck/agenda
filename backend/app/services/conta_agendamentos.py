@@ -2,8 +2,11 @@
 
 - **Quem:** só agendamentos da conta (mesma loja, cliente com o telefone da conta, não excluídos). Os
   outros respondem como inexistentes (a página dá 404).
-- **Quando** (``exigir_alteravel``): situação ``pendente``/``agendado``/``confirmado`` e pelo menos
-  ``ANTECEDENCIA_CLIENTE`` antes do início. O ``POST`` trava a linha (``FOR UPDATE``) e confere de novo.
+- **Quando** (``exigir_alteravel``): situação ``pendente``/``agendado``/``confirmado`` e pelo menos a
+  antecedência da loja (CFG-05, ``loja_configuracoes.antecedencia_cliente_minutos``) antes do início. O
+  ``POST`` trava a linha (``FOR UPDATE``) e confere de novo.
+- **Avisos** (NOT-03): cancelar avisa o profissional; remarcar avisa o cliente (pedido recebido), o
+  profissional novo e, se mudou, o antigo. Na mesma transação (e no mesmo savepoint) da alteração.
 - **Cancelar** (SIT-23): vira ``cancelado`` na hora, sem aceite da loja, com o motivo fixo.
 - **Remarcar** (SIT-24): mesmo serviço, preço congelado e a duração atual (``fim - inicio``); o novo
   horário precisa ser um dos que o site oferece (``horario_oferecido``), sem contar o próprio agendamento
@@ -35,6 +38,7 @@ from app.services.agendamento_site import (
 )
 from app.services.conta_cliente import SITUACOES_ATIVAS, pode_alterar
 from app.services.horarios_livres import locais_permitidos, profissionais
+from app.services.notificacoes import HorarioAnterior, avisar_cancelamento_do_site, avisar_remarcacao_do_site
 
 S = StatusAgendamento
 MOTIVO_CANCELAMENTO = 'Cancelado pelo cliente pelo site.'
@@ -76,9 +80,12 @@ def agendamento_da_conta(
     return db.scalar(consulta)
 
 
-def exigir_alteravel(situacao: StatusAgendamento, inicio: datetime, novo: StatusAgendamento) -> None:
-    """SIT-23/24 e AGE-25: situação ativa, dentro do prazo e transição do cliente permitida."""
-    if not pode_alterar(situacao, inicio) or novo not in TRANSICOES_DO_CLIENTE.get(situacao, frozenset()):
+def exigir_alteravel(
+    situacao: StatusAgendamento, inicio: datetime, novo: StatusAgendamento, antecedencia: timedelta
+) -> None:
+    """SIT-23/24 e AGE-25: situação ativa, dentro do prazo da loja e transição do cliente permitida."""
+    permitidas = TRANSICOES_DO_CLIENTE.get(situacao, frozenset())
+    if not pode_alterar(situacao, inicio, antecedencia) or novo not in permitidas:
         raise NaoAlteravel
 
 
@@ -94,12 +101,13 @@ def cancelado_pelo_cliente(ag: Agendamento) -> bool:
     return ag.status == S.cancelado and ag.motivo_cancelamento == MOTIVO_CANCELAMENTO
 
 
-def cancelar(db: Session, ag: Agendamento) -> None:
-    """Cancela na hora, com o motivo fixo (o chamador já travou a linha)."""
-    exigir_alteravel(ag.status, ag.inicio, S.cancelado)
+def cancelar(ctx: ContextoSite, ag: Agendamento) -> None:
+    """Cancela na hora, com o motivo fixo (o chamador já travou a linha), e avisa o profissional."""
+    exigir_alteravel(ag.status, ag.inicio, S.cancelado, ctx.antecedencia)
     ag.status = S.cancelado
     ag.motivo_cancelamento = MOTIVO_CANCELAMENTO
-    db.flush()
+    ctx.db.flush()
+    avisar_cancelamento_do_site(ctx.db, ctx.aviso, ag)
 
 
 # --- Remarcar (SIT-24) -----------------------------------------------------------------------------
@@ -187,9 +195,10 @@ def remarcar(
     Erros: ``NaoAlteravel``, os de ``novo_horario`` e, no ``flush``, a recusa do banco (23P01) se outro
     pedido levou o horário agora.
     """
-    exigir_alteravel(ag.status, ag.inicio, S.pendente)
+    exigir_alteravel(ag.status, ag.inicio, S.pendente, ctx.antecedencia)
     escolha = novo_horario(ctx, servico, ag, funcionario_id, inicio, local_id)
     livre = escolha.livre
+    antes = HorarioAnterior(funcionario_id=ag.funcionario_id, inicio=ag.inicio)
     if escolha.local_id != ag.local_id:
         ag.local_id = escolha.local_id  # sem o módulo Locais, None (como o pedido do site)
         ag.link_reuniao = None  # o link era do local antigo; o painel mostra o link padrão do novo
@@ -197,4 +206,5 @@ def remarcar(
     ag.inicio, ag.fim = livre.inicio, livre.fim
     ag.status = S.pendente
     ctx.db.flush()  # o banco recusa conflito de horário que tenha surgido agora (EXCLUDE)
+    avisar_remarcacao_do_site(ctx.db, ctx.aviso, ag, antes)
     return escolha

@@ -347,6 +347,7 @@ def test_pedido_auditado_como_cliente_pelo_site(cliente, engine_dono, clinica):
         ('clientes', 'inserir'),
         ('agendamentos', 'inserir'),
         ('agendamento_materiais', 'inserir'),
+        ('notificacoes', 'inserir'),  # NOT-01: os avisos do pedido, na mesma transação
     }
     assert all(r['funcionario_id'] is None and r['superadmin_id'] is None for r in registros)
 

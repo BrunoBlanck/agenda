@@ -128,6 +128,10 @@ MENSAGENS_CONSTRAINT = {
     'registros_ponto_sem_sobreposicao': 'Este funcionário já tem um registro de ponto nesse período.',
     'ck_loja_configuracoes_cor_site_topo': MSG_FORMATO_COR,
     'ck_loja_configuracoes_cor_site_destaque': MSG_FORMATO_COR,
+    'ck_loja_configuracoes_smtp_ativo': (
+        'Para ativar o envio de e-mail, preencha servidor, porta, segurança e remetente.'
+    ),
+    'ck_loja_configuracoes_antecedencia': 'A antecedência deve ficar entre 0 e 10080 minutos (7 dias).',
 }
 
 

@@ -559,7 +559,9 @@ def minha_conta(slug: str, request: Request, db: DbDep) -> HTMLResponse:
     site = abrir(request, db, slug)
     sessao = exigir_sessao(site)
     pagina_atual = _ler_pagina(request.query_params.get('pagina'))
-    dados = meus_agendamentos(db, site.ctx.loja.id, sessao.conta.telefone_digitos, pagina_atual)
+    dados = meus_agendamentos(
+        db, site.ctx.loja.id, sessao.conta.telefone_digitos, pagina_atual, site.ctx.antecedencia
+    )
     paginas = max(1, math.ceil(dados.total_historico / HISTORICO_POR_PAGINA))
     base = f'/{site.slug}/conta'
     return site.renderizar(

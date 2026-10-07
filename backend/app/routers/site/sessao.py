@@ -24,7 +24,7 @@ _UUID = r'[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}'
 # entrada/criação, nem outro slug, esquema ou "//")
 _PAGINAS = (
     rf'(?:/agendar(?:/dados|/pronto)?'
-    rf'|/conta(?:/agendamentos/{_UUID}/(?:cancelar|remarcar(?:/confirmar)?))?)?'
+    rf'|/conta(?:/avisos|/agendamentos/{_UUID}/(?:cancelar|remarcar(?:/confirmar)?))?)?'
 )
 _CONSULTA = r'(?:\?[A-Za-z0-9_.~%=&+-]*)?'
 

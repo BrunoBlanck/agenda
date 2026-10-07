@@ -44,6 +44,9 @@
 {{ contato('contato-capa', endereco, loja, telefone_link) }}
       </div>
       <nav class="conta-nav" aria-label="Sua conta">
+        {% if avisos_nav %}
+        <a class="conta-link avisos-link" href="{{ avisos_nav.url }}" aria-label="Avisos{% if avisos_nav.quantidade %}, {{ avisos_nav.quantidade }} {{ 'não lido' if avisos_nav.quantidade == 1 else 'não lidos' }}{% endif %}"><svg class="icone" aria-hidden="true" viewBox="0 0 24 24"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 8 3 8H3s3-1 3-8"/><path d="M10.3 21a1.9 1.9 0 0 0 3.4 0"/></svg><span class="avisos-texto">Avisos</span>{% if avisos_nav.quantidade %}<span class="contador" aria-hidden="true">{{ avisos_nav.quantidade if avisos_nav.quantidade < 100 else '99+' }}</span>{% endif %}</a>
+        {% endif %}
         <a class="conta-link" href="{{ conta_nav.url }}"><svg class="icone" aria-hidden="true" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>{{ conta_nav.texto }}</a>
       </nav>
     </div>
