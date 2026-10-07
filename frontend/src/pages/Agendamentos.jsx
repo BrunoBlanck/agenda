@@ -9,6 +9,7 @@ import { useTratarErro } from '../data/api/useTratarErro.js'
 import { rotulosLocal } from '../data/locais.js'
 import { dataBR, duracaoTexto, horaCurta } from '../utils/formatos.js'
 import AgendamentoPainel from '../components/AgendamentoPainel.jsx'
+import { SituacaoComPagamento } from '../components/PagamentoAtendimento.jsx'
 import { usePainel } from '../components/base/usePainel.js'
 import LocalInfo from '../components/LocalInfo.jsx'
 import { localDe } from '../components/agenda/util.js'
@@ -69,7 +70,12 @@ export default function Agendamentos() {
     moduloAtivo('servicos') && { title: 'Serviço', dataIndex: 'servicoNome', render: (nome) => nome ?? '—' },
     comLocais && { title: rotulos.singular, key: 'local', render: (_, a) => <LocalInfo local={localDe(a)} /> },
     { title: 'Duração', dataIndex: 'duracao', align: 'right', render: duracaoTexto },
-    { title: 'Situação', dataIndex: 'status', cartao: 'etiqueta', render: (s) => <EtiquetaStatus status={s} /> },
+    {
+      title: 'Situação',
+      dataIndex: 'status',
+      cartao: 'etiqueta',
+      render: (s, a) => (s === 'concluido' && a.pagamento ? <SituacaoComPagamento agendamento={a} /> : <EtiquetaStatus status={s} />),
+    },
     {
       title: <span className="sr-only">Ações</span>,
       key: 'acoes',

@@ -16,9 +16,13 @@ const focarPrimeiroCampo = (el) => {
 // onSalvar recebe os valores já validados.
 // nome, icone, cor: o registro em edição no cabeçalho (sem nome = registro novo).
 // extra(fechar): ações no cabeçalho; fechar(depois) respeita o aviso de alterações não salvas.
-// children também pode ser uma função (fechar) => campos, para atalhos dentro do formulário.
+// children também pode ser uma função (fechar, alterado, semAlteracoes) => campos, para atalhos dentro
+// do formulário (alterado: há alterações não salvas, ex.: para bloquear uma ação que grava fora do
+// formulário; semAlteracoes(): tira a marca depois que essa ação trouxe o registro salvo do servidor).
 // rodape: informação à esquerda do rodapé (ex.: última alteração). somenteLeitura: só o botão Fechar.
 // salvando: envio em andamento (botão com carregamento e campos travados: evita duplo envio).
+// ocupado: outra gravação em andamento dentro do painel (ex.: pagamento): campos, Salvar e fechar
+// travados, sem carregamento no Salvar.
 // Fechar (X, Esc, clique fora ou Cancelar) com alterações pendentes pede confirmação antes de descartar.
 export default function PainelFormulario({
   titulo,
@@ -33,6 +37,7 @@ export default function PainelFormulario({
   textoSalvar = 'Salvar',
   somenteLeitura = false,
   salvando = false,
+  ocupado = false,
   largura,
   rodape,
   extra,
@@ -55,7 +60,7 @@ export default function PainelFormulario({
       onCancelar()
       if (typeof depois === 'function') depois()
     }
-    if (salvando) return
+    if (salvando || ocupado) return
     if (!alterado) return sair()
     modal.confirm({
       title: 'Descartar alterações?',
@@ -96,10 +101,10 @@ export default function PainelFormulario({
               <Button onClick={onCancelar}>Fechar</Button>
             ) : (
               <>
-                <Button onClick={() => fechar()} disabled={salvando}>
+                <Button onClick={() => fechar()} disabled={salvando || ocupado}>
                   Cancelar
                 </Button>
-                <Button type="primary" loading={salvando} onClick={() => form.submit()}>
+                <Button type="primary" loading={salvando} disabled={ocupado} onClick={() => form.submit()}>
                   {textoSalvar}
                 </Button>
               </>
@@ -114,9 +119,9 @@ export default function PainelFormulario({
           layout="vertical"
           preserve={false}
           initialValues={valoresIniciais}
-          disabled={somenteLeitura || salvando}
+          disabled={somenteLeitura || salvando || ocupado}
           onFinish={(valores) => {
-            if (!salvando) onSalvar(valores)
+            if (!salvando && !ocupado) onSalvar(valores)
           }}
           onValuesChange={(...args) => {
             setAlterado(true)
@@ -125,7 +130,7 @@ export default function PainelFormulario({
           scrollToFirstError
           {...propsForm}
         >
-          {typeof children === 'function' ? children(fechar) : children}
+          {typeof children === 'function' ? children(fechar, alterado, () => setAlterado(false)) : children}
           {/* Enter em qualquer campo envia */}
           <button type="submit" hidden aria-hidden="true" tabIndex={-1} />
         </Form>

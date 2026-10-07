@@ -9,9 +9,12 @@ import {
   obterAgendamento,
 } from './api/agendamentos.js'
 
+export { registrarPagamento } from './api/agendamentos.js'
+
 // Hooks da área de agendamentos (lista, detalhe, listas de apoio, disponibilidade).
 // As ações (criar, editar, mudar status, aceitar, recusar, materiais, excluir) ficam em
 // data/api/agendamentos.js: a tela chama e trata o erro com useTratarErro.
+// registrarPagamento (que conclui o atendimento, AGE-26) é reexportado daqui para a seção Pagamento do painel.
 
 const POR_PAGINA = 20
 const BUSCA_MINIMA = 2
@@ -23,7 +26,8 @@ export const LIBERAM_HORARIO = ['cancelado', 'nao_compareceu']
 const TRANSICOES = {
   pendente: ['confirmado', 'cancelado'],
   agendado: ['confirmado', 'cancelado', 'nao_compareceu'],
-  confirmado: ['concluido', 'cancelado', 'nao_compareceu'],
+  // Concluir não passa pela Situação: é registrar o pagamento (AGE-26)
+  confirmado: ['cancelado', 'nao_compareceu'],
 }
 
 /**
@@ -78,7 +82,14 @@ export function useListaAgendamentos(filtros) {
 /** Um agendamento completo (com os materiais). ativo = false não busca (painel fechado ou registro novo). */
 export function useAgendamento(id, { ativo = true } = {}) {
   const consulta = useConsulta((sinal) => obterAgendamento(id, sinal), ['agendamento', id], { ativo: ativo && !!id })
-  return { agendamento: consulta.dados, carregando: consulta.atualizando, erro: consulta.erro, recarregar: consulta.recarregar }
+  return {
+    agendamento: consulta.dados,
+    carregando: consulta.atualizando,
+    erro: consulta.erro,
+    recarregar: consulta.recarregar,
+    // Troca o detalhe pela resposta de uma ação (ex.: registrarPagamento), sem buscar de novo
+    definir: consulta.definirDados,
+  }
 }
 
 /** Serviços, profissionais, locais e materiais do formulário. Exige escrita na agenda: ativo = false para quem só lê. */

@@ -7,6 +7,21 @@ import { enviarData, enviarDataHora, enviarNumero, lerDataHora, lerNumero, lerPa
 
 const lista = (v) => (Array.isArray(v) ? v : [])
 
+/**
+ * Pagamento ativo do atendimento (AGE-26 a AGE-29): só em concluído; null nos demais e nos concluídos
+ * antigos (AGE-29). pago_em vem no fuso da loja e é lido na hora da loja (INT-11).
+ */
+const lerPagamento = (p) =>
+  p && typeof p === 'object'
+    ? {
+        id: p.id ?? null,
+        forma: p.forma ?? null,
+        valor: lerNumero(p.valor),
+        pagoEm: lerDataHora(p.pago_em),
+        registradoPorNome: p.registrado_por_nome ?? null,
+      }
+    : null
+
 const lerMaterialUsado = (m) => ({
   materialId: m?.material_id ?? null,
   nome: m?.nome ?? '—',
@@ -47,6 +62,8 @@ export function converterAgendamento(a) {
     criadoPor: a?.criado_por ?? null,
     // Só no detalhe (GET /agendamentos/{id}) com o módulo Materiais ativo; null = não veio
     materiais: Array.isArray(a?.materiais) ? a.materiais.map(lerMaterialUsado) : null,
+    // { id, forma, valor, pagoEm (dayjs na hora da loja), registradoPorNome } | null
+    pagamento: lerPagamento(a?.pagamento),
     criadoEm: a?.criado_em ?? null,
     atualizadoEm: a?.atualizado_em ?? null,
     atualizadoPor: a?.atualizado_por ?? null,
@@ -125,6 +142,14 @@ export const mudarStatusAgendamento = async (id, status, motivoCancelamento) =>
       ...(status === 'cancelado' && { motivo_cancelamento: textoOuNulo(motivoCancelamento) }),
     }),
   )
+
+/**
+ * POST /agendamentos/{id}/pagamento: registra o pagamento e conclui o atendimento (AGE-26), só a partir
+ * de Confirmado. { forma: 'credito'|'debito'|'dinheiro'|'pix', valor: number } -> agendamento Concluído
+ * (detalhe, com materiais e `pagamento`). Rejeita com ErroApi; 422 traz campos [{ campo: 'forma'|'valor', mensagem }].
+ */
+export const registrarPagamento = async (id, { forma, valor }) =>
+  converterAgendamento(await api.loja.post(`/agendamentos/${id}/pagamento`, { forma, valor: enviarNumero(valor) }))
 
 /** Pedido do site: aceitar (vira confirmado) ou recusar (vira cancelado; sem motivo = "Recusado pela loja"). */
 export const aceitarSolicitacao = async (id) => converterAgendamento(await api.loja.post(`/agendamentos/${id}/aceitar`))

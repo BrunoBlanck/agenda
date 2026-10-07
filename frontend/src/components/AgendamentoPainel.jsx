@@ -11,6 +11,7 @@ import {
   criarAgendamento,
   editarAgendamento,
   mudarStatusAgendamento,
+  obterAgendamento,
   recusarSolicitacao,
 } from '../data/api/agendamentos.js'
 import { useTratarErro } from '../data/api/useTratarErro.js'
@@ -31,6 +32,7 @@ import { EtiquetaTipoLocal } from './Etiquetas.jsx'
 import UltimaAlteracao from './UltimaAlteracao.jsx'
 import HistoricoCliente from './HistoricoCliente.jsx'
 import ResumoCliente from './ResumoCliente.jsx'
+import PagamentoAtendimento from './PagamentoAtendimento.jsx'
 import './agenda/agenda.css'
 
 // Erros 422 da API cujo campo tem outro nome no formulário
@@ -98,6 +100,7 @@ export default function AgendamentoPainel({ open, onClose, agendamento, dataInic
   const historico = usePainel()
   const valores = Form.useWatch([], form) ?? {}
   const [salvando, setSalvando] = useState(false)
+  const [pagando, setPagando] = useState(false) // pagamento sendo gravado: formulário travado
   // Conflito (409) ou regra (422 sem campo) devolvida pelo servidor: fica junto do formulário,
   // no campo relacionado (campo) ou num aviso no topo (campo = null). { mensagem, campo }
   const [erroServidor, setErroServidor] = useState(null)
@@ -349,6 +352,31 @@ export default function AgendamentoPainel({ open, onClose, agendamento, dataInic
     setErroServidor(null)
   }
 
+  // Pagamento registrado (AGE-26): o painel continua aberto, agora com o atendimento Concluído.
+  // Só se paga sem alterações no formulário (e ele fica travado durante o envio), então trocar os
+  // valores pelos do servidor não perde edição e o formulário volta a estar sem alterações.
+  const aoPagar = (resultado, semAlteracoes) => {
+    detalhe.definir(resultado)
+    form.setFieldsValue(valoresDe(resultado))
+    semAlteracoes()
+    setErroServidor(null)
+    onSalvo?.(resultado)
+  }
+
+  // 409 no pagamento (já pago por outra pessoa, situação mudou): reconsulta e mostra o agendamento como está.
+  // Devolve o agendamento atual (null se a consulta falhar) para a seção explicar se sumir.
+  const aoConflitoNoPagamento = async (semAlteracoes) => {
+    try {
+      const atual = await obterAgendamento(original.id)
+      aoPagar(atual, semAlteracoes)
+      return atual
+    } catch {
+      detalhe.recarregar()
+      onSalvo?.()
+      return null
+    }
+  }
+
   const titulo = somenteLeitura ? 'Agendamento' : editando ? 'Editar agendamento' : 'Novo agendamento'
   const avisoLeitura =
     editando && finalizado && !podeReabrir && agenda.editar(original)
@@ -365,6 +393,7 @@ export default function AgendamentoPainel({ open, onClose, agendamento, dataInic
         valoresIniciais={valoresIniciais}
         somenteLeitura={somenteLeitura}
         salvando={salvando}
+        ocupado={pagando}
         textoSalvar={editando ? 'Salvar' : 'Agendar'}
         largura={560}
         onCancelar={onClose}
@@ -372,7 +401,7 @@ export default function AgendamentoPainel({ open, onClose, agendamento, dataInic
         onValuesChange={aoMudar}
         rodape={<UltimaAlteracao item={original} />}
       >
-        {(fechar) => (
+        {(fechar, alterado, semAlteracoes) => (
           <>
             {avisoLeitura && <Alert type="info" showIcon title={avisoLeitura} className="alerta-formulario" />}
             {apoioConsulta.erro && !somenteLeitura && (
@@ -615,7 +644,9 @@ export default function AgendamentoPainel({ open, onClose, agendamento, dataInic
                         )}
                         {statusOriginal === 'concluido' && <p className="texto-apoio agendamento-nota">Já baixados do estoque na conclusão.</p>}
                         {materiaisEditaveis && (
-                          <p className="texto-apoio agendamento-nota">Ajuste o que foi usado antes de concluir: na conclusão eles saem do estoque.</p>
+                          <p className="texto-apoio agendamento-nota">
+                            Ajuste o que foi usado antes de registrar o pagamento: nessa hora eles saem do estoque.
+                          </p>
                         )}
                       </>
                     )}
@@ -653,6 +684,19 @@ export default function AgendamentoPainel({ open, onClose, agendamento, dataInic
             <Form.Item name="observacoes" label="Observações">
               <Input.TextArea rows={3} maxLength={2000} />
             </Form.Item>
+
+            {editando && (
+              <PagamentoAtendimento
+                agendamento={original}
+                podeRegistrar={!somenteLeitura}
+                alterado={alterado}
+                reabrindo={statusOriginal === 'concluido' && valores.status != null && valores.status !== statusOriginal}
+                onEnviando={setPagando}
+                onPago={(resultado) => aoPagar(resultado, semAlteracoes)}
+                onConflito={() => aoConflitoNoPagamento(semAlteracoes)}
+                onNaoEncontrado={() => naoEncontrado.current?.()}
+              />
+            )}
           </>
         )}
       </PainelFormulario>
