@@ -1,4 +1,4 @@
-- [armadilhas-ambiente](armadilhas-ambiente.md) — API local (uvicorn --reload no Windows, curl com acentos), porta 5173 ocupada, node órfão após TaskStop, Vite com base /_app/
+- [armadilhas-ambiente](armadilhas-ambiente.md) — API local (uvicorn --reload, curl com acentos), uv fora do PATH, .env.local com proxy alheio, porta 5173 ocupada, node órfão
 - [armadilhas-form-antd](armadilhas-form-antd.md) — Form.List dentro do PainelFormulario (preserve={false}) perde os valores quando os dados chegam depois da abertura; e como testar o painel no navegador sem login
 - [armadilhas-integracao](armadilhas-integracao.md) — Fuso, CPFs do seed, Form com id, 409 no campo, useConsulta, route do Playwright, efeito filho x Provider da sessão, History do Chromium, painel que pisca ao fechar (useConsulta ativo=false), código real do site
 - [datas-controle-utc](datas-controle-utc.md) — Fuso das datas da API — o back-end responde tudo no fuso da loja; o front usa a hora escrita na string e só converte UTC ("Z")

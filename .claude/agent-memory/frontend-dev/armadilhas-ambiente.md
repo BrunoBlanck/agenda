@@ -17,3 +17,8 @@ Mais (2026-10-03, roteamento por URL):
 - A porta **5173 pode estar ocupada por outro projeto** desta máquina (um Vite do HomeFinance, só em `[::1]`): suba o nosso com `npx vite --port 5180 --strictPort` em vez de matar o processo alheio.
 - `TaskStop` numa tarefa `npx vite ...` mata o shell e **deixa o node órfão** escutando a porta: depois de parar, confira `Get-NetTCPConnection -LocalPort <porta> -State Listen` e derrube o PID (só os que você subiu).
 - Vite com `base: '/_app/'` imitando o nginx: o painel abre em `localhost:<porta>/{slug}/painel`; `/` e `/{slug}` vão para o back-end (precisa da API no ar, senão o proxy dá erro). `vite preview` precisa ser reiniciado depois de mudar o `vite.config.js` (o dev reinicia sozinho).
+
+Mais (2026-10-06, notificacoes):
+- `uv` não está no PATH do Bash nem do PowerShell: `C:\Users\consys\AppData\Roaming\Python\Python313\Scripts\uv.exe` (ou o Python do `backend/.venv/Scripts/python.exe` para scripts).
+- `frontend/.env.local` (de outra sessão) aponta `API_PROXY_ALVO=http://127.0.0.1:4823` e `PORTA_DEV=4824`: o proxy dá 502 com a API na 8000. Suba o Vite com `$env:API_PROXY_ALVO='http://localhost:8000'` (variável do processo vence o arquivo no `loadEnv`); não edite o `.env.local` alheio.
+- Teste de e-mail SMTP: limite real de 5 por loja a cada 10 min (429); o 409 vem antes do limite, então dá para provocá-lo depois.

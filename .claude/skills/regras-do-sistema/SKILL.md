@@ -20,6 +20,7 @@ Catálogo condensado das regras do produto. **A fonte da verdade continua sendo 
 | Cadastros da loja: clientes, funcionários, cargos, serviços, locais, materiais, estoque, ponto, dados da loja | [referencias/cadastros.md](referencias/cadastros.md) | `CLI-*`, `FUN-*`, `SER-*`, `LOC-*`, `MAT-*`, `PON-*`, `CFG-*` |
 | Plataforma (SUPERADMIN): lojas, módulos, planos, usuários admin, auditoria | [referencias/plataforma.md](referencias/plataforma.md) | `PLA-*` |
 | Site do consumidor (público, por `slug`) | [referencias/site.md](referencias/site.md) | `SIT-*` |
+| Notificações: sino do painel e do site, e-mail pelo SMTP da loja, WhatsApp (pendente), lembrete | [referencias/notificacoes.md](referencias/notificacoes.md) | `NOT-*` |
 | Pontos em aberto e decisões provisórias | [referencias/em-aberto.md](referencias/em-aberto.md) | `ABE-*` |
 
 3. Se a regra não está em nenhum lugar, **não invente**: é um ponto em aberto. Escolha o comportamento mais conservador, deixe fácil de trocar e registre como decisão provisória (ver `em-aberto.md`).
