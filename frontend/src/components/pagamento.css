@@ -1,0 +1,129 @@
+/* Pagamento do atendimento, no painel do agendamento */
+
+.pagamento-pendente {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--espaco-2);
+  margin-bottom: var(--espaco-4);
+}
+
+.pagamento-pendente .texto-apoio {
+  margin: 0;
+}
+
+.pagamento-aviso {
+  align-self: stretch;
+}
+
+.pagamento-registro .pagamento-aviso {
+  margin-top: var(--espaco-3);
+}
+
+/* Registro aberto: a forma e o valor ficam juntos numa área própria do painel */
+.pagamento-registro {
+  margin-bottom: var(--espaco-4);
+  padding: var(--espaco-4);
+  background: var(--cor-superficie-suave);
+  border: 1px solid var(--cor-linha);
+  border-radius: var(--raio-conteiner);
+}
+
+.pagamento-registro .ant-form-item:last-of-type {
+  margin-bottom: var(--espaco-4);
+}
+
+/* Formas: 2 x 2 no celular, uma linha só a partir de 576 px. Alvo de toque de 44 px (DIR-004). */
+.pagamento-formas {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--espaco-2);
+}
+
+@media (min-width: 576px) {
+  .pagamento-formas {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+.pagamento-forma {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 44px;
+  padding: var(--espaco-2) var(--espaco-3);
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--cor-texto);
+  background: var(--cor-superficie);
+  border: 1px solid var(--cor-linha);
+  border-radius: var(--raio-controle);
+  cursor: pointer;
+  user-select: none;
+  transition:
+    border-color var(--duracao),
+    background-color var(--duracao);
+}
+
+.pagamento-forma:hover {
+  border-color: var(--cor-tinta-borda);
+}
+
+.pagamento-forma.escolhida {
+  font-weight: 600;
+  color: var(--cor-tinta-escura);
+  background: var(--cor-tinta-clara);
+  border-color: var(--cor-tinta);
+}
+
+.pagamento-forma:has(input:focus-visible) {
+  outline: 2px solid var(--cor-tinta);
+  outline-offset: 2px;
+}
+
+.pagamento-forma:has(input:disabled) {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.pagamento-formas.com-erro .pagamento-forma:not(.escolhida) {
+  border-color: var(--tom-perigo);
+}
+
+/* Concluído: o que foi pago em destaque discreto, quando e quem em texto de apoio */
+.pagamento-resumo {
+  margin-bottom: var(--espaco-4);
+}
+
+.pagamento-resumo p {
+  margin: 0;
+}
+
+.pagamento-resumo-forma {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--cor-texto);
+}
+
+.pagamento-resumo-quando {
+  margin-top: 2px;
+  overflow-wrap: anywhere;
+}
+
+/* Lista de agendamentos: forma e valor abaixo da etiqueta Concluído */
+.situacao-com-pagamento {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+}
+
+.situacao-com-pagamento .texto-apoio {
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.cartao-tabela-etiquetas .situacao-com-pagamento {
+  align-items: flex-end;
+}

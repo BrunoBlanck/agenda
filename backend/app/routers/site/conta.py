@@ -39,7 +39,7 @@ from app.limites import (
     limite_login_site,
 )
 from app.models import ClienteConta
-from app.models.enums import StatusAgendamento
+from app.models.enums import FormaPagamento, StatusAgendamento
 from app.routers.html import RespostaPronta, pagina, redirecionar
 from app.routers.site.paginas import (
     METODOS,
@@ -117,6 +117,15 @@ SITUACOES = {
     StatusAgendamento.concluido: 'Concluído',
     StatusAgendamento.cancelado: 'Cancelado',
     StatusAgendamento.nao_compareceu: 'Não compareceu',
+}
+
+# SIT-26: "Concluído · pago no Pix · R$ 50,00" (forma em minúsculas no meio da frase)
+NBSP = '\u00a0'  # espaço inseparável
+PAGO_COM = {
+    FormaPagamento.credito: 'no crédito',
+    FormaPagamento.debito: 'no débito',
+    FormaPagamento.dinheiro: 'em dinheiro',
+    FormaPagamento.pix: 'no Pix',
 }
 
 ROTULOS = {
@@ -532,6 +541,19 @@ def _ler_pagina(texto: str | None) -> int:
     return int(texto) if 1 <= int(texto) <= PAGINA_MAXIMA else 1
 
 
+def situacao_no_site(item: MeuAgendamento) -> str:
+    """SIT-26: concluído com pagamento mostra a forma e o valor; sem pagamento (AGE-29), só "Concluído".
+
+    O valor usa espaço inseparável depois de "R$" para não quebrar a linha entre o símbolo e o número no
+    celular (DIR-004).
+    """
+    situacao = SITUACOES[item.status]
+    forma, valor = item.pagamento_forma, item.pagamento_valor
+    if item.status == StatusAgendamento.concluido and forma is not None and valor is not None:
+        return f'{situacao} · pago {PAGO_COM[forma]} · {moeda(valor).replace(" ", NBSP)}'
+    return situacao
+
+
 def item_da_conta(site: Pagina, item: MeuAgendamento, *, futuro: bool = True) -> dict[str, object]:
     """Um agendamento como as páginas da conta mostram. Nos próximos, os links de remarcar e cancelar
     (SIT-23/24) quando ainda dá, ou o aviso de falar com a loja quando passou do prazo."""
@@ -546,7 +568,7 @@ def item_da_conta(site: Pagina, item: MeuAgendamento, *, futuro: bool = True) ->
         'profissional': item.funcionario_nome,
         'local': item.local_nome,
         'preco': moeda(item.preco) if item.preco is not None else None,
-        'situacao': SITUACOES[item.status],
+        'situacao': situacao_no_site(item),
         'classe': item.status.value,
         'remarcar': f'{base}/remarcar' if alteravel else None,
         'cancelar': f'{base}/cancelar' if alteravel else None,

@@ -41,6 +41,11 @@ MENSAGENS_VALIDACAO = {
     'int_type': 'Informe um número inteiro.',
     'float_parsing': 'Informe um número.',
     'decimal_parsing': 'Informe um número.',
+    'decimal_type': 'Informe um número.',
+    'finite_number': 'Informe um número.',
+    'decimal_max_places': 'Use no máximo {decimal_places} casas decimais.',
+    'decimal_max_digits': 'Valor fora do limite permitido.',
+    'decimal_whole_digits': 'Valor fora do limite permitido.',
     'bool_parsing': 'Informe verdadeiro ou falso.',
     'greater_than_equal': 'O valor deve ser maior ou igual a {ge}.',
     'greater_than': 'O valor deve ser maior que {gt}.',
@@ -132,6 +137,8 @@ MENSAGENS_CONSTRAINT = {
         'Para ativar o envio de e-mail, preencha servidor, porta, segurança e remetente.'
     ),
     'ck_loja_configuracoes_antecedencia': 'A antecedência deve ficar entre 0 e 10080 minutos (7 dias).',
+    'agendamento_pagamentos_ativo_uk': 'Este atendimento já está pago.',
+    'ck_agendamento_pagamentos_valor': 'O valor do pagamento não pode ser negativo.',
 }
 
 

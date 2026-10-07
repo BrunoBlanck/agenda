@@ -38,8 +38,17 @@ from sqlalchemy.orm import Session
 
 from app.auth.tokens import DadosTokenCliente
 from app.db import definir_contexto
-from app.models import Agendamento, Cliente, ClienteCodigo, ClienteConta, Funcionario, Local, Servico
-from app.models.enums import CanalCliente, StatusAgendamento
+from app.models import (
+    Agendamento,
+    AgendamentoPagamento,
+    Cliente,
+    ClienteCodigo,
+    ClienteConta,
+    Funcionario,
+    Local,
+    Servico,
+)
+from app.models.enums import CanalCliente, FormaPagamento, StatusAgendamento
 from app.schemas.comum import formatar_telefone, so_digitos
 from app.services.agendamento_site import NOME_SEM_SERVICO, cliente_do_telefone, filtro_telefone
 from app.services.assinatura import assinar_id, ler_id
@@ -376,6 +385,8 @@ class MeuAgendamento:
     alteravel: bool  # pode cancelar/remarcar pelo site (situação ativa e prazo da loja, CFG-05)
     servico_id: UUID | None
     funcionario_id: UUID
+    pagamento_forma: FormaPagamento | None = None  # SIT-26: só a forma e o valor do pagamento ativo
+    pagamento_valor: Decimal | None = None
 
 
 @dataclass(frozen=True)
@@ -408,6 +419,8 @@ def _da_conta(loja_id: UUID, digitos: str) -> Select:
             Local.nome,
             Agendamento.servico_id,
             Agendamento.funcionario_id,
+            AgendamentoPagamento.forma,
+            AgendamentoPagamento.valor,
         )
         .join(Cliente, (Cliente.id == Agendamento.cliente_id) & (Cliente.loja_id == Agendamento.loja_id))
         .join(
@@ -416,6 +429,14 @@ def _da_conta(loja_id: UUID, digitos: str) -> Select:
         )
         .outerjoin(Servico, (Servico.id == Agendamento.servico_id) & (Servico.loja_id == Agendamento.loja_id))
         .outerjoin(Local, (Local.id == Agendamento.local_id) & (Local.loja_id == Agendamento.loja_id))
+        # SIT-26: o pagamento ativo (no máximo um, AGE-27), na mesma consulta
+        .outerjoin(
+            AgendamentoPagamento,
+            (AgendamentoPagamento.agendamento_id == Agendamento.id)
+            & (AgendamentoPagamento.loja_id == Agendamento.loja_id)
+            & AgendamentoPagamento.excluido_em.is_(None)
+            & (Agendamento.status == StatusAgendamento.concluido),
+        )
         .where(
             Agendamento.loja_id == loja_id,
             Agendamento.excluido_em.is_(None),
@@ -442,6 +463,8 @@ def _item(linha: Row, agora: datetime, antecedencia: timedelta) -> MeuAgendament
         local_nome,
         servico_id,
         funcionario_id,
+        pagamento_forma,
+        pagamento_valor,
     ) = linha
     return MeuAgendamento(
         id=id_,
@@ -455,6 +478,8 @@ def _item(linha: Row, agora: datetime, antecedencia: timedelta) -> MeuAgendament
         alteravel=pode_alterar(situacao, inicio, antecedencia, agora),
         servico_id=servico_id,
         funcionario_id=funcionario_id,
+        pagamento_forma=pagamento_forma,
+        pagamento_valor=pagamento_valor,
     )
 
 

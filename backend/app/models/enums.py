@@ -20,6 +20,13 @@ class StatusAgendamento(StrEnum):
     nao_compareceu = 'nao_compareceu'
 
 
+class FormaPagamento(StrEnum):
+    credito = 'credito'
+    debito = 'debito'
+    dinheiro = 'dinheiro'
+    pix = 'pix'
+
+
 class OrigemAgendamento(StrEnum):
     painel = 'painel'
     site = 'site'

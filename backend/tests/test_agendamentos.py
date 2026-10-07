@@ -30,6 +30,15 @@ def _estoque(cliente, c: Clinica):
     return cliente.get(f'/api/loja/materiais/{c.luvas}', headers=c.lt.h_admin).json()['quantidade_atual']
 
 
+def _concluir(cliente, c: Clinica, ag_id, cab=None, forma='pix', valor=200):
+    """Confirma (se preciso) e registra o pagamento: a única forma de concluir (AGE-26)."""
+    cab = cab or c.lt.h_admin
+    cliente.post(f'{URL}/{ag_id}/status', json={'status': 'confirmado'}, headers=cab)
+    resposta = cliente.post(f'{URL}/{ag_id}/pagamento', json={'forma': forma, 'valor': valor}, headers=cab)
+    assert resposta.status_code == 200, resposta.json()
+    return resposta.json()
+
+
 # --- Criação: serviço define duração e preço ----------------------------------------------------
 
 
@@ -189,15 +198,15 @@ def test_fluxo_de_status_baixa_e_estorno_do_estoque(cliente, clinica, engine_don
     c = clinica
     ag = _criar(cliente, c)
     url = f'{URL}/{ag["id"]}/status'
-    pular = cliente.post(url, json={'status': 'concluido'}, headers=c.lt.h_admin)
+    pagar = f'{URL}/{ag["id"]}/pagamento'
+    pix = {'forma': 'pix', 'valor': 200}
+    pular = cliente.post(pagar, json=pix, headers=c.lt.h_admin)
     assert _erro(pular, 409) == 'Não é possível passar de "Agendado" para "Concluído".'
     assert (
         cliente.post(url, json={'status': 'confirmado'}, headers=c.lt.h_admin).json()['status']
         == 'confirmado'
     )
-    assert (
-        cliente.post(url, json={'status': 'concluido'}, headers=c.lt.h_admin).json()['status'] == 'concluido'
-    )
+    assert cliente.post(pagar, json=pix, headers=c.lt.h_admin).json()['status'] == 'concluido'
     assert _estoque(cliente, c) == 8  # 10 - 2 luvas
 
     final = cliente.post(url, json={'status': 'cancelado', 'motivo_cancelamento': 'x'}, headers=c.lt.h_admin)
@@ -212,7 +221,7 @@ def test_fluxo_de_status_baixa_e_estorno_do_estoque(cliente, clinica, engine_don
         == 'confirmado'
     )
     assert _estoque(cliente, c) == 10  # estorno
-    cliente.post(url, json={'status': 'concluido'}, headers=c.lt.h_admin)
+    assert cliente.post(pagar, json=pix, headers=c.lt.h_admin).status_code == 200
     assert _estoque(cliente, c) == 8
     with engine_dono.connect() as conexao:
         movimentos = conexao.execute(
@@ -231,8 +240,7 @@ def test_estoque_pode_ficar_negativo(cliente, clinica):
     c = clinica
     for hora in ('08:00', '09:00', '10:00', '13:00', '14:00', '15:00'):
         ag = _criar(cliente, c, inicio=f'{SEGUNDA}T{hora}', local_id=c.online)
-        for st in ('confirmado', 'concluido'):
-            cliente.post(f'{URL}/{ag["id"]}/status', json={'status': st}, headers=c.lt.h_admin)
+        _concluir(cliente, c, ag['id'])
     assert _estoque(cliente, c) == -2
     material = cliente.get(f'/api/loja/materiais/{c.luvas}', headers=c.lt.h_admin).json()
     assert material['repor'] is True
@@ -243,8 +251,7 @@ def test_sem_modulo_materiais_nao_ha_baixa(cliente, clinica, engine_dono):
     mudar_modulo(engine_dono, c.lt.loja.id, 'materiais', habilitado=False)
     ag = _criar(cliente, c)
     assert ag['materiais'] is None
-    for st in ('confirmado', 'concluido'):
-        cliente.post(f'{URL}/{ag["id"]}/status', json={'status': st}, headers=c.lt.h_admin)
+    _concluir(cliente, c, ag['id'])
     mudar_modulo(engine_dono, c.lt.loja.id, 'materiais', habilitado=True)
     assert _estoque(cliente, c) == 10
 
@@ -354,8 +361,7 @@ def test_ajustar_materiais_antes_de_concluir(cliente, clinica):
         headers=c.lt.h_prof,
     )
     assert ajustado.json()['materiais'][0]['quantidade'] == 3
-    for st in ('confirmado', 'concluido'):
-        cliente.post(f'{URL}/{ag["id"]}/status', json={'status': st}, headers=c.lt.h_prof)
+    _concluir(cliente, c, ag['id'], c.lt.h_prof)
     assert _estoque(cliente, c) == 7
     depois = cliente.put(f'{URL}/{ag["id"]}/materiais', json={'materiais': []}, headers=c.lt.h_admin)
     assert _erro(depois, 409) == 'Os materiais só podem ser ajustados antes de concluir o atendimento.'
@@ -368,8 +374,7 @@ def test_excluir(cliente, clinica):
     assert cliente.get(f'{URL}/{ag["id"]}', headers=c.lt.h_admin).status_code == 404
     # O horário fica livre de novo
     concluido = _criar(cliente, c)
-    for st in ('confirmado', 'concluido'):
-        cliente.post(f'{URL}/{concluido["id"]}/status', json={'status': st}, headers=c.lt.h_admin)
+    _concluir(cliente, c, concluido['id'])
     assert 'não pode ser excluído' in _erro(
         cliente.delete(f'{URL}/{concluido["id"]}', headers=c.lt.h_admin), 409
     )
@@ -581,8 +586,7 @@ def test_disponibilidade(cliente, clinica):
 def test_historico_do_cliente(cliente, clinica):
     c = clinica
     concluido = _criar(cliente, c)
-    for st in ('confirmado', 'concluido'):
-        cliente.post(f'{URL}/{concluido["id"]}/status', json={'status': st}, headers=c.lt.h_admin)
+    _concluir(cliente, c, concluido['id'])
     falta = _criar(cliente, c, inicio=f'{SEGUNDA}T10:00')
     cliente.post(f'{URL}/{falta["id"]}/status', json={'status': 'nao_compareceu'}, headers=c.lt.h_admin)
     do_admin = _criar(cliente, c, funcionario_id=str(c.lt.admin.id), inicio='2030-01-14T09:00')
@@ -646,8 +650,7 @@ def test_isolamento_entre_lojas(cliente, lojas, clinica):
 def test_historico_ignora_agendamentos_excluidos(cliente, clinica):
     c = clinica
     ag = _criar(cliente, c)
-    for st in ('confirmado', 'concluido'):
-        cliente.post(f'{URL}/{ag["id"]}/status', json={'status': st}, headers=c.lt.h_admin)
+    _concluir(cliente, c, ag['id'])
     excluido = _criar(cliente, c, inicio=f'{SEGUNDA}T13:00')
     cliente.post(f'{URL}/{excluido["id"]}/status', json={'status': 'nao_compareceu'}, headers=c.lt.h_admin)
     cliente.delete(f'{URL}/{excluido["id"]}', headers=c.lt.h_admin)

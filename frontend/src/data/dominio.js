@@ -23,6 +23,14 @@ export const statusAgendamento = {
   nao_compareceu: { label: 'Não compareceu', tom: 'atencao' },
 }
 
+// Forma do pagamento do atendimento (AGE-27). frase: como entra no meio da frase ("Pago no Pix")
+export const formasPagamento = {
+  credito: { label: 'Crédito', frase: 'no crédito' },
+  debito: { label: 'Débito', frase: 'no débito' },
+  dinheiro: { label: 'Dinheiro', frase: 'em dinheiro' },
+  pix: { label: 'Pix', frase: 'no Pix' },
+}
+
 // Tipo da loja: constante do sistema (no banco, enum tipo_loja). Cada tipo tem o próprio site do
 // consumidor final (layout, textos e fluxo), por isso um tipo novo só entra junto com código novo.
 export const tiposLoja = {

@@ -33,3 +33,12 @@ Mais (2026-10-06, conta-cliente):
   **How to apply:** todo hook "busca de novo ao reabrir".
 - Para forçar bordas (null, 502 HTML, rede fora, 401) com o back-end real rodando, `page.route` do Playwright no endpoint é suficiente e não mexe no banco; o 404 real do DELETE dá para provocar servindo um GET falso com `possui_conta: true`.
 - Código de confirmação real do site (conta-cliente): `/clinica-sorriso/conta/criar` com o telefone da Maria do seed `(11) 98888-1111`; o código só é consumido ao salvar a senha. Remover acesso também invalida os códigos pendentes do telefone (a lista do painel esvazia).
+
+Mais (2026-10-07, pagamento-atendimento):
+- No `AgendamentoPainel`, `form.isFieldsTouched()` fica **true** só por causa da `Form.List` de `materiais` (sem o usuário mexer
+  em nada), então o efeito "detalhe chegou → `setFieldsValue` se ninguém mexeu" não roda depois de um `detalhe.recarregar()`.
+  Ação fora do Form que muda o agendamento (pagamento, 409 com reconsulta) precisa aplicar a resposta direto:
+  `detalhe.definir(novo)` + `form.setFieldsValue(valoresDe(novo))`, senão o Select fica com a situação antiga.
+  **Why:** depois do 409 "já está pago" a seção mostrava o aviso de reabrir (status do form ≠ do detalhe).
+  **How to apply:** toda ação lateral do painel do agendamento que troca o status.
+- Pagamento de teste se desfaz reabrindo pelo Administrador (`POST .../status` para `confirmado`/`agendado`): o pagamento some (AGE-28).

@@ -28,6 +28,7 @@ from app.schemas.agendamentos import (
     LocalFiltro,
     MateriaisEntrada,
     MaterialApoio,
+    PagamentoEntrada,
     ProfissionalApoio,
     ProfissionalFiltro,
     RecusaEntrada,
@@ -154,12 +155,27 @@ def remover(agendamento_id: UUID, ctx: EscreverAgenda) -> None:
 
 
 @router.post(
-    '/agendamentos/{agendamento_id}/status', summary='Mudar o status (confirmar, concluir, cancelar...)'
+    '/agendamentos/{agendamento_id}/status',
+    summary='Mudar o status (confirmar, cancelar, não compareceu, reabrir). Concluir é pelo pagamento',
 )
 def mudar_status(agendamento_id: UUID, dados: StatusEntrada, ctx: EscreverAgenda) -> AgendamentoSaida:
     ag = regras.buscar_visivel(ctx, agendamento_id, travar=True)
     regras.exigir_edicao(ctx, ag)
     regras.mudar_status(ctx, ag, dados.status, dados.motivo_cancelamento)
+    return _detalhe(ctx, ag)
+
+
+@router.post(
+    '/agendamentos/{agendamento_id}/pagamento',
+    summary='Registrar o pagamento e concluir o atendimento (só a partir de Confirmado)',
+)
+def registrar_pagamento(
+    agendamento_id: UUID, dados: PagamentoEntrada, ctx: EscreverAgenda
+) -> AgendamentoSaida:
+    """AGE-26: a única forma de concluir. Pagamento, status e baixa de materiais na mesma transação."""
+    ag = regras.buscar_visivel(ctx, agendamento_id, travar=True)
+    regras.exigir_edicao(ctx, ag)
+    regras.registrar_pagamento(ctx, ag, dados.forma, dados.valor)
     return _detalhe(ctx, ag)
 
 

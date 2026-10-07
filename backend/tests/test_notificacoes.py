@@ -181,7 +181,13 @@ def test_concluir_nao_compareceu_e_reabrir_nao_avisam(cliente, clinica, engine_d
     faltou = criar_no_painel(cliente, clinica, inicio=f'{SEGUNDA}T10:00')
     assert mudar(cliente, clinica, concluido['id'], 'confirmado').status_code == 200
     antes = len(avisos(engine_dono))
-    assert mudar(cliente, clinica, concluido['id'], 'concluido').status_code == 200
+    pagar = cliente.post(
+        f'/api/loja/agendamentos/{concluido["id"]}/pagamento',
+        json={'forma': 'pix', 'valor': 200},
+        headers=clinica.lt.h_admin,
+    )
+    assert pagar.status_code == 200  # concluir = registrar o pagamento (AGE-26)
+    assert mudar(cliente, clinica, concluido['id'], 'confirmado').status_code == 200  # reabrir
     assert mudar(cliente, clinica, faltou['id'], 'nao_compareceu').status_code == 200
     assert mudar(cliente, clinica, faltou['id'], 'confirmado').status_code == 200  # reabrir (Administrador)
     assert len(avisos(engine_dono)) == antes
