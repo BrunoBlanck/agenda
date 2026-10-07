@@ -6,6 +6,7 @@ from app.models.base import Base, ControleMixin, LojaMixin
 from app.models.clientes import Cliente, ClienteCodigo, ClienteConta
 from app.models.locais import Local, LojaConfiguracao
 from app.models.materiais import CategoriaMaterial, Material, MovimentacaoEstoque
+from app.models.notificacoes import Notificacao
 from app.models.plataforma import (
     Auditoria,
     Funcionalidade,
@@ -39,6 +40,7 @@ __all__ = [
     'LojaMixin',
     'Material',
     'MovimentacaoEstoque',
+    'Notificacao',
     'Perfil',
     'PerfilAcesso',
     'PerfilHorario',

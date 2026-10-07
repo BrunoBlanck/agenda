@@ -467,6 +467,10 @@ erDiagram
 
     lojas ||--o{ cliente_contas : "conta do site por telefone"
     lojas ||--o{ cliente_codigos : "códigos de confirmação"
+
+    clientes ||--o{ notificacoes : "avisos ao cliente"
+    funcionarios ||--o{ notificacoes : "avisos ao profissional"
+    agendamentos ||--o{ notificacoes : "sobre"
 ```
 
 ## 2.1 `perfis`
@@ -1011,6 +1015,15 @@ Opções da loja que não são dados cadastrais (ver 2.18). Uma linha por loja, 
 | rotulo_local_plural | varchar(40) | NOT NULL DEFAULT `'Locais'`. Usado no menu e nos títulos |
 | cor_site_topo | varchar(7) | NULL = cor padrão do tipo da loja. `CHECK (~ '^#[0-9a-f]{6}$')`. Cor do cabeçalho do site do consumidor (SIT-13) |
 | cor_site_destaque | varchar(7) | NULL = padrão do tipo. Mesmo CHECK. Botões, dia/horário escolhidos e links do site |
+| antecedencia_cliente_minutos | integer | NOT NULL DEFAULT 120, `CHECK (0..10080)`. Lembrete ao cliente e prazo para ele cancelar/remarcar pelo site (CFG-05) |
+| smtp_ativo | boolean | NOT NULL DEFAULT false. `CHECK`: ativo exige servidor, porta, segurança e remetente (CFG-06) |
+| smtp_servidor | varchar(255) | Nome do servidor SMTP ou IP, sem esquema |
+| smtp_porta | integer | `CHECK (IN (25, 465, 587, 2525))` |
+| smtp_seguranca | varchar(10) | `ssl` (SMTPS) ou `starttls` |
+| smtp_usuario | varchar(255) | |
+| smtp_senha_cifrada | text | Senha cifrada (Fernet, `CHAVE_CIFRA` no `.env`). Nunca sai pela API; mascarada na auditoria |
+| smtp_remetente_email | varchar(254) | E-mail do remetente |
+| smtp_remetente_nome | varchar(120) | Nome do remetente |
 | criado_em | timestamptz | NOT NULL DEFAULT now() |
 | atualizado_em | timestamptz | NOT NULL DEFAULT now(). Atualizado automaticamente em todo UPDATE (trigger) |
 | atualizado_por | uuid | FK (loja_id, atualizado_por) → funcionarios. Funcionário que fez a última alteração na linha |
@@ -1020,6 +1033,10 @@ Opções da loja que não são dados cadastrais (ver 2.18). Uma linha por loja, 
 📌 **Cores do site (SIT-13 a SIT-15, migração 0006):** editadas em *Configurações › Dados da loja* (escrita em `config_loja`) e pelo SUPERADMIN na aba *Site* do detalhe da loja (PLA-20). Cada cor precisa de contraste ≥ 4,5:1 com texto branco; no modo escuro o destaque é clareado automaticamente. O site aplica as cores com `<style nonce>` (a CSP continua sem `unsafe-inline`). Paleta padrão por tipo num só lugar: `backend/app/services/cores_site.py` (igual ao `site.css`).
 
 📌 Os rótulos são editados na própria tela de Locais, por quem tem **escrita** em *Locais*. Diferente do tipo da loja (1.2), que só muda os textos do site do consumidor, o rótulo muda os textos do **painel**.
+
+📌 **CFG-05 Antecedência do cliente (migração 0008):** `antecedencia_cliente_minutos` (padrão 120 = o comportamento anterior, de 0 a 10080 = 7 dias) é ao mesmo tempo o horário do **lembrete** (NOT-05) e o **prazo para o cliente cancelar ou remarcar pelo site** (SIT-23/24). Depois do prazo, só a loja altera. 0 = sem lembrete e o cliente altera até o início. Editada em *Configurações › Dados da loja › Avisos e e-mail* (escrita em `config_loja`); a API recebe minutos.
+
+📌 **CFG-06 SMTP por loja (migração 0008):** cada loja envia os e-mails dos avisos pelo próprio SMTP (escrita em `config_loja`): ativo, servidor, porta (25, 465, 587 ou 2525), segurança (`ssl` ou `starttls`, TLS com certificado conferido), usuário, senha, e-mail e nome do remetente. A **senha é cifrada** (Fernet, `CHAVE_CIFRA`; sem a chave a loja não salva senha), **nunca volta na API** (só `senha_definida`) e é **mascarada na auditoria**. Trocar o servidor ou o usuário com uma senha salva exige informar a senha de novo (422 em `email.senha`): a senha salva nunca vai para outra conta. Em produção, servidor que resolve para endereço privado, loopback ou link-local (inclusive IPv4 embutido em IPv6, como NAT64) é recusado ("Servidor não permitido.", SSRF), na hora de salvar e de novo na hora de conectar. "Enviar e-mail de teste" usa a configuração salva e devolve o resultado na hora (5 por loja a cada 10 min).
 
 ## 2.22 `cliente_contas`
 
@@ -1066,9 +1083,58 @@ Códigos de 6 dígitos que confirmam o telefone ao criar a conta ou trocar a sen
 - **SIT-20** Sessão por cookie `HttpOnly`, `SameSite=Lax`, `Path=/{slug}`, `Secure` fora de desenvolvimento, token do tipo `cliente` (loja, conta, versão), 30 dias (provisório). O token do cliente nunca vale na API do painel nem do SUPERADMIN, e vice-versa. Todo `POST` das páginas confere a origem.
 - **SIT-21** Minha conta: "Próximos" (`pendente`/`agendado`/`confirmado` que ainda não terminaram, até 50) e "Histórico" (o resto, 20 por página). Mostra serviço, dia, hora, profissional, local (só o nome), preço e situação; nunca o motivo de cancelamento/recusa. Agendamentos excluídos não aparecem.
 - **SIT-22** Agendar com a conta: o passo 3 só pede observações; o pedido usa o cliente mais antigo da loja com o telefone da conta e passa pelos mesmos limites. Sem conta, o fluxo continua igual, com "Já tem conta? Entrar" e o convite para criar a senha no fim.
-- **SIT-23** Cancelar pelo site: só `pendente`, `agendado` ou `confirmado` e só até **2 h antes do início** (constante `ANTECEDENCIA_CLIENTE`, provisória, ABE-11). Vira `cancelado` na hora, sem aceite da loja, com o motivo fixo "Cancelado pelo cliente pelo site." e `app.origem = 'site'`. Página "Cancelar este agendamento?" antes (sem JS). Fora do prazo ou em situação final: só a loja altera (o site mostra o telefone dela). Agendamento de outro telefone ou de outra loja: 404.
+- **SIT-23** Cancelar pelo site: só `pendente`, `agendado` ou `confirmado` e só até a **antecedência da loja** antes do início (CFG-05, `loja_configuracoes.antecedencia_cliente_minutos`, padrão 2 h; antes era a constante `ANTECEDENCIA_CLIENTE`, ABE-11 decidido em 2026-10-06). Vira `cancelado` na hora, sem aceite da loja, com o motivo fixo "Cancelado pelo cliente pelo site." e `app.origem = 'site'`. Página "Cancelar este agendamento?" antes (sem JS). Fora do prazo ou em situação final: só a loja altera (o site mostra o telefone dela). Agendamento de outro telefone ou de outra loja: 404.
 - **SIT-24** Remarcar pelo site: mesmas situações e mesmo prazo da SIT-23. Mantém serviço, preço congelado e a **duração atual** (`fim − inicio`); o cliente escolhe profissional (habilitado e ativo, ou "qualquer") e um horário **oferecido** pelo site, sem o próprio agendamento contar como ocupado. Ao confirmar, o mesmo agendamento muda profissional, local (escolhido como no pedido; sem o módulo Locais, fica sem local), início e fim e **volta a `pendente`** (a loja aceita ou recusa como um pedido novo); o horário antigo fica livre na hora. Serviço inativo ou removido, ninguém habilitado ou nenhum local possível: "Para remarcar este horário, fale com a loja." (cancelar continua possível).
 - **CLI-06** No painel (tela Clientes), ver os códigos pendentes e remover o acesso de um cliente ao site exigem **escrita** em *Clientes*.
+- **SIT-25** Avisos no site: logado, o cabeçalho mostra "Avisos" com a quantidade não visualizada (sem número quando zero). `/{slug}/conta/avisos` lista as notificações dos clientes do telefone da conta (20 por página, mais novas primeiro) e marca como visualizadas as da página mostrada (NOT-06). Funciona sem JS; sem link de local e sem motivo de cancelamento.
+
+## 2.24 `notificacoes`
+
+Avisos ao cliente e ao profissional (NOT-01 a NOT-08, migração 0008). Uma linha por aviso, com o status de cada canal.
+
+| Coluna | Tipo | Regras |
+|---|---|---|
+| id | uuid | PK |
+| loja_id | uuid | FK → lojas |
+| tipo | varchar(10) | NOT NULL, `cliente` ou `loja` |
+| cliente_id | uuid | FK (loja_id, cliente_id) → clientes. Preenchido **só** com `tipo = cliente` (CHECK) |
+| funcionario_id | uuid | FK (loja_id, funcionario_id) → funcionarios. Preenchido **só** com `tipo = loja` (CHECK) |
+| agendamento_id | uuid | FK (loja_id, agendamento_id) → agendamentos |
+| evento | varchar(30) | NOT NULL. CHECK com os eventos de NOT-02 (`tipo = cliente`) e NOT-03 (`tipo = loja`) |
+| titulo | varchar(120) | NOT NULL, congelado na criação |
+| mensagem | varchar(1000) | NOT NULL, congelada na criação |
+| status_site | smallint | NOT NULL DEFAULT 1. 1 não visualizada, 2 visualizada |
+| visualizada_em | timestamptz | Preenchida junto com `status_site = 2` (CHECK) |
+| status_email | smallint | NOT NULL. 1 pendente de envio, 2 enviado, 3 erro no envio, 4 dado faltando no cadastro |
+| email_destino | varchar(254) | Copiado na criação; NULL quando 4 |
+| email_tentativas | smallint | NOT NULL DEFAULT 0, `CHECK (0..3)` |
+| email_proxima_tentativa_em | timestamptz | Quando a fila pode tentar (também a reserva do envio em andamento) |
+| email_enviado_em | timestamptz | Preenchido junto com `status_email = 2` (CHECK) |
+| email_erro | varchar(300) | Motivo tratado (sem senha nem dados pessoais além do endereço) |
+| status_whatsapp | smallint | NOT NULL, mesmos códigos; hoje sempre 4 |
+| whatsapp_erro | varchar(300) | "Envio por WhatsApp ainda não disponível." |
+| lembrete_inicio | timestamptz | Só no evento `lembrete`: o `inicio` lembrado |
+| criado_em, atualizado_em, atualizado_por, excluido_em, excluido_por | | Controle (como em 2.7) |
+
+Índices: `(loja_id, funcionario_id, criado_em DESC) WHERE tipo = 'loja'`, `(loja_id, cliente_id, criado_em DESC) WHERE tipo = 'cliente'`, fila `(email_proxima_tentativa_em) WHERE status_email = 1`, **único** `notificacoes_lembrete_uk (loja_id, agendamento_id, lembrete_inicio) WHERE evento = 'lembrete'` (todos com `excluido_em IS NULL`) e `agendamentos_lembrete_idx (inicio) WHERE status IN ('agendado', 'confirmado')`.
+
+📌 **NOT-01** Toda notificação é uma linha aqui, para um cliente (`tipo = cliente`) ou um funcionário (`tipo = loja`), gravada **na mesma transação** do fato que a gerou (se a mudança de status não grava, a notificação também não). Título e mensagem são **congelados** (horas no padrão do painel, "ter 14/10 às 9h30", no fuso da loja).
+
+📌 **NOT-02 Eventos do cliente** (destinatário = cliente do agendamento): `pedido_recebido` (pedido pelo site, inclusive remarcação pelo site), `agendamento_criado` (criado no painel), `confirmado` (qualquer ida a `confirmado`, inclusive aceitar), `cancelado` (cancelado ou recusado **pela loja**; nunca o motivo), `horario_alterado` (a loja mudou início, profissional ou local de um agendamento não final) e `lembrete` (NOT-05). Concluir, não compareceu e reabrir não notificam. O que o próprio cliente faz no site não gera `cancelado` para ele.
+
+📌 **NOT-03 Eventos da loja** (destinatário = **só o profissional** do agendamento, ativo e não excluído): `novo_pedido` (pedido pelo site), `remarcacao_pedida` (remarcação pelo site; se o profissional mudou, o antigo recebe `cancelado_pelo_cliente` com "remarcou para outro profissional") e `cancelado_pelo_cliente`.
+
+📌 **NOT-04 Status por canal:** site 1/2; e-mail e WhatsApp 1 pendente, 2 enviado, 3 erro, 4 dado faltando (destinatário sem e-mail/telefone). WhatsApp sempre 4 por enquanto. E-mail: sem e-mail = 4; loja sem SMTP ativo = 3 ("O envio de e-mail da loja não está configurado."); falha temporária continua 1 e tenta de novo (até 3 tentativas, esperas de 1 e 5 min); depois, ou em falha definitiva (usuário/senha, destinatário ou servidor recusados), 3 com a mensagem tratada. **O status só avança** (2, 3 e 4 são finais; visualizada não volta): trigger `notificacoes_status_avanca`.
+
+📌 **NOT-05 Lembrete:** agendamento `agendado`/`confirmado`, não excluído, com `inicio − antecedência da loja ≤ agora < inicio` recebe **um** `lembrete` (índice único por agendamento e início lembrado: remarcar para outro horário permite outro lembrete). Criado/confirmado já dentro da janela: sai no próximo ciclo da tarefa. Pendente, cancelado e antecedência 0 não recebem.
+
+📌 **NOT-06 Visualizar só ao abrir o sino:** abrir o sino marca como visualizadas **as notificações mostradas naquela abertura** (painel: ids enviados pelo front; site: as da página aberta); a que chegou depois continua não visualizada. Cada um só lê e marca as suas: funcionário = `tipo loja` com o seu `funcionario_id` (ids alheios são ignorados em silêncio); cliente = `tipo cliente` de qualquer cliente da loja com o telefone da conta (SIT-16). No acesso de suporte do SUPERADMIN ("Acessar loja") nada é marcado.
+
+📌 **NOT-07 Envio fora da transação (outbox):** a rota só grava a linha; uma tarefa de fundo (no processo da API, a cada 30 s, ou `python -m scripts.notificacoes`) cria os lembretes e envia os e-mails pendentes, loja por loja (só lojas **ativas**, descobertas pela função `notificacoes_lojas_com_trabalho`, SECURITY DEFINER), com origem `sistema`. Até 4 lojas em paralelo, num pool fixo; o ciclo espera no máximo 20 s e a loja atrasada fica fora dos ciclos seguintes até terminar. Reserva com `FOR UPDATE SKIP LOCKED` (tentativa + 1 e próxima tentativa = relógio da hora da reserva + 5 min, mais que o pior caso de uma loja), envia sem transação aberta (**prazo total de 15 s por envio**, em todas as fases: DNS, conexão, handshake TLS e comandos; a primeira falha de conexão interrompe o lote da loja e cada loja tem 60 s por ciclo; o que não foi tentado volta à fila sem gastar tentativa) e grava o resultado só se a linha ainda tiver a mesma reserva: seguro com vários processos. **Aviso vencido** não sai (status 3): lembrete cujo agendamento não está mais `agendado`/`confirmado`, mudou de início, foi excluído ou já começou ("Aviso vencido: o agendamento mudou."); qualquer e-mail pendente com mais de 24 h ou de agendamento que já começou ("Aviso vencido.").
+
+📌 **NOT-08** E-mail ao **cliente** nunca tem link para o painel/SUPERADMIN (DIR-003); com `URL_PUBLICA` configurada, leva o link `/{slug}/conta` do site. Datas no fuso da loja, remetente da loja, texto simples.
+
+📌 **Acesso:** as notificações do painel são pessoais (qualquer funcionário logado, sem recurso); nenhum módulo desliga o sino. Sem o módulo Serviços a mensagem usa "Atendimento"; sem Locais não cita o local.
 
 ---
 
@@ -1133,8 +1199,8 @@ Diferenças entre o mock atual e o banco:
 
 - [ ] Estoque pode ficar negativo ou deve bloquear a conclusão do atendimento?
 - [x] ~~Cliente precisa de acesso próprio?~~ Decidido em 2026-10-06: conta do cliente por loja e telefone (2.22, 2.23, SIT-16 a SIT-24).
-- [ ] Antecedência mínima para agendar e para cancelar.
-- [ ] Notificações (WhatsApp/e-mail) de confirmação e lembrete: exigiria tabela de fila/histórico de envios.
+- [ ] Antecedência mínima para **agendar** pelo site (hoje 60 min fixos). ~~Para cancelar~~ decidido em 2026-10-06: CFG-05 (configurável pela loja).
+- [x] ~~Notificações de confirmação e lembrete~~ Decidido em 2026-10-06: tabela `notificacoes` (2.24, NOT-01 a NOT-08), e-mail pelo SMTP da loja. Falta o envio real por **WhatsApp** (hoje sempre status 4).
 - [ ] Financeiro (pagamentos dos atendimentos, comissão de profissionais).
 - [ ] Prontuário/anotações clínicas do atendimento (dados sensíveis, LGPD).
 - [ ] Um mesmo funcionário trabalhando em mais de uma loja (hoje seria um cadastro por loja).

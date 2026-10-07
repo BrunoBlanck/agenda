@@ -3,6 +3,7 @@ import { App, Button, Descriptions, Flex, Form } from 'antd'
 import { DisconnectOutlined, EyeOutlined } from '@ant-design/icons'
 import { useAcesso } from '../data/useAcesso.js'
 import { useConfigLoja, useCoresSite } from '../data/useConfigLoja.js'
+import { useConfigNotificacoes } from '../data/useConfigNotificacoes.js'
 import { useTratarErro } from '../data/api/useTratarErro.js'
 import { modulos } from '../data/acesso.js'
 import { tiposLoja } from '../data/dominio.js'
@@ -16,6 +17,7 @@ import { CamposEmpresa, CamposEndereco } from '../components/CamposLoja.jsx'
 import UltimaAlteracao from '../components/UltimaAlteracao.jsx'
 import EnvioLogo from '../components/EnvioLogo.jsx'
 import CoresSite from '../components/CoresSite.jsx'
+import AvisosEmail from '../components/AvisosEmail.jsx'
 
 const titulo = 'Dados da loja'
 const descricao = 'Aparecem no site de agendamento e nos avisos enviados aos clientes.'
@@ -28,6 +30,7 @@ export default function ConfigLoja() {
   const [form] = Form.useForm()
   const config = useConfigLoja()
   const coresSite = useCoresSite()
+  const configNotificacoes = useConfigNotificacoes()
   const [salvando, setSalvando] = useState(false)
   const [gravacoes, setGravacoes] = useState(0)
   const somenteLeitura = !pode('config_loja', 'escrita')
@@ -102,6 +105,10 @@ export default function ConfigLoja() {
                 )}
               </div>
             </Form>
+          </Secao>
+
+          <Secao titulo="Avisos e e-mail" descricao="Lembrete aos clientes, prazo para cancelar pelo site e o e-mail que envia os avisos.">
+            <AvisosEmail estado={configNotificacoes} nomeLoja={dados.nomeFantasia} somenteLeitura={somenteLeitura} />
           </Secao>
 
           <Secao titulo="Cores do site" descricao="Usadas no site de agendamento dos clientes.">

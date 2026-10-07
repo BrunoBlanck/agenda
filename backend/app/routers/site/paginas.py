@@ -76,6 +76,7 @@ from app.services.agendamento_site import (
     servicos_publicos,
     solicitar,
 )
+from app.services.avisos_conta import avisos_nao_lidos
 from app.services.comum import hoje, no_fuso
 from app.services.conta_cliente import SessaoCliente
 from app.services.cores_site import CLASSE_CORES, CoresDoTopo, cores_do_topo, css_da_loja
@@ -233,8 +234,12 @@ class Pagina:
     ) -> HTMLResponse:
         telefone = re.sub(r'\D', '', self.loja.telefone or '')
         passos = PASSOS if self.ctx.usa_servicos else PASSOS[1:]
+        avisos_nav = None
         if self.sessao is not None:
             conta_nav = {'texto': 'Minha conta', 'url': f'/{self.slug}/conta'}
+            # SIT-25: contado na hora de montar (a página de avisos já marcou os dela como visualizados)
+            nao_lidos = avisos_nao_lidos(self.ctx.db, self.ctx.loja.id, self.sessao.conta.telefone_digitos)
+            avisos_nav = {'url': f'/{self.slug}/conta/avisos', 'quantidade': nao_lidos}
         else:
             conta_nav = {'texto': 'Entrar', 'url': self.url_entrar(self.caminho)}
         nonce = novo_nonce() if self.estilo else None
@@ -255,6 +260,7 @@ class Pagina:
             passos=passos if passo is not None else (),
             passo_atual=passo - (len(PASSOS) - len(passos)) if passo is not None else -1,
             conta_nav=conta_nav,
+            avisos_nav=avisos_nav,
             indexar=indexar,
             css=url_estatica('site.css'),
             js=url_estatica('site.js'),

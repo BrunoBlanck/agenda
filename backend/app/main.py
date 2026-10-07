@@ -1,4 +1,4 @@
-"""Aplicação FastAPI: routers, CORS e tratamento de erros."""
+"""Aplicação FastAPI: routers, CORS, tratamento de erros e a tarefa de fundo das notificações."""
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -10,6 +10,7 @@ from app.erros import registrar_tratadores
 from app.limites import LimiteDoCorpo
 from app.routers import arquivos, loja, paginas, site, superadmin
 from app.routers.html import RespostaPronta, responder
+from app.tarefas import ciclo_de_vida
 
 
 def criar_app() -> FastAPI:
@@ -21,6 +22,7 @@ def criar_app() -> FastAPI:
         docs_url=None if settings.ambiente == 'producao' else '/docs',
         redoc_url=None,
         openapi_url=None if settings.ambiente == 'producao' else '/openapi.json',
+        lifespan=ciclo_de_vida,  # tarefa de fundo das notificações (app/tarefas.py)
     )
     app.add_middleware(LimiteDoCorpo)
     app.add_middleware(

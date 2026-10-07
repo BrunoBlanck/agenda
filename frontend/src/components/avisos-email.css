@@ -1,0 +1,152 @@
+/* Configurações > Dados da loja > Avisos e e-mail (AvisosEmail.jsx) */
+
+.avisos-antecedencia {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--espaco-2);
+}
+
+.avisos-antecedencia-numero.ant-input-number {
+  width: 120px;
+}
+
+/* O título do grupo SMTP separa a antecedência dos dados do servidor, como a pauta da agenda */
+.avisos-email .avisos-grupo {
+  padding-top: var(--espaco-5);
+  margin-top: var(--espaco-5);
+  border-top: 1px solid var(--cor-linha-suave);
+}
+
+.avisos-grupo-ajuda {
+  margin: calc(var(--espaco-2) * -1) 0 var(--espaco-4);
+}
+
+.avisos-senha-ajuda {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0 var(--espaco-1);
+}
+
+.avisos-email .ant-form-item-extra .ant-btn-link {
+  height: auto;
+  padding: 0;
+}
+
+.avisos-whatsapp {
+  margin: 0 0 var(--espaco-4);
+  font-size: 13px;
+  color: var(--cor-texto-secundario);
+}
+
+.avisos-whatsapp strong {
+  font-weight: 600;
+  color: var(--cor-texto);
+}
+
+.avisos-acoes {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--espaco-2);
+  margin-left: auto;
+}
+
+.rodape-formulario .avisos-acoes .ant-btn {
+  margin-left: 0;
+}
+
+/* ---------- Envio de teste ---------- */
+
+.avisos-teste {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espaco-3);
+  margin-top: var(--espaco-4);
+  padding: var(--espaco-4);
+  border: 1px solid var(--cor-linha);
+  border-radius: var(--raio-conteiner);
+  background: var(--cor-superficie-suave);
+}
+
+.avisos-teste-cabecalho {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--espaco-2);
+}
+
+.avisos-teste-cabecalho .grupo-formulario {
+  margin: 0;
+}
+
+.avisos-teste .texto-ajuda {
+  margin: 0;
+}
+
+.avisos-teste-linha {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 0 var(--espaco-2);
+}
+
+.avisos-teste-linha .ant-form-item {
+  flex: 1 1 260px;
+  max-width: 420px;
+  margin-bottom: 0;
+}
+
+/* Botão alinhado ao campo (abaixo do rótulo) */
+.avisos-teste-linha > .ant-btn {
+  margin-top: 30px;
+}
+
+.avisos-teste .ant-form {
+  margin: 0;
+}
+
+/* ---------- Carregando ---------- */
+
+.avisos-email-carregando {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espaco-4);
+}
+
+.avisos-email-fantasma-grade {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--espaco-4);
+}
+
+@media (max-width: 575px) {
+  .avisos-email-fantasma-grade {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .avisos-teste-linha .ant-form-item {
+    max-width: none;
+  }
+
+  .avisos-teste-linha > .ant-btn {
+    width: 100%;
+    margin-top: var(--espaco-2);
+  }
+}
+
+@media (max-width: 767px) {
+  .avisos-acoes {
+    width: 100%;
+  }
+
+  .avisos-acoes .ant-btn {
+    flex: 1 1 auto;
+    height: 44px;
+  }
+
+  .avisos-email .ant-form-item-extra .ant-btn-link {
+    min-height: 44px;
+  }
+}

@@ -11,3 +11,4 @@ Uma especificação por funcionalidade (`<slug>.md`), escrita pelo agente `coord
 | [Cores do site escolhidas pela loja](cores-site.md) | aprovada | feat/cores-site |
 | [Conta do cliente no site (login, meus agendamentos, remarcar, cancelar)](conta-cliente.md) | aprovada | feat/conta-cliente |
 | [Mobile first: site e painéis (DIR-004)](mobile-first.md) | aprovada | feat/mobile-first |
+| [Notificações (sino, e-mail por SMTP da loja, lembrete)](notificacoes.md) | aprovada | feat/notificacoes |

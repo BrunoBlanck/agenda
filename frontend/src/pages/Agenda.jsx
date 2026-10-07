@@ -1,10 +1,11 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { Alert, Button, Flex, Segmented, Select, Tooltip } from 'antd'
 import { LeftOutlined, MenuFoldOutlined, PlusOutlined, RightOutlined } from '@ant-design/icons'
 import { useAcesso } from '../data/useAcesso.js'
 import { useAgenda } from '../data/useAgenda.js'
 import { useFiltrosAgenda } from '../data/useAgendamentos.js'
-import { agoraNaLoja } from '../data/api/conversao.js'
+import { agoraNaLoja, lerData } from '../data/api/conversao.js'
 import AgendamentoPainel from '../components/AgendamentoPainel.jsx'
 import { usePainel } from '../components/base/usePainel.js'
 import VisaoSemana from '../components/agenda/VisaoSemana.jsx'
@@ -49,6 +50,32 @@ export default function Agenda() {
   const [modo, setModo] = useState('semana')
   const [referencia, setReferencia] = useState(agoraNaLoja) // semana/mês exibido (no dia da loja)
   const [dia, setDia] = useState(agoraNaLoja) // dia detalhado no painel lateral
+
+  // ?dia=AAAA-MM-DD (ex.: "Ver na agenda" das notificações) abre a agenda naquele dia, também quando
+  // a agenda já está aberta. Aplicado, o parâmetro sai da URL: dali em diante valem Hoje e as setas.
+  const [params, setParams] = useSearchParams()
+  const diaDaUrl = params.get('dia')
+  const [diaDaUrlAntes, setDiaDaUrlAntes] = useState(null)
+  if (diaDaUrl !== diaDaUrlAntes) {
+    setDiaDaUrlAntes(diaDaUrl)
+    const pedido = /^\d{4}-\d{2}-\d{2}$/.test(diaDaUrl ?? '') ? lerData(diaDaUrl) : null
+    if (pedido) {
+      setReferencia(pedido)
+      setDia(pedido)
+    }
+  }
+  useEffect(() => {
+    if (!diaDaUrl) return
+    setParams(
+      (atuais) => {
+        const novos = new URLSearchParams(atuais)
+        novos.delete('dia')
+        return novos
+      },
+      { replace: true },
+    )
+  }, [diaDaUrl, setParams])
+
   const [profissional, setProfissional] = useState(null)
   const painelAgendamento = usePainel() // agendamento aberto; {hora} = novo naquele horário
   const [painelAberto, setPainelAberto] = useState(lerPainel)

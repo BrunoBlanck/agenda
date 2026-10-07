@@ -13,6 +13,7 @@ import uuid
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
+from functools import cached_property
 from uuid import UUID
 from zoneinfo import ZoneInfo
 
@@ -43,6 +44,7 @@ from app.services.horarios_livres import (
     profissionais,
     profissionais_por_servico,
 )
+from app.services.notificacoes import LojaAviso, antecedencia_da_loja, avisar_pedido_do_site
 from app.services.site import carregar_loja_publica
 
 NOME_SEM_SERVICO = 'Atendimento'
@@ -88,6 +90,15 @@ class ContextoSite:
     @property
     def nome_da_loja(self) -> str:
         return self.loja.nome_fantasia or self.loja.nome
+
+    @cached_property
+    def antecedencia(self) -> timedelta:
+        """CFG-05: prazo para o cliente cancelar ou remarcar pelo site (e antecedência do lembrete)."""
+        return timedelta(minutes=antecedencia_da_loja(self.db, self.loja.id))
+
+    @property
+    def aviso(self) -> LojaAviso:
+        return LojaAviso.de(self.loja, self.modulos)
 
 
 def abrir_site(db: Session, slug: str, ip: str | None) -> ContextoSite | None:
@@ -381,6 +392,7 @@ def solicitar(ctx: ContextoSite, dados: SolicitacaoEntrada) -> SolicitacaoSaida:
                 )
             )
         db.flush()
+    avisar_pedido_do_site(db, ctx.aviso, agendamento)  # NOT-02/03: na mesma transação (e savepoint)
 
     return SolicitacaoSaida(
         id=agendamento.id,

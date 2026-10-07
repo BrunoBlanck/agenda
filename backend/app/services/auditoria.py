@@ -46,6 +46,7 @@ TABELAS_LOJA: dict[str, str] = {
     'lojas': 'Dados da loja',
     'loja_funcionalidades': 'Módulos da loja',
     'loja_configuracoes': 'Configurações da loja',
+    'notificacoes': 'Notificações',
 }
 TABELAS_PLATAFORMA: dict[str, str] = {
     'planos': 'Planos',
@@ -250,6 +251,9 @@ def mudancas(registro: Auditoria, zona: ZoneInfo | None = None) -> list[Mudanca]
         if campo == 'senha_hash':
             saida.append(Mudanca(campo='senha', antes=SENHA_OCULTA, depois='redefinida'))
             continue
+        if campo == 'smtp_senha_cifrada':  # mascarada na auditoria (migração 0008, CFG-06)
+            saida.append(Mudanca(campo='senha do e-mail', antes=SENHA_OCULTA, depois='alterada'))
+            continue
         valor_antes, valor_depois = _no_fuso(antes.get(campo), zona), _no_fuso(depois.get(campo), zona)
         saida.append(Mudanca(campo=campo, antes=valor_antes, depois=valor_depois))
     return saida
@@ -308,6 +312,8 @@ def rotulos(db: Session, loja_id: UUID | None, registros: Sequence[Auditoria], z
                 rotulo = linha.get('motivo') or _data_hora(linha.get('inicio'), zona)
             case 'loja_funcionalidades':
                 rotulo = modulos.get(str(linha.get('funcionalidade_id')))
+            case 'notificacoes':
+                rotulo = linha.get('titulo')
             case 'movimentacoes_estoque':
                 rotulo = f'{linha.get("tipo", "")} {linha.get("quantidade", "")}'.strip()
             case _:

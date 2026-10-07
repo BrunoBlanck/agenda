@@ -47,6 +47,12 @@ from app.services.comum import (
 )
 from app.services.disponibilidade import mensagem_indisponivel
 from app.services.estoque import baixar_materiais, estornar_materiais
+from app.services.notificacoes import (
+    LojaAviso,
+    avisar_criado_no_painel,
+    avisar_horario_alterado,
+    avisar_mudanca_de_status,
+)
 
 S = StatusAgendamento
 MSG_404 = 'Agendamento não encontrado.'
@@ -117,6 +123,10 @@ def exigir_edicao(ctx: ContextoLoja, ag: Agendamento) -> None:
         raise proibido('Você só pode alterar os seus próprios agendamentos.')
 
 
+def loja_do_aviso(ctx: ContextoLoja) -> LojaAviso:
+    return LojaAviso.de(ctx.loja, ctx.acesso.modulos)
+
+
 # --- Status --------------------------------------------------------------------------------------
 
 
@@ -148,6 +158,8 @@ def mudar_status(
     ctx.db.flush()
     if novo == S.concluido and ctx.acesso.modulo_ativo('materiais'):
         baixar_materiais(ctx.db, ctx.loja_id, ag.id)
+    if atual not in FINAIS:  # NOT-02: a reabertura não avisa o cliente
+        avisar_mudanca_de_status(ctx.db, loja_do_aviso(ctx), ag, atual)
 
 
 # --- Criação e edição ----------------------------------------------------------------------------
@@ -327,9 +339,12 @@ def salvar(ctx: ContextoLoja, dados: AgendamentoEntrada, atual: Agendamento | No
                     )
                 )
             db.flush()
+        avisar_criado_no_painel(db, loja_do_aviso(ctx), ag)
         return ag
 
     ag = atual
+    # NOT-02: o cliente é avisado se a loja muda início, profissional ou local de um agendamento não final
+    antes = (ag.inicio, ag.funcionario_id, ag.local_id)
     for campo, valor in valores.items():
         if getattr(ag, campo) != valor:
             setattr(ag, campo, valor)
@@ -341,6 +356,8 @@ def salvar(ctx: ContextoLoja, dados: AgendamentoEntrada, atual: Agendamento | No
         )
     if dados.status is not None and dados.status != ag.status:
         mudar_status(ctx, ag, dados.status, dados.motivo_cancelamento)
+    if (ag.inicio, ag.funcionario_id, ag.local_id) != antes and ag.status not in FINAIS:
+        avisar_horario_alterado(db, loja_do_aviso(ctx), ag)
     return ag
 
 

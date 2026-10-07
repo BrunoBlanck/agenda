@@ -38,4 +38,6 @@ Testes exploratórios ficam no scratchpad (fora do repo) e reaproveitam `backend
 
 - **Mobile/375 px (2026-10-06):** o scratchpad da sessão é dividido com os construtores (já traz `node_modules/playwright-core` e `preparar_banco.py`): trabalhe numa subpasta própria (`rev/`). Painel: login pela tela (`getByLabel(/e-mail/i)`, `/senha/i`) em contexto `isMobile+hasTouch` 375x812; medir `scrollWidth`, `.cartao-tabela` e `.ant-table`; nulos/vazio/500 com `page.route('**/api/loja/clientes?**')`. Site: 320/375/1280 com e sem JS seguindo os hrefs reais (`a.servico`, `a.chip`, `a.horario`). Arquivo de teste exploratório passado ao pytest pelo Git Bash como `/c/...` quebra a coleta (go-link no Temp): rode pelo PowerShell com caminho Windows.
 
+- **SMTP de verdade (notificações, 2026-10-06):** servidor de socket numa thread em 127.0.0.1 nas portas permitidas (25/465/587/2525) gotejando bytes; para TLS "aceito", `monkeypatch.setattr(envio_email.ssl, 'create_default_context', lambda *a, **k: ssl._create_unverified_context())` e certificado autoassinado gerado com `cryptography`. Cuidado: os testes do projeto (`test_notificacoes_revisao.py`) usam a porta 2525 e dão **skip** se ela estiver ocupada; não rode exploratórios com servidor nessas portas junto com a suíte. No Windows, conexão recusada em 127.0.0.1 leva ~2 s.
+
 Relacionado: [[defeitos-recorrentes]].

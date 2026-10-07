@@ -52,8 +52,6 @@ DOMINIO_VERIFICADO = 'conta-verificado'
 
 SENHA_MINIMA, SENHA_MAXIMA = 8, 128
 
-# SIT-23/24: cancelar e remarcar pelo site só até este tempo antes do início. Provisória (ABE-11)
-ANTECEDENCIA_CLIENTE = timedelta(hours=2)
 SITUACOES_ATIVAS = (StatusAgendamento.pendente, StatusAgendamento.agendado, StatusAgendamento.confirmado)
 PROXIMOS_MAXIMO = 50
 HISTORICO_POR_PAGINA = 20
@@ -375,7 +373,7 @@ class MeuAgendamento:
     servico_nome: str
     funcionario_nome: str
     local_nome: str | None
-    alteravel: bool  # pode cancelar/remarcar pelo site (situação ativa e prazo da SIT-23)
+    alteravel: bool  # pode cancelar/remarcar pelo site (situação ativa e prazo da loja, CFG-05)
     servico_id: UUID | None
     funcionario_id: UUID
 
@@ -389,9 +387,11 @@ class MeusAgendamentos:
     por_pagina: int = HISTORICO_POR_PAGINA
 
 
-def pode_alterar(status: StatusAgendamento, inicio: datetime, agora: datetime | None = None) -> bool:
-    """SIT-23/24: situação ativa e pelo menos ``ANTECEDENCIA_CLIENTE`` antes do início."""
-    return status in SITUACOES_ATIVAS and inicio - (agora or datetime.now(UTC)) >= ANTECEDENCIA_CLIENTE
+def pode_alterar(
+    status: StatusAgendamento, inicio: datetime, antecedencia: timedelta, agora: datetime | None = None
+) -> bool:
+    """SIT-23/24: situação ativa e pelo menos ``antecedencia`` (a da loja, CFG-05) antes do início."""
+    return status in SITUACOES_ATIVAS and inicio - (agora or datetime.now(UTC)) >= antecedencia
 
 
 def _da_conta(loja_id: UUID, digitos: str) -> Select:
@@ -430,7 +430,7 @@ def _proximo() -> ColumnElement[bool]:
     return and_(Agendamento.status.in_(SITUACOES_ATIVAS), Agendamento.fim >= func.now())
 
 
-def _item(linha: Row, agora: datetime) -> MeuAgendamento:
+def _item(linha: Row, agora: datetime, antecedencia: timedelta) -> MeuAgendamento:
     (
         id_,
         inicio,
@@ -452,14 +452,19 @@ def _item(linha: Row, agora: datetime) -> MeuAgendamento:
         servico_nome=servico_nome or NOME_SEM_SERVICO,
         funcionario_nome=funcionario_nome,
         local_nome=local_nome,
-        alteravel=pode_alterar(situacao, inicio, agora),
+        alteravel=pode_alterar(situacao, inicio, antecedencia, agora),
         servico_id=servico_id,
         funcionario_id=funcionario_id,
     )
 
 
-def meus_agendamentos(db: Session, loja_id: UUID, digitos: str, pagina: int) -> MeusAgendamentos:
-    """Próximos (início crescente, até 50) e uma página do histórico (início decrescente)."""
+def meus_agendamentos(
+    db: Session, loja_id: UUID, digitos: str, pagina: int, antecedencia: timedelta
+) -> MeusAgendamentos:
+    """Próximos (início crescente, até 50) e uma página do histórico (início decrescente).
+
+    ``antecedencia``: prazo da loja para cancelar/remarcar pelo site (CFG-05).
+    """
     agora = datetime.now(UTC)
     base = _da_conta(loja_id, digitos)
     proximos = db.execute(
@@ -473,17 +478,19 @@ def meus_agendamentos(db: Session, loja_id: UUID, digitos: str, pagina: int) -> 
         .limit(HISTORICO_POR_PAGINA)
     ).all()
     return MeusAgendamentos(
-        proximos=[_item(linha, agora) for linha in proximos],
-        historico=[_item(linha, agora) for linha in historico],
+        proximos=[_item(linha, agora, antecedencia) for linha in proximos],
+        historico=[_item(linha, agora, antecedencia) for linha in historico],
         total_historico=total,
         pagina=pagina,
     )
 
 
-def meu_agendamento(db: Session, loja_id: UUID, digitos: str, agendamento_id: UUID) -> MeuAgendamento | None:
+def meu_agendamento(
+    db: Session, loja_id: UUID, digitos: str, agendamento_id: UUID, antecedencia: timedelta
+) -> MeuAgendamento | None:
     """Um agendamento da conta (mesma loja, cliente com o telefone, não excluído), ou None (página 404)."""
     linha = db.execute(_da_conta(loja_id, digitos).where(Agendamento.id == agendamento_id)).one_or_none()
-    return _item(linha, datetime.now(UTC)) if linha is not None else None
+    return _item(linha, datetime.now(UTC), antecedencia) if linha is not None else None
 
 
 # --- Painel: códigos e acesso ao site (CLI-06) -----------------------------------------------------

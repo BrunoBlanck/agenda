@@ -159,8 +159,9 @@ async function lerCorpo(resposta) {
  * corpo: objeto já no formato da API (snake_case), ou FormData para envio de arquivo (multipart).
  * query: filtros (vazios são omitidos).
  * sinal: AbortSignal de quem chamou (cancelar não vira erro de conexão).
+ * tempoLimite: ms até desistir (padrão 15 s; arquivo, 120 s), para rotas que esperam um serviço de fora.
  */
-export async function requisitar(area, metodo, caminho, { corpo, query, sinal } = {}) {
+export async function requisitar(area, metodo, caminho, { corpo, query, sinal, tempoLimite } = {}) {
   // O site é público: nunca leva token. A loja usa o token da loja aberta nesta aba.
   const sessao = area === 'loja' ? sessaoDaLoja : area === 'superadmin' ? 'superadmin' : null
   const token = tokens.ler(sessao)
@@ -170,7 +171,7 @@ export async function requisitar(area, metodo, caminho, { corpo, query, sinal } 
   const relogio = setTimeout(() => {
     esgotou = true
     controle.abort()
-  }, arquivo ? TEMPO_LIMITE_ARQUIVO : TEMPO_LIMITE)
+  }, tempoLimite ?? (arquivo ? TEMPO_LIMITE_ARQUIVO : TEMPO_LIMITE))
   const cancelarJunto = () => controle.abort()
   if (sinal?.aborted) controle.abort()
   sinal?.addEventListener('abort', cancelarJunto, { once: true })

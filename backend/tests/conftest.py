@@ -15,6 +15,7 @@ import tempfile
 from collections.abc import Callable, Iterator
 
 import pytest
+from cryptography.fernet import Fernet
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine import URL, make_url
 
@@ -32,6 +33,8 @@ def _configurar_ambiente_de_teste() -> tuple[URL, URL]:
     os.environ['DATABASE_URL'] = url_app.render_as_string(hide_password=False)
     os.environ['DATABASE_OWNER_URL'] = url_dono.render_as_string(hide_password=False)
     os.environ['AMBIENTE'] = 'teste'
+    # Senha SMTP das lojas (CFG-06): uma chave nova a cada execução (os testes sem chave a tiram)
+    os.environ['CHAVE_CIFRA'] = Fernet.generate_key().decode()
     # Arquivos enviados (logo) numa pasta temporária, nunca em backend/arquivos
     os.environ['ARQUIVOS_DIR'] = tempfile.mkdtemp(prefix='agenda-arquivos-')
     get_settings.cache_clear()

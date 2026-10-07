@@ -210,6 +210,7 @@ def test_fluxo_completo_sem_js(cliente, site, engine_dono):
         ('clientes', 'inserir'),
         ('agendamentos', 'inserir'),
         ('agendamento_materiais', 'inserir'),
+        ('notificacoes', 'inserir'),  # NOT-01: os avisos do pedido, na mesma transação
     }
 
 

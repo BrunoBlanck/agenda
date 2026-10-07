@@ -7,7 +7,7 @@ Mapa de URLs (o nginx de produção e o servidor de dev do front seguem o mesmo 
 - ``/static/site/<arquivo>``: CSS e JS do site do consumidor (lista fechada de arquivos);
 - ``/<slug>`` e ``/<slug>/agendar[/...]``: site do consumidor (``app/routers/site/paginas.py``);
 - ``/<slug>/conta[/...]``: conta do cliente no site (``app/routers/site/conta.py``; cancelar e remarcar em
-  ``app/routers/site/conta_agendamentos.py``);
+  ``app/routers/site/conta_agendamentos.py``; avisos em ``app/routers/site/avisos.py``);
 - ``/<slug>/``: 308 para ``/<slug>``;
 - qualquer outro ``/<slug>/<resto>``: 404.
 
@@ -27,7 +27,7 @@ from app.routers.html import (
     estatico,
     nao_encontrada,
 )
-from app.routers.site import conta, conta_agendamentos
+from app.routers.site import avisos, conta, conta_agendamentos
 from app.routers.site import paginas as site
 from app.services.slugs import endereco_de_loja
 
@@ -72,6 +72,7 @@ def arquivo_do_site(nome: str, request: Request) -> Response:
 router.include_router(site.router)
 router.include_router(conta.router)  # /<slug>/conta/... (conta do cliente, SIT-16 a SIT-21)
 router.include_router(conta_agendamentos.router)  # /<slug>/conta/agendamentos/<id>/... (SIT-23, SIT-24)
+router.include_router(avisos.router)  # /<slug>/conta/avisos (SIT-25)
 
 
 @router.api_route('/{slug:segmento}/', methods=METODOS, response_model=None)

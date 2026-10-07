@@ -1,0 +1,206 @@
+/* ---------- Sino do cabeçalho ---------- */
+
+.casca-topo .sino.ant-btn {
+  position: relative;
+  overflow: visible;
+}
+
+/* Contador em marca-texto: não lidas são o que pede atenção agora (DIR-002) */
+.sino-contador {
+  position: absolute;
+  top: 0;
+  left: calc(50% + 2px);
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 9px;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 18px;
+  text-align: center;
+  color: var(--tom-marca);
+  background: var(--cor-marca-texto);
+  /* Anel da cor da barra, para o número não encostar no desenho do sino */
+  box-shadow: 0 0 0 2px var(--cor-superficie);
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+}
+
+@media (max-width: 767px) {
+  .sino-contador {
+    top: 4px;
+  }
+}
+
+/* ---------- Painel "Notificações" ---------- */
+
+.painel-notificacoes .ant-drawer-body {
+  padding: 0;
+}
+
+.notificacoes-barra {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--espaco-2);
+  min-height: 40px;
+  padding: var(--espaco-2) var(--espaco-4) 0 var(--espaco-5);
+}
+
+.notificacoes-barra strong {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.notificacoes-carregando {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espaco-5);
+  padding: var(--espaco-4) var(--espaco-5);
+}
+
+.notificacao {
+  position: relative;
+  display: flex;
+  gap: var(--espaco-3);
+  padding: var(--espaco-3) var(--espaco-5) var(--espaco-4);
+}
+
+/* Não lida nesta abertura: fio de tinta à esquerda + etiqueta "Nova" (nunca só a cor) */
+.notificacao.nova {
+  background: var(--cor-selecao-suave);
+}
+
+.notificacao.nova::before {
+  content: '';
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 3px;
+  background: var(--cor-tinta);
+}
+
+.notificacao-icone {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  margin-top: 2px;
+  border-radius: 50%;
+  font-size: 15px;
+}
+
+.notificacao-icone.tom-tinta {
+  color: var(--tom-tinta);
+  background: var(--tom-tinta-fundo);
+}
+
+.notificacao-icone.tom-atencao {
+  color: var(--tom-atencao);
+  background: var(--tom-atencao-fundo);
+}
+
+.notificacao-icone.tom-perigo {
+  color: var(--tom-perigo);
+  background: var(--tom-perigo-fundo);
+}
+
+.notificacao-icone.tom-neutro {
+  color: var(--tom-neutro);
+  background: var(--tom-neutro-fundo);
+}
+
+.notificacao-corpo {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.notificacao-topo {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--espaco-1) var(--espaco-2);
+}
+
+.notificacao-titulo {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.4;
+  color: var(--cor-texto);
+}
+
+.notificacao-mensagem {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--cor-texto-secundario);
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+
+.notificacao-rodape {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--espaco-1) var(--espaco-4);
+  margin-top: var(--espaco-1);
+  font-size: 13px;
+  color: var(--cor-texto-terciario);
+}
+
+.notificacao-link {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--espaco-1);
+  font-weight: 600;
+  color: var(--cor-tinta);
+}
+
+.notificacao-link:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.notificacoes-mais {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--espaco-2);
+  padding: var(--espaco-4) var(--espaco-5) var(--espaco-5);
+  border-top: 1px solid var(--cor-linha-suave);
+}
+
+.notificacoes-mais-erro {
+  margin: 0;
+  font-size: 13px;
+  color: var(--tom-perigo);
+}
+
+@media (max-width: 575px) {
+  .notificacoes-barra {
+    padding-left: var(--espaco-4);
+  }
+
+  .notificacao,
+  .notificacoes-carregando,
+  .notificacoes-mais {
+    padding-inline: var(--espaco-4);
+  }
+}
+
+/* Toque: link e "Carregar mais" com 44 px de altura */
+@media (max-width: 767px) {
+  .notificacao-link {
+    min-height: 44px;
+    margin-block: -10px;
+  }
+
+  .notificacoes-mais .ant-btn {
+    height: 44px;
+  }
+}

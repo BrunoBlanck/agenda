@@ -12,6 +12,7 @@ from app.routers.loja import (
     inicio,
     locais,
     materiais,
+    notificacoes,
     perfis,
     ponto,
     servicos,
@@ -30,4 +31,6 @@ router.include_router(agenda.router)
 router.include_router(ponto.router)
 router.include_router(configuracoes.router)
 router.include_router(configuracoes.router_site)
+router.include_router(configuracoes.router_notificacoes)
+router.include_router(notificacoes.router)
 router.include_router(inicio.router)
