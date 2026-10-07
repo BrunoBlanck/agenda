@@ -818,7 +818,7 @@ ALTER TABLE agendamentos ADD CONSTRAINT agendamentos_local_sem_conflito
 pendente (site) ──► confirmado (loja aceitou)
    └──────────────► cancelado (loja recusou)
 
-agendado ──► confirmado ──► concluido
+agendado ──► confirmado ──► concluido (só registrando o pagamento, AGE-26)
    │              │
    └──────────────┴──► cancelado / nao_compareceu
 ```
@@ -827,6 +827,10 @@ agendado ──► confirmado ──► concluido
 - `concluido`, `cancelado` e `nao_compareceu` são finais (só o Administrador pode reabrir).
 - **AGE-25** Transições exclusivas do cliente pelo site (conta, SIT-23/24): `pendente`/`agendado`/`confirmado` → `cancelado` (cancelar) e `agendado`/`confirmado` → `pendente` ou `pendente` → `pendente` com outro horário (remarcar). Nenhum caminho do painel volta um agendamento a `pendente` (`TRANSICOES` do painel não muda; as do cliente ficam em `TRANSICOES_DO_CLIENTE`, `app/services/conta_agendamentos.py`).
 - Ao ir para `concluido`: dá baixa nos materiais (ver 2.14 e 2.15), somente se o módulo **Materiais** estiver ativo.
+- **AGE-26 Concluir = registrar o pagamento.** A única forma de ir para `concluido` é `POST /api/loja/agendamentos/{id}/pagamento` (forma + valor), que grava o pagamento (2.25), muda o status e dá a baixa de materiais **na mesma transação**, com o agendamento travado (`FOR UPDATE`). Só a partir de `confirmado` (segue `TRANSICOES`: `agendado` não vai direto, `pendente` precisa ser aceito). `POST .../status` e `PUT` com `status = concluido` são recusados (422 "Para concluir o atendimento, registre o pagamento."), antes de olhar a transição. Já concluído: 409 "Este atendimento já está pago."; outra situação: 409 `Não é possível passar de "<rótulo>" para "Concluído".`. Concluir continua sem notificar (NOT-02).
+- **AGE-27 Dados do pagamento:** `forma` (`credito`, `debito`, `dinheiro`, `pix`) e `valor` obrigatório de 0 (cortesia) a 99.999.999,99, no máximo 2 casas. O `preco` do agendamento **não muda**. `pago_em` é a hora do servidor e `criado_por` quem registrou. **Um pagamento ativo por agendamento** (índice único parcial).
+- **AGE-28 Reabrir um concluído** (só o Administrador) exclui logicamente o pagamento ativo, junto com o estorno dos materiais. Concluir de novo exige novo pagamento. Concluído continua não editável nem excluível (AGE-21).
+- **AGE-29** Concluídos anteriores ao pagamento (sem linha em 2.25) continuam válidos: na API `pagamento = null`; o painel mostra "Pagamento não registrado" e o site, só "Concluído". Para registrar o pagamento de um deles, o Administrador reabre e conclui de novo.
 
 Índices sugeridos:
 
@@ -1136,6 +1140,29 @@ Avisos ao cliente e ao profissional (NOT-01 a NOT-08, migração 0008). Uma linh
 
 📌 **Acesso:** as notificações do painel são pessoais (qualquer funcionário logado, sem recurso); nenhum módulo desliga o sino. Sem o módulo Serviços a mensagem usa "Atendimento"; sem Locais não cita o local.
 
+## 2.25 `agendamento_pagamentos`
+
+Pagamento que conclui o atendimento (AGE-26 a AGE-29, SIT-26; migração 0009). Nasce simples (uma forma, um valor) e pronto para crescer (parcelas, várias formas, comissão: ponto em aberto "Financeiro", seção 5).
+
+| Coluna | Tipo | Regras |
+|---|---|---|
+| id | uuid | PK |
+| loja_id | uuid | FK → lojas |
+| agendamento_id | uuid | NOT NULL, FK (loja_id, agendamento_id) → agendamentos |
+| forma | enum `forma_pagamento` | NOT NULL: `credito`, `debito`, `dinheiro`, `pix` |
+| valor | numeric(10,2) | NOT NULL, CHECK (`valor >= 0`); 0 = cortesia |
+| pago_em | timestamptz | NOT NULL DEFAULT now() (hora do servidor, GER-17) |
+| criado_por | uuid | FK (loja_id, criado_por) → funcionarios. DEFAULT lido do contexto (quem registrou) |
+| criado_em, atualizado_em, atualizado_por, excluido_em, excluido_por | | Controle (como em 2.7). CHECK: `excluido_por` só com `excluido_em` |
+
+Índice **único** `agendamento_pagamentos_ativo_uk (loja_id, agendamento_id) WHERE excluido_em IS NULL` (um pagamento ativo por agendamento).
+
+📌 **Invariante:** pagamento ativo só existe em agendamento `concluido` (o serviço só grava ao concluir e exclui ao reabrir; concluído não é excluído). A API só procura o pagamento dos concluídos.
+
+📌 **Acesso:** registrar = escrita na agenda + poder alterar aquele agendamento (AGE-22, igual a mudar o status). Ver = quem vê o agendamento. Nenhum módulo desliga o pagamento.
+
+📌 **Site (SIT-26):** em Minha conta, concluído com pagamento aparece como "Concluído · pago no Pix · R$ 50,00" ("no crédito", "no débito", "em dinheiro", "no Pix"); nunca quem registrou nem a hora.
+
 ---
 
 # 3. Enums
@@ -1152,6 +1179,7 @@ CREATE TYPE tipo_local         AS ENUM ('presencial', 'online');
 CREATE TYPE tipo_loja          AS ENUM ('clinica', 'barbearia', 'escola');
 CREATE TYPE operacao_auditoria AS ENUM ('inserir', 'alterar', 'excluir', 'restaurar');
 CREATE TYPE origem_auditoria   AS ENUM ('painel', 'superadmin', 'site', 'sistema');
+CREATE TYPE forma_pagamento    AS ENUM ('credito', 'debito', 'dinheiro', 'pix');
 ```
 
 ---
@@ -1162,7 +1190,7 @@ CREATE TYPE origem_auditoria   AS ENUM ('painel', 'superadmin', 'site', 'sistema
 |---|---|
 | Início | `agendamentos`, `clientes`, `registros_ponto`, `materiais` |
 | Agenda | `agendamentos`, `funcionarios`, `perfil_horarios`, `bloqueios_agenda`, `locais` |
-| Agendamentos | `agendamentos`, `clientes`, `servicos`, `servico_funcionarios`, `servico_locais`, `locais`, `agendamento_materiais` |
+| Agendamentos | `agendamentos`, `clientes`, `servicos`, `servico_funcionarios`, `servico_locais`, `locais`, `agendamento_materiais`, `agendamento_pagamentos` |
 | Clientes | `clientes` |
 | Funcionários | `funcionarios`, `cargos`, `perfis`, `perfil_acessos`, `recursos` |
 | Serviços | `servicos`, `servico_funcionarios`, `servico_materiais`, `servico_locais` |
@@ -1201,7 +1229,7 @@ Diferenças entre o mock atual e o banco:
 - [x] ~~Cliente precisa de acesso próprio?~~ Decidido em 2026-10-06: conta do cliente por loja e telefone (2.22, 2.23, SIT-16 a SIT-24).
 - [ ] Antecedência mínima para **agendar** pelo site (hoje 60 min fixos). ~~Para cancelar~~ decidido em 2026-10-06: CFG-05 (configurável pela loja).
 - [x] ~~Notificações de confirmação e lembrete~~ Decidido em 2026-10-06: tabela `notificacoes` (2.24, NOT-01 a NOT-08), e-mail pelo SMTP da loja. Falta o envio real por **WhatsApp** (hoje sempre status 4).
-- [ ] Financeiro (pagamentos dos atendimentos, comissão de profissionais).
+- [ ] Financeiro (pagamentos dos atendimentos, comissão de profissionais). *Decidido em 2026-10-07 (parte):* concluir exige registrar o pagamento com **forma** (crédito, débito, dinheiro, pix) e **valor** (2.25, AGE-26 a AGE-29). Continuam em aberto: caixa, relatórios, comissão, parcelas, troco, várias formas num atendimento, estorno de dinheiro, cobrança online e formas configuráveis por loja. *Provisório:* só `confirmado` pode ser pago e um pagamento ativo por agendamento.
 - [ ] Prontuário/anotações clínicas do atendimento (dados sensíveis, LGPD).
 - [ ] Um mesmo funcionário trabalhando em mais de uma loja (hoje seria um cadastro por loja).
 - [ ] Tipo da loja precisa de um **subtipo/segmento** (ex.: Escola → Música, Idiomas; Clínica → Odontológica, Estética)? Só faria diferença no site do consumidor.
@@ -1223,7 +1251,7 @@ Como o back-end (`backend/`, migrações `0001` e `0002`) aplica este documento,
 - **Colunas de controle:** os triggers também fixam `criado_em` (no `INSERT` vale `now()` e depois nunca muda) e cuidam de `excluido_em`/`excluido_por`: excluir (por `DELETE` ou por `UPDATE` de `excluido_em`) grava a hora e quem excluiu; restaurar (`excluido_em = NULL`) limpa `excluido_por`. Colunas "quem criou" (`lojas.criado_por`, `funcionarios.criado_por_*`, `agendamentos.criado_por`, `bloqueios_agenda.criado_por`, `movimentacoes_estoque.funcionario_id`) têm `DEFAULT` lido do contexto.
 - **Auditoria:** não guarda `senha_hash` (nem `cliente_codigos.codigo`, desde a migração 0007) em `antes`/`depois` (só aparece em `campos_alterados`, indicando que a senha mudou). `campos_alterados` é preenchido em `alterar`. `UPDATE` que não muda nenhum valor não gera linha. Além do `REVOKE`, um trigger impede `UPDATE`/`DELETE` na auditoria até para o dono do schema.
 - **Leitura sem excluídos:** em vez de uma view `*_ativos` por tabela, o ORM do back-end acrescenta `excluido_em IS NULL` a toda consulta (com opção explícita para incluir os excluídos). As políticas de RLS não escondem excluídos (senão não daria para restaurar).
-- **RLS ligado** nas 21 tabelas da seção 2 (`loja_id = app.loja_id`). Com `app.superadmin_id` preenchido, todas as lojas ficam visíveis. A API conecta com um usuário sem privilégio de dono, para o RLS e o `REVOKE` valerem.
+- **RLS ligado** em todas as tabelas da seção 2 (23 desde a migração 0009) (`loja_id = app.loja_id`). Com `app.superadmin_id` preenchido, todas as lojas ficam visíveis. A API conecta com um usuário sem privilégio de dono, para o RLS e o `REVOKE` valerem.
 - **Unicidade:** e-mails (`superadmin_usuarios`, `funcionarios`) são únicos sem diferenciar maiúsculas (`lower(email)`). `funcionalidades.codigo` e `recursos.codigo` também usam índice parcial. `UNIQUE (loja_id, id)` continua comum (não parcial), porque é alvo das FKs compostas.
 - **FKs compostas** também em `criado_por`, `editado_por`, `movimentacoes_estoque.agendamento_id`/`funcionario_id`, `funcionarios.criado_por_funcionario`, `lojas (id, atualizado_por_funcionario)` e `auditoria (loja_id, funcionario_id)`.
 - **Conflito de horário:** as duas restrições `EXCLUDE` de `agendamentos` ignoram também linhas excluídas (`excluido_em IS NULL`).

@@ -12,3 +12,4 @@ Uma especificação por funcionalidade (`<slug>.md`), escrita pelo agente `coord
 | [Conta do cliente no site (login, meus agendamentos, remarcar, cancelar)](conta-cliente.md) | aprovada | feat/conta-cliente |
 | [Mobile first: site e painéis (DIR-004)](mobile-first.md) | aprovada | feat/mobile-first |
 | [Notificações (sino, e-mail por SMTP da loja, lembrete)](notificacoes.md) | aprovada | feat/notificacoes |
+| [Pagamento do atendimento (concluir só ao marcar como pago)](pagamento-atendimento.md) | aprovada | feat/pagamento-atendimento |

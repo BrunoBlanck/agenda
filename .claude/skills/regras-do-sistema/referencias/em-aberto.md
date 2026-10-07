@@ -15,7 +15,7 @@ Fonte: `estrutura.md` seção 5 (pontos em aberto) e 6.1/6.2 (decisões *provis�
 - ~~ABE-10 Cliente com login próprio~~ Decidido em 2026-10-06: SIT-16 a SIT-24.
 - ~~ABE-11 Antecedência mínima para cancelar~~ Decidido em 2026-10-06: configurável pela loja (CFG-05), padrão 2 h, vale para cancelar e remarcar pelo site e para o lembrete (NOT-05).
 - ABE-12 Notificações por **WhatsApp/SMS** (e-mail, sino e lembrete decididos em 2026-10-06: NOT-01 a NOT-08; hoje o WhatsApp fica sempre com status 4). Inclui trocar o provedor "painel" do código da conta (SIT-17) por SMS/WhatsApp: hoje quem tem escrita em Clientes, ou quem convence a recepção, consegue o código e assume a conta de um telefone; ao trocar, guardar só o hash do código. Risco provisório aceito (rodada 2 da conta-cliente): com 4 IPs dá para esgotar as 20 tentativas de um código e um telefone visado recebe até 100 palpites/hora; avaliar teto de erros por telefone e aviso à loja.
-- ABE-13 Financeiro (pagamentos, comissões).
+- ABE-13 Financeiro (caixa, relatórios, comissões, várias formas por atendimento, parcelas). Decidido em 2026-10-07: concluir exige registrar forma e valor do pagamento (AGE-26 a AGE-29).
 - ABE-14 Prontuário/anotações clínicas (dados sensíveis, LGPD).
 - ABE-15 Um funcionário em mais de uma loja.
 - ABE-16 Subtipo/segmento da loja (só afetaria o site).
