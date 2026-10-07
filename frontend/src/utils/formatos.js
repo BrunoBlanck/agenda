@@ -1,5 +1,5 @@
 import dayjs from 'dayjs'
-import { lerData, lerDataHora } from '../data/api/conversao.js'
+import { agoraNaLoja, lerData, lerDataHora } from '../data/api/conversao.js'
 
 export const soDigitos = (valor) => String(valor ?? '').replace(/\D/g, '')
 
@@ -120,4 +120,18 @@ export function duracaoTexto(minutos) {
   if (minutos < 60) return `${minutos} min`
   const resto = minutos % 60
   return `${Math.floor(minutos / 60)}h${resto ? String(resto).padStart(2, '0') : ''}`
+}
+
+// Quando algo aconteceu, como a recepção diz: "agora", "há 5 min", "hoje às 14h30", "ontem às 9h",
+// "12/10 às 9h" (mesmo ano) ou "12/10/2025 às 9h". Tudo na hora da loja (data: dayjs ou texto da API).
+export function quandoAconteceu(data, agora = agoraNaLoja()) {
+  const d = paraDayjs(data)
+  if (!d) return '—'
+  const minutos = agora.diff(d, 'minute')
+  const hora = horaCurta(d.format('HH:mm'))
+  if (minutos >= 0 && minutos < 1) return 'agora'
+  if (minutos >= 1 && minutos < 60) return `há ${minutos} min`
+  if (d.isSame(agora, 'day')) return `hoje às ${hora}`
+  if (d.isSame(agora.subtract(1, 'day'), 'day')) return `ontem às ${hora}`
+  return `${d.format(d.isSame(agora, 'year') ? 'DD/MM' : 'DD/MM/YYYY')} às ${hora}`
 }

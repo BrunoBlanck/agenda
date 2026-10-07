@@ -12,6 +12,7 @@ import ExigirSessao from './ExigirSessao.jsx'
 import Pagina from '../components/base/Pagina.jsx'
 import Secao from '../components/base/Secao.jsx'
 import EstadoVazio from '../components/base/EstadoVazio.jsx'
+import SinoNotificacoes from '../components/Notificacoes.jsx'
 
 function MarcaLoja({ loja, recolhido }) {
   const nome = loja?.nomeFantasia || loja?.nome || ''
@@ -80,6 +81,7 @@ function Painel() {
           >
             <span className="rotulo-largo">Site da loja</span>
           </Button>
+          <SinoNotificacoes />
           <Usuario nome={acesso.usuario?.nome} detalhe={acesso.perfil?.nome} />
           <Button type="text" icon={<LogoutOutlined />} onClick={sair} aria-label="Sair">
             <span className="rotulo-largo">Sair</span>
