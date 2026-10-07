@@ -12,9 +12,9 @@ Fonte: `estrutura.md` seção 5 (pontos em aberto) e 6.1/6.2 (decisões *provis�
 | ABE-05 | Serviços desligado | Agendamento sem serviço, duração e preço manuais | `services/agendamentos.py` |
 
 ## Ainda sem decisão
-- ABE-10 Cliente com login próprio (agendar online logado).
-- ABE-11 Antecedência mínima para **cancelar**.
-- ABE-12 Notificações (WhatsApp/e-mail) de confirmação e lembrete.
+- ~~ABE-10 Cliente com login próprio~~ Decidido em 2026-10-06: SIT-16 a SIT-24.
+- ABE-11 Antecedência mínima para **cancelar** (provisório: 2 h para cancelar/remarcar pelo site, `ANTECEDENCIA_CLIENTE`).
+- ABE-12 Notificações (WhatsApp/e-mail) de confirmação e lembrete. Inclui trocar o provedor "painel" do código da conta (SIT-17) por SMS/WhatsApp: hoje quem tem escrita em Clientes, ou quem convence a recepção, consegue o código e assume a conta de um telefone; ao trocar, guardar só o hash do código. Risco provisório aceito (rodada 2 da conta-cliente): com 4 IPs dá para esgotar as 20 tentativas de um código e um telefone visado recebe até 100 palpites/hora; avaliar teto de erros por telefone e aviso à loja.
 - ABE-13 Financeiro (pagamentos, comissões).
 - ABE-14 Prontuário/anotações clínicas (dados sensíveis, LGPD).
 - ABE-15 Um funcionário em mais de uma loja.

@@ -19,4 +19,5 @@ Tinta #2340A8 (primária), grafite #1E2230 (texto), papel #F3F4F7 (fundo), marca
 - SUPERADMIN = mesma Casca com barra lateral grafite (`temaPlataforma`).
 - Site do consumidor saiu do React (2026-10-03, vira HTML do back-end). As cores por tipo que o protótipo usava (`temasSite`: clínica #1F5C99, barbearia #8A4B1F com topo grafite, escola #2F6B3A) ficam no histórico do git, para a especificação do site.
 - Cores existem em dois lugares (tema.js para o antd, :root em index.css): mudar os dois.
+- Códigos lidos em voz alta (confirmação do site, 2026-10-06): `--fonte-codigo` / `fontFamilyCode` = Atkinson Hyperlegible Mono, baixada só com os dígitos (`text=0123456789` no index.html), em dois grupos de três ("482 913"). Marca-texto só no código da ficha do cliente; na lista de códigos, sem destaque (tudo ali é pendente).
 Relacionado: [[padroes-de-tela]]

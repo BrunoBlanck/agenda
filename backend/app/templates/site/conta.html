@@ -1,0 +1,63 @@
+{% extends 'site/base.html' %}
+{% block titulo %}Minha conta · {{ loja.nome_fantasia }}{% endblock %}
+{% macro item(a, rotulo_local, loja, telefone_link) %}
+          <li class="meu-agendamento">
+            <p class="meu-titulo"><strong>{{ a.servico }}</strong> · {{ a.dia }} · {{ a.hora }}</p>
+            <p class="meu-detalhe">{{ a.profissional }}{% if a.local %} · {{ rotulo_local }}: {{ a.local }}{% endif %}{% if a.preco %} · <span class="preco">{{ a.preco }}</span>{% endif %}</p>
+            <p class="situacao situacao-{{ a.classe }}"><svg class="icone" aria-hidden="true" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>{{ a.situacao }}</p>
+            {% if a.remarcar %}
+            <p class="meu-acoes">
+              <a class="botao botao-secundario botao-pequeno" href="{{ a.remarcar }}" aria-label="Remarcar {{ a.servico }} de {{ a.dia }}, {{ a.hora }}">Remarcar</a>
+              <a class="botao botao-secundario botao-pequeno" href="{{ a.cancelar }}" aria-label="Cancelar {{ a.servico }} de {{ a.dia }}, {{ a.hora }}">Cancelar</a>
+            </p>
+            {% elif a.so_com_a_loja %}
+            <p class="meu-loja">Para alterar, fale com a loja{% if loja.telefone %}: {% if telefone_link %}<a href="{{ telefone_link }}">{{ loja.telefone }}</a>{% else %}{{ loja.telefone }}{% endif %}{% endif %}</p>
+            {% endif %}
+          </li>
+{% endmacro %}
+{% block conteudo %}
+      <div class="titulo-linha conta-topo">
+        <h2 class="titulo">Olá{% if nome %}, {{ nome }}{% endif %}</h2>
+        <form method="post" action="{{ sair }}">
+          <button type="submit" class="botao botao-secundario">Sair</button>
+        </form>
+      </div>
+      <p class="nota">Telefone: {{ telefone }}</p>
+      {% if aviso %}
+      <p class="aviso" role="status">{{ aviso }}</p>
+      {% endif %}
+      <section class="secao-conta" aria-labelledby="proximos-titulo">
+        <h3 class="rotulo" id="proximos-titulo">Próximos</h3>
+        {% if proximos %}
+        <ul class="meus-agendamentos">
+          {% for a in proximos %}
+{{ item(a, rotulo_local, loja, telefone_link) }}
+          {% endfor %}
+        </ul>
+        {% else %}
+        <p class="vazio">Você não tem horários marcados.</p>
+        {% endif %}
+        <a class="botao botao-largo" href="{{ agendar }}">Agendar novo horário</a>
+      </section>
+      <section class="secao-conta" id="historico" aria-labelledby="historico-titulo">
+        <h3 class="rotulo" id="historico-titulo">Histórico</h3>
+        {% if historico %}
+        <ul class="meus-agendamentos historico">
+          {% for a in historico %}
+{{ item(a, rotulo_local, loja, telefone_link) }}
+          {% endfor %}
+        </ul>
+        {% elif total_historico %}
+        <p class="vazio">Não há agendamentos nesta página.</p>
+        {% else %}
+        <p class="vazio">Nenhum agendamento anterior.</p>
+        {% endif %}
+        {% if anterior or proxima %}
+        <nav class="paginacao" aria-label="Páginas do histórico">
+          {% if anterior %}<a href="{{ anterior }}" rel="prev">‹ Anterior</a>{% else %}<span></span>{% endif %}
+          <span class="paginacao-atual">Página {{ pagina }} de {{ paginas }}</span>
+          {% if proxima %}<a href="{{ proxima }}" rel="next">Próxima ›</a>{% else %}<span></span>{% endif %}
+        </nav>
+        {% endif %}
+      </section>
+{% endblock %}

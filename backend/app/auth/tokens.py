@@ -1,5 +1,15 @@
-"""Tokens JWT. O tipo do usuário vai no token: funcionario (com loja_id) ou superadmin."""
+"""Tokens JWT.
 
+- **Painel e SUPERADMIN** (``criar_token``/``ler_token``): o tipo do usuário vai no token, funcionario
+  (com loja_id) ou superadmin; vão no cabeçalho ``Authorization``.
+- **Cliente do site** (``criar_token_cliente``/``ler_token_cliente``, SIT-20): sessão por cookie, tipo
+  ``cliente``, com a loja, a conta e a versão da sessão. Assinado com outra chave (derivada do segredo) e
+  com audiência própria: um token de cliente nunca passa em ``ler_token`` (nem nas rotas /api/loja e
+  /api/superadmin) e um token do painel nunca passa como sessão do site.
+"""
+
+import hashlib
+import hmac
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Literal
@@ -68,6 +78,68 @@ def ler_token(token: str) -> DadosToken:
             loja_id=UUID(dados['loja_id']) if funcionario else None,
             expira_em=datetime.fromtimestamp(dados['exp'], UTC),
             suporte=funcionario and dados.get('suporte') is True,
+        )
+    except (jwt.PyJWTError, KeyError, ValueError, TypeError, OverflowError, OSError) as erro:
+        raise TokenInvalido from erro
+
+
+# ---------------------------------------------------------------------------------------------
+# Sessão do cliente no site (SIT-20)
+# ---------------------------------------------------------------------------------------------
+
+AUDIENCIA_CLIENTE = 'site-cliente'
+
+
+@dataclass(frozen=True)
+class DadosTokenCliente:
+    conta_id: UUID
+    loja_id: UUID
+    versao: int
+    expira_em: datetime
+
+
+def _segredo_cliente() -> bytes:
+    """Chave própria das sessões do site: um token do painel não verifica com ela, e vice-versa."""
+    segredo = get_settings().jwt_secret.get_secret_value().encode()
+    return hmac.new(segredo, b'agenda:sessao-cliente-site', hashlib.sha256).digest()
+
+
+def criar_token_cliente(conta_id: UUID, loja_id: UUID, versao: int) -> tuple[str, datetime]:
+    """Token da sessão do cliente (validade ``SITE_SESSAO_DIAS``)."""
+    settings = get_settings()
+    agora = datetime.now(UTC).replace(microsecond=0)
+    expira_em = agora + timedelta(days=settings.site_sessao_dias)
+    dados: dict[str, object] = {
+        'sub': str(conta_id),
+        'tipo': 'cliente',
+        'loja_id': str(loja_id),
+        'ver': versao,
+        'aud': AUDIENCIA_CLIENTE,
+        'iat': agora,
+        'exp': expira_em,
+    }
+    token = jwt.encode(dados, _segredo_cliente(), algorithm=settings.jwt_algoritmo)
+    return token, expira_em
+
+
+def ler_token_cliente(token: str) -> DadosTokenCliente:
+    settings = get_settings()
+    try:
+        dados = jwt.decode(
+            token,
+            _segredo_cliente(),
+            algorithms=[settings.jwt_algoritmo],
+            audience=AUDIENCIA_CLIENTE,
+            options={'require': ['sub', 'tipo', 'loja_id', 'ver', 'aud', 'exp', 'iat']},
+        )
+        versao = dados['ver']
+        if dados['tipo'] != 'cliente' or type(versao) is not int or versao < 1:
+            raise TokenInvalido
+        return DadosTokenCliente(
+            conta_id=UUID(dados['sub']),
+            loja_id=UUID(dados['loja_id']),
+            versao=versao,
+            expira_em=datetime.fromtimestamp(dados['exp'], UTC),
         )
     except (jwt.PyJWTError, KeyError, ValueError, TypeError, OverflowError, OSError) as erro:
         raise TokenInvalido from erro

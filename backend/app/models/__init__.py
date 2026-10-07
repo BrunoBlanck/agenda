@@ -3,7 +3,7 @@
 from app.models.acesso import Cargo, Funcionario, Perfil, PerfilAcesso
 from app.models.agenda import Agendamento, AgendamentoMaterial, BloqueioAgenda, PerfilHorario
 from app.models.base import Base, ControleMixin, LojaMixin
-from app.models.clientes import Cliente
+from app.models.clientes import Cliente, ClienteCodigo, ClienteConta
 from app.models.locais import Local, LojaConfiguracao
 from app.models.materiais import CategoriaMaterial, Material, MovimentacaoEstoque
 from app.models.plataforma import (
@@ -27,6 +27,8 @@ __all__ = [
     'Cargo',
     'CategoriaMaterial',
     'Cliente',
+    'ClienteCodigo',
+    'ClienteConta',
     'ControleMixin',
     'Funcionalidade',
     'Funcionario',

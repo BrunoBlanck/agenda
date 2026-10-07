@@ -43,3 +43,4 @@ confirmado -> concluido  | cancelado | nao_compareceu
 - **AGE-22** Só *Minha agenda*: vê e altera apenas onde `funcionario_id` é ele. Com *Agenda da equipe*: todos. Leitura só vê; escrita cria, remarca, muda status e cancela.
 - **AGE-23** Histórico do cliente exige leitura em *Clientes* e mostra só os agendamentos que o usuário pode ver na agenda (`parcial = true` quando há outros).
 - **AGE-24** Todo o histórico do agendamento (remarcação, status, troca de profissional/local) vem da `auditoria`.
+- **AGE-25** Transições exclusivas do cliente pelo site (SIT-23/24), em `TRANSICOES_DO_CLIENTE` (`app/services/conta_agendamentos.py`): `pendente`/`agendado`/`confirmado` → `cancelado`; `agendado`/`confirmado` → `pendente` e `pendente` → `pendente` com outro horário (remarcação). O `TRANSICOES` do painel não muda: nenhum caminho do painel volta um agendamento a `pendente`.

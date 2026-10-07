@@ -36,15 +36,20 @@
         </ul>
         {% endif %}
       </div>
+      <nav class="conta-nav" aria-label="Sua conta">
+        <a class="conta-link" href="{{ conta_nav.url }}"><svg class="icone" aria-hidden="true" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>{{ conta_nav.texto }}</a>
+      </nav>
     </div>
   </header>
   <main class="largura principal">
     <div class="cartao">
+      {% if passos %}
       <ol class="passos" aria-label="Etapas do agendamento">
         {% for nome in passos %}
         <li{% if loop.index0 == passo_atual %} aria-current="step"{% elif loop.index0 < passo_atual %} class="feito"{% endif %}><span class="passo-num" aria-hidden="true">{{ loop.index }}</span><span class="passo-nome">{{ nome }}</span></li>
         {% endfor %}
       </ol>
+      {% endif %}
 {% block conteudo %}{% endblock %}
     </div>
   </main>

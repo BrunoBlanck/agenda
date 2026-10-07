@@ -9,10 +9,6 @@ Erros: ``invalido`` (422) para escolha que não existe (serviço, profissional, 
 pendentes por telefone. As páginas HTML tratam cada um de um jeito (voltar ao passo certo).
 """
 
-import base64
-import hashlib
-import hmac
-import re
 import uuid
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
@@ -37,6 +33,7 @@ from app.schemas.site import (
 )
 from app.services.acesso import modulos_da_loja
 from app.services.agendamentos import materiais_do_servico
+from app.services.assinatura import assinar_id, ler_id
 from app.services.comum import conflito, fuso, invalido, no_fuso
 from app.services.horarios_livres import (
     DURACAO_SEM_SERVICO,
@@ -178,8 +175,13 @@ def agenda_do_periodo(
     primeiro: date,
     ultimo: date,
     local_id: UUID | None = None,
+    *,
+    ignorar: UUID | None = None,
 ) -> tuple[Agenda, dict[UUID, Local]]:
-    """Agenda do período. ``local_id`` (módulo Locais) restringe os horários aos desse local."""
+    """Agenda do período. ``local_id`` (módulo Locais) restringe os horários aos desse local.
+
+    ``ignorar``: agendamento que não conta como ocupado (o próprio, na remarcação pelo site, SIT-24).
+    """
     candidatos = profissionais(ctx.db, ctx.loja.id, servico)
     if funcionario_id is not None:
         candidatos = [f for f in candidatos if f.id == funcionario_id]
@@ -198,6 +200,7 @@ def agenda_do_periodo(
         [local.id for local in locais] if locais is not None else None,
         primeiro,
         ultimo,
+        ignorar=ignorar,
     )
     return agenda, {local.id: local for local in locais or []}
 
@@ -213,10 +216,18 @@ def dias_livres(
     primeiro: date,
     ultimo: date,
     local_id: UUID | None = None,
+    *,
+    duracao: int | None = None,
+    ignorar: UUID | None = None,
 ) -> tuple[list[tuple[date, list[Livre]]], dict[UUID, Local]]:
-    """Horários livres de cada dia do período (o chamador limita o tamanho do período)."""
-    agenda, locais = agenda_do_periodo(ctx, servico, funcionario_id, primeiro, ultimo, local_id)
-    agora, duracao = datetime.now(UTC), duracao_de(servico)
+    """Horários livres de cada dia do período (o chamador limita o tamanho do período).
+
+    ``duracao`` (minutos): a do serviço quando não informada; ``ignorar``: ver ``agenda_do_periodo``.
+    """
+    agenda, locais = agenda_do_periodo(
+        ctx, servico, funcionario_id, primeiro, ultimo, local_id, ignorar=ignorar
+    )
+    agora, duracao = datetime.now(UTC), duracao or duracao_de(servico)
     dias = [primeiro + timedelta(days=i) for i in range((ultimo - primeiro).days + 1)]
     return [(dia, agenda.livres_no_dia(dia, duracao, agora)) for dia in dias], locais
 
@@ -239,18 +250,20 @@ def horario_oferecido(
     funcionario_id: UUID,
     inicio: datetime,
     local_id: UUID | None = None,
+    *,
+    duracao: int | None = None,
+    ignorar: UUID | None = None,
 ) -> HorarioEscolhido:
     """O horário precisa ser um dos oferecidos (jornada, bloqueios, antecedência e ocupação, SIT-05).
 
     ``local_id`` vazio = o primeiro local permitido e livre (SIT-04). Sem o módulo Locais, é ignorado.
+    ``duracao`` e ``ignorar``: ver ``dias_livres`` (remarcação pelo site, SIT-24).
     """
     inicio = no_fuso(inicio, ctx.zona)
     dia = inicio.astimezone(ctx.zona).date()
-    agenda, locais = agenda_do_periodo(ctx, servico, funcionario_id, dia, dia)
-    livre = next(
-        (h for h in agenda.livres_no_dia(dia, duracao_de(servico), datetime.now(UTC)) if h.inicio == inicio),
-        None,
-    )
+    agenda, locais = agenda_do_periodo(ctx, servico, funcionario_id, dia, dia, ignorar=ignorar)
+    livres = agenda.livres_no_dia(dia, duracao or duracao_de(servico), datetime.now(UTC))
+    livre = next((h for h in livres if h.inicio == inicio), None)
     if livre is None:
         raise HorarioIndisponivel(MSG_HORARIO_OCUPADO)
     escolhido = livre.local_id
@@ -266,9 +279,22 @@ def horario_oferecido(
 # --- Pedido de agendamento -----------------------------------------------------------------------
 
 
+def filtro_telefone(loja_id: UUID, digitos: str) -> ColumnElement[bool]:
+    """Clientes da loja com o telefone (só dígitos, SIT-07); índice ``clientes_telefone_digitos_idx``."""
+    return (Cliente.loja_id == loja_id) & (func.regexp_replace(Cliente.telefone, r'\D', '', 'g') == digitos)
+
+
 def _telefone_da_loja(ctx: ContextoSite, digitos: str) -> ColumnElement[bool]:
-    return (Cliente.loja_id == ctx.loja.id) & (
-        func.regexp_replace(Cliente.telefone, r'\D', '', 'g') == digitos
+    return filtro_telefone(ctx.loja.id, digitos)
+
+
+def cliente_do_telefone(db: Session, loja_id: UUID, digitos: str) -> Cliente | None:
+    """O cliente mais antigo da loja com o telefone (o mesmo que o pedido do site usa)."""
+    return db.scalar(
+        select(Cliente)
+        .where(filtro_telefone(loja_id, digitos))
+        .order_by(Cliente.criado_em, Cliente.id)
+        .limit(1)
     )
 
 
@@ -302,12 +328,7 @@ def _cliente(ctx: ContextoSite, dados: SolicitacaoEntrada, digitos: str) -> Clie
     O cadastro existente não é alterado (nome e e-mail ficam como a loja registrou) e nada dele é
     devolvido, para o site não revelar dados de quem já é cliente.
     """
-    existente = ctx.db.scalar(
-        select(Cliente)
-        .where(_telefone_da_loja(ctx, digitos))
-        .order_by(Cliente.criado_em, Cliente.id)
-        .limit(1)
-    )
+    existente = cliente_do_telefone(ctx.db, ctx.loja.id, digitos)
     if existente is not None:
         if CanalCliente.site not in existente.canais:
             existente.canais = [*existente.canais, CanalCliente.site]
@@ -413,17 +434,33 @@ def pedido_repetido(ctx: ContextoSite, dados: SolicitacaoEntrada) -> UUID | None
     )
 
 
+def pedido_repetido_da_conta(ctx: ContextoSite, dados: SolicitacaoEntrada) -> UUID | None:
+    """O mesmo pedido de quem está na conta (SIT-22), já gravado pelo site há pouco e ainda pendente.
+
+    A sessão prova que o telefone é de quem envia, então basta o telefone da conta (em ``dados``), o
+    profissional, o início e as observações iguais (LOG-07: duplo clique, recarregar, envio simultâneo).
+    """
+    return ctx.db.scalar(
+        select(Agendamento.id)
+        .join(Cliente, (Cliente.id == Agendamento.cliente_id) & (Cliente.loja_id == Agendamento.loja_id))
+        .where(
+            Agendamento.loja_id == ctx.loja.id,
+            Agendamento.funcionario_id == dados.funcionario_id,
+            Agendamento.inicio == no_fuso(dados.inicio, ctx.zona),
+            Agendamento.origem == OrigemAgendamento.site,
+            Agendamento.status == StatusAgendamento.pendente,
+            Agendamento.criado_em > func.now() - JANELA_DE_REPETICAO,
+            Agendamento.observacoes.is_not_distinct_from(dados.observacoes),
+            _telefone_da_loja(ctx, so_digitos(dados.telefone)),
+        )
+        .limit(1)
+    )
+
+
 # --- Confirmação (passo 4) -----------------------------------------------------------------------
 
 VALIDADE_DO_CODIGO = timedelta(hours=24)
-_CODIGO = re.compile(r'^([0-9a-f]{32})([0-9a-f]{8})\.([A-Za-z0-9_-]{22})$')
-
-
-def _assinatura(dominio: str, loja_id: UUID, corpo: str) -> str:
-    segredo = get_settings().jwt_secret.get_secret_value().encode()
-    mensagem = f'{dominio}\x1f{loja_id}\x1f{corpo}'.encode()
-    resumo = hmac.new(segredo, mensagem, hashlib.sha256).digest()[:16]
-    return base64.urlsafe_b64encode(resumo).decode().rstrip('=')
+DOMINIO_PEDIDO, DOMINIO_FALSO = 'site-pedido', 'site-falso'
 
 
 def codigo_do_pedido(loja_id: UUID, agendamento_id: UUID | None, *, agora: datetime | None = None) -> str:
@@ -433,10 +470,14 @@ def codigo_do_pedido(loja_id: UUID, agendamento_id: UUID | None, *, agora: datet
     armadilha do formulário): mesmo formato, assinado com outra chave, e a página mostra uma
     confirmação genérica sem gravar nada.
     """
-    expira = int(((agora or datetime.now(UTC)) + VALIDADE_DO_CODIGO).timestamp())
     falso = agendamento_id is None
-    corpo = f'{(uuid.uuid4() if falso else agendamento_id).hex}{expira:08x}'
-    return f'{corpo}.{_assinatura("site-falso" if falso else "site-pedido", loja_id, corpo)}'
+    return assinar_id(
+        DOMINIO_FALSO if falso else DOMINIO_PEDIDO,
+        loja_id,
+        uuid.uuid4() if agendamento_id is None else agendamento_id,
+        VALIDADE_DO_CODIGO,
+        agora=agora,
+    )
 
 
 @dataclass(frozen=True)
@@ -447,17 +488,10 @@ class CodigoLido:
 
 def ler_codigo(codigo: str, loja_id: UUID, *, agora: datetime | None = None) -> CodigoLido | None:
     """Código válido, desta loja e dentro da validade; senão None (a página responde 404)."""
-    partes = _CODIGO.fullmatch(codigo)
-    if partes is None:
+    lido = ler_id(codigo, loja_id, (DOMINIO_PEDIDO, DOMINIO_FALSO), agora=agora)
+    if lido is None:
         return None
-    id_hex, expira_hex, assinatura = partes.groups()
-    if int(expira_hex, 16) < (agora or datetime.now(UTC)).timestamp():
-        return None
-    corpo = f'{id_hex}{expira_hex}'
-    for dominio, falso in (('site-pedido', False), ('site-falso', True)):
-        if hmac.compare_digest(assinatura, _assinatura(dominio, loja_id, corpo)):
-            return CodigoLido(agendamento_id=UUID(id_hex), falso=falso)
-    return None
+    return CodigoLido(agendamento_id=lido[0], falso=lido[1] == DOMINIO_FALSO)
 
 
 @dataclass(frozen=True)

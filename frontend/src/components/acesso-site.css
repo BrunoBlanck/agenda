@@ -1,0 +1,189 @@
+/* ---------- Código de confirmação do site ---------- */
+
+.codigo-confirmacao {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--espaco-1);
+}
+
+.codigo-confirmacao-digitos {
+  display: inline-flex;
+  gap: 0.4em;
+  font-family: var(--fonte-codigo);
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 1.2;
+  letter-spacing: 0.04em;
+  color: var(--cor-texto);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Na ficha do cliente, o código é o que pede atenção agora: maior e com o marca-texto */
+.codigo-confirmacao-digitos.destaque {
+  padding: 2px 8px;
+  font-size: 28px;
+  color: var(--tom-marca);
+  background: var(--cor-marca-texto);
+  border-radius: 2px 6px 3px 5px;
+}
+
+.acesso-site-validade {
+  font-size: 13px;
+  color: var(--cor-texto-secundario);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* ---------- Seção "Acesso ao site" na ficha do cliente ---------- */
+
+.grupo-com-acao {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--espaco-2);
+}
+
+.grupo-com-acao h3 {
+  margin: 0;
+  font-size: inherit;
+  font-weight: inherit;
+}
+
+.acesso-site {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--espaco-3);
+  margin-bottom: var(--espaco-5);
+}
+
+.acesso-site p {
+  margin: 0;
+}
+
+.acesso-site-situacao {
+  color: var(--cor-texto);
+  font-variant-numeric: tabular-nums;
+}
+
+.acesso-site-situacao .sem-quebra {
+  white-space: nowrap;
+}
+
+.acesso-site-codigo {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espaco-1);
+}
+
+.acesso-site-codigo-linha {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--espaco-1) var(--espaco-3);
+}
+
+.acesso-site-aviso {
+  padding: var(--espaco-1) var(--espaco-2);
+  border-radius: var(--raio-controle);
+  color: var(--tom-atencao);
+  background: var(--tom-atencao-fundo);
+}
+
+.acesso-site-carregando {
+  width: 100%;
+}
+
+.acesso-site .estado-vazio {
+  align-self: stretch;
+}
+
+/* ---------- Painel "Códigos do site" ---------- */
+
+.painel-codigos-site .ant-drawer-body {
+  padding: 0;
+}
+
+.codigos-site-barra {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--espaco-2);
+  padding: var(--espaco-3) var(--espaco-4) 0 var(--espaco-5);
+}
+
+.codigos-site-barra strong {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.codigos-site-ajuda {
+  margin: 0;
+  padding: 0 var(--espaco-5) var(--espaco-2);
+}
+
+.codigos-site-filtro {
+  padding: var(--espaco-2) var(--espaco-5);
+}
+
+.codigos-site-item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--espaco-2) var(--espaco-4);
+  padding: var(--espaco-3) var(--espaco-5);
+}
+
+.codigos-site-quem {
+  display: flex;
+  flex: 1 1 200px;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  font-size: 13px;
+  color: var(--cor-texto-secundario);
+  overflow-wrap: anywhere;
+}
+
+.codigos-site-quem strong {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--cor-texto);
+  font-variant-numeric: tabular-nums;
+}
+
+.codigos-site-sem-cadastro {
+  font-style: italic;
+  color: var(--cor-texto-terciario);
+}
+
+.codigos-site-codigo {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+}
+
+.codigos-site-carregando {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espaco-5);
+  padding: var(--espaco-5);
+}
+
+@media (max-width: 575px) {
+  .codigos-site-barra {
+    padding-left: var(--espaco-4);
+  }
+
+  .codigos-site-ajuda,
+  .codigos-site-filtro,
+  .codigos-site-item {
+    padding-inline: var(--espaco-4);
+  }
+
+  .codigos-site-codigo {
+    align-items: flex-start;
+  }
+}

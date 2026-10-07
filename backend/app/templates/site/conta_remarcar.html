@@ -1,0 +1,28 @@
+{% extends 'site/base.html' %}
+{% from 'site/_agendamento.html' import linhas %}
+{% block titulo %}Confirmar remarcação · {{ loja.nome_fantasia }}{% endblock %}
+{% block conteudo %}
+      <h2 class="titulo">Remarcar: {{ servico }}</h2>
+      <div class="de-para">
+        <div class="resumo resumo-de">
+          <p class="resumo-titulo">De</p>
+          <ul class="resumo-lista">
+{{ linhas(atual, rotulo_local) }}
+          </ul>
+        </div>
+        <div class="resumo resumo-para">
+          <p class="resumo-titulo">Para</p>
+          <ul class="resumo-lista">
+{{ linhas(novo, rotulo_local) }}
+          </ul>
+        </div>
+      </div>
+      <p class="aviso" role="note">A loja vai confirmar o novo horário. O horário atual fica livre.</p>
+      <form class="formulario" method="post" action="{{ acao }}" data-enviar>
+        {% for nome, valor in ocultos.items() %}
+        <input type="hidden" name="{{ nome }}" value="{{ valor }}">
+        {% endfor %}
+        <button type="submit" class="botao botao-largo" data-enviando="Enviando…">Confirmar remarcação</button>
+      </form>
+      <a class="botao botao-secundario botao-largo" href="{{ escolher }}">Escolher outro horário</a>
+{% endblock %}

@@ -1,9 +1,9 @@
 """Clientes (estrutura.md, 2.7)."""
 
-from datetime import date
+from datetime import date, datetime
 from uuid import UUID
 
-from pydantic import Field, field_validator
+from pydantic import BaseModel, Field, field_validator
 
 from app.models.enums import CanalCliente
 from app.schemas.comum import (
@@ -46,3 +46,33 @@ class ClienteSaida(Controle):
     observacoes: str | None
     canais: list[CanalCliente]
     ativo: bool
+
+
+# --- Acesso do cliente ao site (CLI-06, SIT-16 a SIT-20) ---------------------------------------------
+
+
+class ClienteDoCodigo(BaseModel):
+    id: UUID
+    nome: str = Field(description='Nome completo (nome + sobrenome)')
+
+
+class CodigoSiteSaida(BaseModel):
+    """Código de confirmação aguardando uso, que a loja repassa ao cliente (provedor "painel")."""
+
+    telefone: str = Field(description='(11) 98888-1111')
+    codigo: str = Field(description='6 dígitos')
+    expira_em: datetime
+    criado_em: datetime
+    clientes: list[ClienteDoCodigo] = Field(description='Clientes com o telefone (vazia: sem cadastro)')
+
+
+class CodigoPendente(BaseModel):
+    codigo: str
+    expira_em: datetime
+
+
+class ContaSiteSaida(BaseModel):
+    possui_conta: bool
+    criada_em: datetime | None
+    ultimo_acesso_em: datetime | None
+    codigo_pendente: CodigoPendente | None

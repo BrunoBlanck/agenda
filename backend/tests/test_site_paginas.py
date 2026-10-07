@@ -165,7 +165,7 @@ def test_fluxo_completo_sem_js(cliente, site, engine_dono):
     assert 'Limpeza' in pronto
     assert 'R$ 200,00' in pronto
     assert 'Seu horário fica reservado até a Loja loja-a confirmar.' in pronto
-    assert link(pronto, '/loja-a') == '/loja-a'  # "Fazer outro agendamento"
+    assert '/loja-a' in hrefs(pronto)  # "Fazer outro agendamento"
     for pessoal in ('97777', 'ana@example.com', 'Souza'):
         assert pessoal not in pronto
 

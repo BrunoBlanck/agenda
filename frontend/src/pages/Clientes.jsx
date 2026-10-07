@@ -1,5 +1,5 @@
 import { App, Button, Col, Form, Input, Menu, Row, Switch } from 'antd'
-import { HistoryOutlined } from '@ant-design/icons'
+import { HistoryOutlined, KeyOutlined } from '@ant-design/icons'
 import CadastroTabela from '../components/CadastroTabela.jsx'
 import { useAcesso } from '../data/useAcesso.js'
 import { useClientes } from '../data/useClientes.js'
@@ -7,6 +7,8 @@ import { MAPA_ERROS_CLIENTE } from '../data/api/clientes.js'
 import { useTratarErro } from '../data/api/useTratarErro.js'
 import { IconesCanais, SeletorCanais } from '../components/CanaisCliente.jsx'
 import HistoricoCliente from '../components/HistoricoCliente.jsx'
+import AcessoSiteCliente from '../components/AcessoSiteCliente.jsx'
+import CodigosSite from '../components/CodigosSite.jsx'
 import { EtiquetaSituacao } from '../components/Etiquetas.jsx'
 import { usePainel } from '../components/base/usePainel.js'
 import { canaisCliente } from '../data/dominio.js'
@@ -45,6 +47,9 @@ export default function Clientes() {
   const tratarErro = useTratarErro()
   const clientes = useClientes({ ativo: pode('clientes') })
   const historico = usePainel()
+  const codigos = usePainel()
+  // Códigos e acesso ao site do cliente exigem escrita em Clientes (sem ela, nada disso aparece)
+  const podeEscrever = pode('clientes', 'escrita')
 
   const oferecerInativar = (cliente, motivo) =>
     modal.confirm({
@@ -114,10 +119,15 @@ export default function Clientes() {
         colunas={colunas}
         placeholderBusca="Buscar por nome, telefone ou CPF"
         larguraTabela={1040}
-        somenteLeitura={!pode('clientes', 'escrita')}
+        somenteLeitura={!podeEscrever}
         valoresNovo={{ canais: ['loja'], ativo: true }}
         nomeRegistro={nomeCompleto}
         destaqueId={historico.destaqueId}
+        acoes={
+          <Button icon={<KeyOutlined />} onClick={() => codigos.abrir()}>
+            Códigos do site
+          </Button>
+        }
         mapaErros={MAPA_ERROS_CLIENTE}
         textoExcluir="Só dá para excluir cliente sem agendamentos. Com agendamentos, ele pode ser inativado."
         acoesEdicao={(c, fechar) => (
@@ -130,7 +140,7 @@ export default function Clientes() {
             Histórico
           </Button>
         )}
-        campos={
+        campos={(cliente) => (
           <>
             <h3 className="grupo-formulario">Dados pessoais</h3>
             {/* Nome e sobrenome separados: a loja chama o cliente pelo nome */}
@@ -190,6 +200,8 @@ export default function Clientes() {
               <SeletorCanais />
             </Form.Item>
 
+            {podeEscrever && cliente.id && <AcessoSiteCliente clienteId={cliente.id} telefoneSalvo={cliente.telefone} />}
+
             <h3 className="grupo-formulario">Mais informações</h3>
             <Form.Item name="observacoes" label="Observações" extra="Aparecem no histórico do cliente (ex.: alergias, preferências).">
               <Input.TextArea rows={3} maxLength={2000} />
@@ -198,9 +210,10 @@ export default function Clientes() {
               <Switch />
             </Form.Item>
           </>
-        }
+        )}
       />
       <HistoricoCliente clienteId={historico.registro?.id} open={historico.aberto} onClose={historico.fechar} />
+      {podeEscrever && <CodigosSite open={codigos.aberto} onClose={codigos.fechar} />}
     </>
   )
 }

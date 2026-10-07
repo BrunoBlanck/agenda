@@ -219,7 +219,7 @@ def descrever_quem(
 
 
 # timestamptz gravado pelo trigger (to_jsonb): "2026-10-03T00:22:41.592358+00:00"
-_MOMENTO = re.compile(r'^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?([+-]\d{2}:\d{2}|Z)$')
+_MOMENTO = re.compile(r'^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?([+-]\d{2}:\d{2}|Z)$', re.ASCII)
 
 
 def _no_fuso(valor: Any, zona: ZoneInfo) -> Any:

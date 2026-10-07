@@ -26,3 +26,10 @@ Confirmado em 2026-10-02 na integração da área A (clientes, funcionários, pe
 Mais (2026-10-03, acessar-loja):
 - Efeito do filho roda **antes** do efeito do Provider da sessão: token gravado no efeito de uma tela (ex.: `/suporte`) é visto pelo `useEffect` de montagem do Provider, que dispara um `GET /eu` paralelo **sem** as checagens da tela. Ao recusar o token, `controle.current?.abort()` nessa conferência, senão ela termina depois e marca `logado` (comprovado: token comum plantado na entrega entrava no painel).
 - Provar que nada sensível vai para o histórico global: `chromium.launchPersistentContext(pasta, { executablePath: <chrome-win64/chrome.exe>, headless: true })` grava `Default/History` (copiar o arquivo e ler a tabela `urls` com o sqlite3 do Python).
+
+Mais (2026-10-06, conta-cliente):
+- `useConsulta(..., { ativo: false })` zera `dados`: num `PainelLateral` que busca "a cada abertura", desligar com o painel fechando faz o conteúdo piscar para o estado vazio durante a animação. Padrão usado em `useCodigosSite`: contador de aberturas (setState no render quando `ativo` vira true) na chave, consulta ligada desde a primeira abertura, e itens só quando `consulta.atual`.
+  **Why:** confirmado em 2026-10-06 ao ligar a conta-cliente.
+  **How to apply:** todo hook "busca de novo ao reabrir".
+- Para forçar bordas (null, 502 HTML, rede fora, 401) com o back-end real rodando, `page.route` do Playwright no endpoint é suficiente e não mexe no banco; o 404 real do DELETE dá para provocar servindo um GET falso com `possui_conta: true`.
+- Código de confirmação real do site (conta-cliente): `/clinica-sorriso/conta/criar` com o telefone da Maria do seed `(11) 98888-1111`; o código só é consumido ao salvar a senha. Remover acesso também invalida os códigos pendentes do telefone (a lista do painel esvazia).

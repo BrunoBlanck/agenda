@@ -20,6 +20,7 @@ import { useTratarErro } from '../data/api/useTratarErro.js'
 // campoBusca: campo (ou função que recebe o item) usado na busca.
 // larguraTabela: largura mínima da tabela quando há textos longos (eles quebram linha em vez de esticar a coluna).
 // antes: conteúdo entre o cabeçalho e a lista (ex.: um aviso ou uma configuração da tela).
+// acoes: botões a mais no cabeçalho, antes do "Novo" (só aparecem com escrita; ex.: Códigos do site).
 // valoresNovo: valores iniciais de um registro novo (na edição o formulário abre com o próprio registro).
 // nomeRegistro(item): nome no cabeçalho do painel na edição (padrão: item.nome).
 // iconeRegistro(item) e corRegistro(item): marca do registro no cabeçalho no lugar das iniciais
@@ -57,6 +58,7 @@ export default function CadastroTabela({
   larguraPainel,
   larguraTabela,
   antes,
+  acoes,
   valoresNovo,
   nomeRegistro = (r) => r.nome,
   iconeRegistro,
@@ -214,7 +216,10 @@ export default function CadastroTabela({
             Somente leitura
           </Etiqueta>
         ) : (
-          botaoNovo
+          <>
+            {acoes}
+            {botaoNovo}
+          </>
         )
       }
     >

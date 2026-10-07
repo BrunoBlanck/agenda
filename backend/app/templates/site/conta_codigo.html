@@ -1,0 +1,27 @@
+{% extends 'site/base.html' %}
+{% from 'site/_campos.html' import campo, resumo %}
+{% block titulo %}Código de confirmação · {{ loja.nome_fantasia }}{% endblock %}
+{% block conteudo %}
+      <h2 class="titulo">Digite o código de 6 dígitos</h2>
+      <p class="nota">Telefone: <strong>{{ telefone }}</strong> · <a href="{{ novo_codigo }}">Trocar</a></p>
+      <p class="instrucao">{{ instrucao }}</p>
+      {% if mensagem %}
+      <p class="aviso" role="alert">{{ mensagem }}</p>
+      {% endif %}
+      {% if vencido %}
+      <a class="botao botao-largo" href="{{ novo_codigo }}">Pedir um novo código</a>
+      {% else %}
+{{ resumo(resumo_erros) }}
+      <form class="formulario" method="post" action="{{ acao }}" data-enviar>
+        <input type="hidden" name="t" value="{{ t }}">
+        {% if voltar %}
+        <input type="hidden" name="voltar" value="{{ voltar }}">
+        {% endif %}
+{{ campo('codigo', 'Código', valores, erros, maximo=6, completar='one-time-code', teclado='numeric', dica='O código vale por 15 minutos.') }}
+        <button type="submit" class="botao botao-largo" data-enviando="Conferindo…">Confirmar</button>
+      </form>
+      <ul class="links-conta">
+        <li>O código venceu? <a href="{{ novo_codigo }}">Pedir um novo código</a></li>
+      </ul>
+      {% endif %}
+{% endblock %}

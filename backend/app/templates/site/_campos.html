@@ -1,0 +1,28 @@
+{# Peças dos formulários do site: campo com rótulo e erro, resumo dos erros no topo. #}
+{% macro campo(id, rotulo, valores, erros, tipo='text', obrigatorio=True, maximo=None, completar=None, teclado=None, minimo=None, dica=None) %}
+        <div class="campo{% if erros[id] %} com-erro{% endif %}">
+          <label for="campo-{{ id }}">{{ rotulo }}{% if obrigatorio %} <span class="obrigatorio" aria-hidden="true">*</span>{% else %} <span class="opcional">(opcional)</span>{% endif %}</label>
+          {% if tipo == 'textarea' %}
+          <textarea id="campo-{{ id }}" name="{{ id }}" rows="3"{% if maximo %} maxlength="{{ maximo }}"{% endif %}{% if erros[id] %} aria-invalid="true" aria-describedby="erro-{{ id }}"{% endif %}>{{ valores[id] }}</textarea>
+          {% else %}
+          <input id="campo-{{ id }}" name="{{ id }}" type="{{ tipo }}" value="{{ valores[id] if tipo != 'password' else '' }}"{% if obrigatorio %} required{% endif %}{% if minimo %} minlength="{{ minimo }}"{% endif %}{% if maximo %} maxlength="{{ maximo }}"{% endif %}{% if completar %} autocomplete="{{ completar }}"{% endif %}{% if teclado %} inputmode="{{ teclado }}"{% endif %}{% if erros[id] %} aria-invalid="true" aria-describedby="erro-{{ id }}"{% elif dica %} aria-describedby="dica-{{ id }}"{% endif %}>
+          {% endif %}
+          {% if erros[id] %}
+          <p class="erro-campo" id="erro-{{ id }}">{{ erros[id] }}</p>
+          {% elif dica %}
+          <p class="dica-campo" id="dica-{{ id }}">{{ dica }}</p>
+          {% endif %}
+        </div>
+{% endmacro %}
+{% macro resumo(resumo_erros) %}
+      {% if resumo_erros %}
+      <div class="erros" id="resumo-erros" role="alert" tabindex="-1">
+        <p>Confira {{ 'o campo' if resumo_erros | length == 1 else 'os campos' }} abaixo:</p>
+        <ul>
+          {% for e in resumo_erros %}
+          <li><a href="#campo-{{ e.campo }}">{{ e.rotulo }}: {{ e.mensagem }}</a></li>
+          {% endfor %}
+        </ul>
+      </div>
+      {% endif %}
+{% endmacro %}
